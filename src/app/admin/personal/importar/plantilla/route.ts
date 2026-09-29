@@ -13,7 +13,7 @@ export async function GET() {
     { header: "Nombre", key: "name", width: 18 },
     { header: "Apellidos", key: "surname", width: 22 },
     { header: "Teléfono", key: "phone", width: 16 },
-    { header: "Puesto", key: "role", width: 12 },
+    { header: "Puesto", key: "role", width: 22 },
     { header: "Email", key: "email", width: 26 },
     { header: "Zona", key: "zone", width: 18 },
     { header: "Valoración", key: "rating", width: 11 },
@@ -29,9 +29,9 @@ export async function GET() {
     ws.getCell(`D${r}`).dataValidation = {
       type: "list",
       allowBlank: true,
-      formulae: ['"Camarero,Maître,Mozo"'],
+      formulae: ['"Camarero,Camarero responsable,Maître,Mozo"'],
       showErrorMessage: true,
-      error: "Elige Camarero, Maître o Mozo",
+      error: "Elige Camarero, Camarero responsable, Maître o Mozo",
     };
   }
   ws.views = [{ state: "frozen", ySplit: 1 }];
@@ -42,7 +42,7 @@ export async function GET() {
     "Cómo rellenar la plantilla",
     "",
     "• Una fila por trabajador. Obligatorios: Nombre, Teléfono y Puesto.",
-    "• Puesto: Camarero, Maître o Mozo (también se entienden «camarera», «metre», «mozo de descarga»…).",
+    "• Puesto: Camarero, Camarero responsable, Maître o Mozo (también se entienden «camarera», «metre», «mozo de descarga»…). Si alguien puede hacer varios puestos, márcalos después en su ficha.",
     "• Teléfono: con o sin +34 y espacios. Es lo que identifica a cada trabajador: si ya existe, no se duplica.",
     "• Valoración: de 1 a 5 (opcional; por defecto 3).",
     "• Se pueden añadir más columnas: las que no se reconozcan se ignoran.",

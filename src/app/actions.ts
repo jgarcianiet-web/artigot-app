@@ -14,9 +14,9 @@ import {
 } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { forgetDevice } from "@/lib/devices";
-import { callTime, EVENT_TYPES, formatDate, ROLE_LABEL, ROLES, type Role } from "@/lib/domain";
+import { EVENT_TYPES, formatDate, isRole, LEAD_ROLES, ROLES, type Role } from "@/lib/domain";
 import { notify } from "@/lib/push";
-import { candidatesFor, gaps } from "@/lib/staffing";
+import { autoReplace, candidatesFor, fillGaps, notifyInvited } from "@/lib/staffing";
 const time = z.string().regex(/^\d{2}:\d{2}$/);
 const optTime = z.union([time, z.literal("")]).transform((v) => v || null);
 const optText = z.string().trim().transform((v) => v || null);
@@ -54,27 +54,6 @@ export async function logout() {
   redirect("/login");
 }
 
-// ---------- Avisos ----------
-
-type EventInfo = { id: string; name: string; date: string; startTime: string; unloadTime: string | null };
-
-/** Aviso de convocatoria a cada trabajador, tras responder a RRHH (no retrasa la pantalla). */
-function notifyInvited(event: EventInfo, invited: { workerId: string; role: string }[]) {
-  if (!invited.length) return;
-  after(async () => {
-    for (const role of ROLES) {
-      const ids = invited.filter((i) => i.role === role).map((i) => i.workerId);
-      await notify({
-        workerIds: ids,
-        workerUrl: `/app/eventos/${event.id}`,
-        title: "Nueva convocatoria",
-        body: `${event.name} · ${formatDate(event.date)} a las ${callTime(event, role)} (${ROLE_LABEL[role as Role].toLowerCase()}). Toca para aceptar o rechazar.`,
-        tag: `inv-${event.id}`,
-      });
-    }
-  });
-}
-
 // ---------- Personal ----------
 
 const workerSchema = z.object({
@@ -96,7 +75,9 @@ export async function saveWorker(_prev: string | null, form: FormData) {
   if (key.length < 9) return "El teléfono debe tener al menos 9 cifras";
   const clash = await db.worker.findUnique({ where: { phoneKey: key } });
   if (clash && clash.id !== id) return `Ese teléfono ya es de ${clash.name}`;
-  const data = { ...parsed.data, phoneKey: key };
+  // Puestos que puede desempeñar: los marcados más el principal
+  const roles = [...new Set([parsed.data.role, ...form.getAll("roles").map(String).filter(isRole)])];
+  const data = { ...parsed.data, roles, phoneKey: key };
   const worker = id
     ? await db.worker.update({ where: { id }, data })
     : await db.worker.create({ data: { ...data, accessCode: newAccessCode() } });
@@ -173,6 +154,8 @@ const eventSchema = z.object({
   notes: optText,
   needCamareros: z.coerce.number().int().min(0).max(500),
   needMaitres: z.coerce.number().int().min(0).max(100),
+  needResponsables: z.coerce.number().int().min(0).max(20),
+  autoReplace: z.string().optional().transform((v) => v === "1"),
   needMozos: z.coerce.number().int().min(0).max(200),
 });
 
@@ -250,23 +233,22 @@ export async function deleteEvent(id: string) {
 
 // ---------- Convocatoria ----------
 
-export async function inviteWorkers(eventId: string, form: FormData) {
+/** Convoca a los seleccionados para un puesto concreto (un mismo trabajador puede valer para varios). */
+export async function inviteWorkers(eventId: string, role: Role, form: FormData) {
   await requireAdmin();
   const event = await db.event.findUniqueOrThrow({ where: { id: eventId } });
   const ids = form.getAll("workerId").map(String);
-  if (!ids.length) return;
-  const available = Object.values(await candidatesFor(event)).flat();
-  const allowed = new Map(available.map((c) => [c.id, c]));
+  if (!ids.length || !isRole(role)) return;
+  const allowed = new Set((await candidatesFor(event))[role].map((c) => c.id));
   const invited = [];
   for (const id of ids) {
-    const c = allowed.get(id);
-    if (!c) continue;
+    if (!allowed.has(id)) continue;
     await db.assignment.upsert({
       where: { eventId_workerId: { eventId, workerId: id } },
-      create: { eventId, workerId: id, role: c.role },
-      update: { status: "CONVOCADO", role: c.role, respondedAt: null },
+      create: { eventId, workerId: id, role },
+      update: { status: "CONVOCADO", role, respondedAt: null },
     });
-    invited.push({ workerId: id, role: c.role });
+    invited.push({ workerId: id, role });
   }
   notifyInvited(event, invited);
   revalidatePath(`/admin/eventos/${eventId}`);
@@ -275,17 +257,7 @@ export async function inviteWorkers(eventId: string, form: FormData) {
 /** Convoca automáticamente a los mejores candidatos hasta cubrir los huecos de cada puesto. */
 export async function autoFill(eventId: string) {
   await requireAdmin();
-  const event = await db.event.findUniqueOrThrow({ where: { id: eventId }, include: { assignments: true } });
-  const missing = gaps(event, event.assignments);
-  const candidates = await candidatesFor(event);
-  const invited = [];
-  for (const role of ROLES) {
-    for (const c of candidates[role].slice(0, missing[role])) {
-      await db.assignment.create({ data: { eventId, workerId: c.id, role } });
-      invited.push({ workerId: c.id, role });
-    }
-  }
-  notifyInvited(event, invited);
+  await fillGaps(eventId);
   revalidatePath(`/admin/eventos/${eventId}`);
 }
 
@@ -295,9 +267,11 @@ export async function setAssignmentStatus(id: string, status: string) {
   const a = await db.assignment.update({
     where: { id },
     data: { status, respondedAt: status === "CONVOCADO" ? null : new Date() },
-    include: { event: true },
+    include: { event: true, worker: { select: { name: true } } },
   });
   if (status === "CONVOCADO") notifyInvited(a.event, [a]);
+  // Si RRHH anota que alguien no puede ir (p. ej. avisó por teléfono), también se busca sustituto
+  if (status === "RECHAZADO" && isRole(a.role)) after(() => autoReplace(a.eventId, a.role as Role, a.worker.name));
   if (status === "CANCELADO") {
     after(() =>
       notify({
@@ -318,12 +292,12 @@ export async function removeAssignment(id: string) {
   revalidatePath(`/admin/eventos/${a.eventId}`);
 }
 
-/** Aviso al maître para que valore a su equipo. */
+/** Aviso al maître o camarero responsable para que valore a su equipo. */
 export async function remindReviews(eventId: string) {
   await requireAdmin();
   const event = await db.event.findUniqueOrThrow({
     where: { id: eventId },
-    include: { assignments: { where: { status: "CONFIRMADO", role: "MAITRE" }, select: { workerId: true } } },
+    include: { assignments: { where: { status: "CONFIRMADO", role: { in: [...LEAD_ROLES] } }, select: { workerId: true } } },
   });
   await notify({
     workerIds: event.assignments.map((a) => a.workerId),

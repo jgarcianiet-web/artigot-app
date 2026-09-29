@@ -15,6 +15,7 @@ async function main() {
   const rates = [
     { role: "CAMARERO", hourlyRate: 12, minHours: 4 },
     { role: "MAITRE", hourlyRate: 16, minHours: 5 },
+    { role: "RESPONSABLE", hourlyRate: 14, minHours: 4 },
     { role: "MOZO", hourlyRate: 11, minHours: 3 },
   ];
   for (const r of rates) await db.rate.upsert({ where: { role: r.role }, create: r, update: {} });
@@ -36,6 +37,8 @@ async function main() {
         data: {
           name,
           role,
+          // Los mejores camareros también pueden ir como camarero responsable
+          roles: role === "CAMARERO" && i < 3 ? [role, "RESPONSABLE"] : [role],
           phone: String(phone),
           phoneKey: String(phone++),
           accessCode: accessCode(),

@@ -52,7 +52,8 @@ export function parseRole(value: string): Role | null {
   const v = norm(value);
   if (!v) return null;
   if (isRole(v.toUpperCase())) return v.toUpperCase() as Role;
-  if (/(maitre|metre|jefe de sala|jefe de rango|responsable de sala|encargad)/.test(v)) return "MAITRE";
+  if (/(camarer[oa]s? responsable|responsable de (servicio|evento|equipo)|^responsable$|jefe de rango)/.test(v)) return "RESPONSABLE";
+  if (/(maitre|metre|jefe de sala|responsable de sala|encargad)/.test(v)) return "MAITRE";
   if (/(mozo|descarga|carga|montaje|mozo de almacen|peon)/.test(v)) return "MOZO";
   if (/(camarer|waiter|servicio|extra)/.test(v)) return "CAMARERO";
   return null;
@@ -225,7 +226,7 @@ export async function analyzeFile(
     if (name.length < 2) return fail("Falta el nombre");
     if (key.length < 9) return fail(phone ? "Teléfono no válido (menos de 9 cifras)" : "Falta el teléfono");
     const match = byPhone.get(key);
-    if (roleRaw && !parseRole(roleRaw)) return fail(`Puesto no reconocido: «${roleRaw}» (usa Camarero, Maître o Mozo)`);
+    if (roleRaw && !parseRole(roleRaw)) return fail(`Puesto no reconocido: «${roleRaw}» (usa Camarero, Camarero responsable, Maître o Mozo)`);
     // A quien ya existe se le mantiene su puesto si el Excel no lo indica
     if (!row.role && !match) return fail("Falta el puesto (elige un puesto por defecto)");
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail("Email no válido");

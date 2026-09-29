@@ -7,13 +7,16 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Puestos: CAMARERO | MAITRE | MOZO
+// Puestos: CAMARERO | RESPONSABLE (camarero responsable) | MAITRE | MOZO
 model Worker {
   id              String           @id @default(cuid())
   name            String
   phone           String
   email           String?
+  // Puesto principal y todos los puestos que puede desempeñar (incluye el principal).
+  // El puesto en cada evento lo marca la convocatoria (Assignment.role)
   role            String
+  roles           String[]         @default([])
   rating          Int              @default(3)
   zone            String?
   notes           String?
@@ -62,8 +65,12 @@ model Event {
   notes         String?
   needCamareros Int          @default(0)
   needMaitres   Int          @default(0)
+  // Camarero responsable: hace de maître en eventos pequeños
+  needResponsables Int       @default(0)
   needMozos     Int          @default(0)
   status        String       @default("ABIERTO")
+  // Si alguien rechaza o se retira, convocar automáticamente al siguiente mejor puntuado
+  autoReplace   Boolean      @default(true)
   createdAt     DateTime     @default(now())
   assignments   Assignment[]
   messages      Message[]

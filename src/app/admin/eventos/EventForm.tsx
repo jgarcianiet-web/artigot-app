@@ -21,6 +21,8 @@ type Event = {
   notes: string | null;
   needCamareros: number;
   needMaitres: number;
+  needResponsables: number;
+  autoReplace: boolean;
   needMozos: number;
 };
 
@@ -77,7 +79,7 @@ export function EventForm({ event, radius, defaultDate }: { event?: Event; radiu
 
       <fieldset className="rounded-lg border border-stone-200 p-4">
         <legend className="px-1 text-sm font-semibold">Personal necesario</legend>
-        <div className="grid gap-4 sm:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-5">
           <div>
             <label className="label">Camareros</label>
             <input name="needCamareros" type="number" min={0} className="input" defaultValue={event?.needCamareros ?? 0} />
@@ -85,6 +87,10 @@ export function EventForm({ event, radius, defaultDate }: { event?: Event; radiu
           <div>
             <label className="label">Maîtres</label>
             <input name="needMaitres" type="number" min={0} className="input" defaultValue={event?.needMaitres ?? 0} />
+          </div>
+          <div>
+            <label className="label" title="Hace de maître en eventos pequeños">Camareros responsables</label>
+            <input name="needResponsables" type="number" min={0} className="input" defaultValue={event?.needResponsables ?? 0} />
           </div>
           <div>
             <label className="label">Mozos</label>
@@ -95,6 +101,10 @@ export function EventForm({ event, radius, defaultDate }: { event?: Event; radiu
             <input name="unloadTime" type="time" className="input" defaultValue={event?.unloadTime ?? ""} />
           </div>
         </div>
+        <label className="mt-3 flex items-center gap-2 text-sm">
+          <input type="checkbox" name="autoReplace" value="1" defaultChecked={event?.autoReplace ?? true} className="size-4" />
+          Reposición automática: si alguien rechaza o se retira, convocar solo al siguiente mejor puntuado del mismo puesto
+        </label>
         <p className="mt-2 text-xs text-stone-500">Si indicas hora de descarga, los mozos serán citados a esa hora en lugar de a la hora de servicio.</p>
       </fieldset>
 
