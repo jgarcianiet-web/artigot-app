@@ -1,0 +1,174 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Puestos: CAMARERO | MAITRE | MOZO
+model Worker {
+  id              String           @id @default(cuid())
+  name            String
+  phone           String
+  email           String?
+  role            String
+  rating          Int              @default(3)
+  zone            String?
+  notes           String?
+  active          Boolean          @default(true)
+  // Acceso a la app: teléfono normalizado + código de 6 cifras que RRHH entrega al trabajador
+  phoneKey        String           @unique
+  accessCode      String
+  sessionVersion  Int              @default(0)
+  failedLogins    Int              @default(0)
+  lockedUntil     DateTime?
+  createdAt       DateTime         @default(now())
+  unavailabilities Unavailability[]
+  assignments     Assignment[]
+  messages        Message[]
+  devices         Device[]
+  reviews         Review[]         @relation("reviewed")
+  reviewsGiven    Review[]         @relation("reviewer")
+}
+
+// Días en los que el trabajador no está disponible (fecha YYYY-MM-DD)
+model Unavailability {
+  id       String @id @default(cuid())
+  workerId String
+  date     String
+  reason   String?
+  worker   Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@unique([workerId, date])
+  @@index([date])
+}
+
+// Tipos: BODA | EVENTO | OTRO. Estado: ABIERTO | CERRADO
+model Event {
+  id            String       @id @default(cuid())
+  name          String
+  type          String       @default("BODA")
+  date          String
+  startTime     String
+  endTime       String?
+  unloadTime    String?
+  venue         String
+  // Punto exacto del evento para validar el fichaje por geolocalización
+  lat           Float?
+  lng           Float?
+  client        String?
+  notes         String?
+  needCamareros Int          @default(0)
+  needMaitres   Int          @default(0)
+  needMozos     Int          @default(0)
+  status        String       @default("ABIERTO")
+  createdAt     DateTime     @default(now())
+  assignments   Assignment[]
+  messages      Message[]
+  reads         ChatRead[]
+  reviews       Review[]
+
+  @@index([date])
+}
+
+// Estado: CONVOCADO | CONFIRMADO | RECHAZADO | CANCELADO
+model Assignment {
+  id            String    @id @default(cuid())
+  eventId       String
+  workerId      String
+  role          String
+  status        String    @default("CONVOCADO")
+  respondedAt   DateTime?
+  checkIn       String?
+  checkOut      String?
+  // Datos del fichaje por GPS (distancia al evento y precisión en metros). *Manual = corregido por RRHH
+  checkInLat      Float?
+  checkInLng      Float?
+  checkInDistance Int?
+  checkInAccuracy Int?
+  checkInManual   Boolean @default(false)
+  checkOutLat      Float?
+  checkOutLng      Float?
+  checkOutDistance Int?
+  checkOutAccuracy Int?
+  checkOutManual   Boolean @default(false)
+  hoursOverride Float?
+  // El trabajador se retiró después de haber confirmado
+  withdrew      Boolean   @default(false)
+  notes         String?
+  createdAt     DateTime  @default(now())
+  event         Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  worker        Worker    @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, workerId])
+}
+
+// Tarifa por puesto
+model Rate {
+  role       String @id
+  hourlyRate Float
+  minHours   Float  @default(0)
+}
+
+// Mensaje del chat de un evento. workerId nulo = escrito por RRHH (authorName = nombre de quien escribe)
+model Message {
+  id         String   @id @default(cuid())
+  eventId    String
+  workerId   String?
+  authorName String
+  body       String
+  createdAt  DateTime @default(now())
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  worker     Worker?  @relation(fields: [workerId], references: [id], onDelete: SetNull)
+
+  @@index([eventId, createdAt])
+}
+
+// Última lectura del chat. reader = "w:<workerId>" para trabajadores, "rrhh" para RRHH (bandeja compartida)
+model ChatRead {
+  id         String   @id @default(cuid())
+  eventId    String
+  reader     String
+  lastReadAt DateTime
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, reader])
+}
+
+// Dispositivo que recibe notificaciones. kind: web (Web Push) | fcm (Android) | apns (iOS)
+model Device {
+  id        String   @id @default(cuid())
+  kind      String
+  token     String   @unique
+  keys      Json?
+  workerId  String?
+  adminName String?
+  createdAt DateTime @default(now())
+  worker    Worker?  @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@index([workerId])
+}
+
+// Valoración que hace un maître del evento a cada miembro de su equipo (puntuaciones de 1 a 5)
+model Review {
+  id          String   @id @default(cuid())
+  eventId     String
+  workerId    String
+  reviewerId  String
+  noShow      Boolean  @default(false)
+  punctuality Int?
+  appearance  Int?
+  service     Int?
+  attitude    Int?
+  comment     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  worker      Worker   @relation("reviewed", fields: [workerId], references: [id], onDelete: Cascade)
+  reviewer    Worker   @relation("reviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, workerId, reviewerId])
+  @@index([workerId, createdAt])
+}

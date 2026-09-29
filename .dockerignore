@@ -1,0 +1,9 @@
+node_modules
+.next
+.git
+android
+ios
+resources
+mobile
+.env
+*.log
