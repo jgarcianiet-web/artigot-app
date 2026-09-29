@@ -33,7 +33,11 @@ export default async function StaffList({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1>Personal</h1>
-        <Link href="/admin/personal/nuevo" className="btn btn-primary">+ Nuevo trabajador</Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/admin/personal/importar" className="btn">Importar Excel</Link>
+          <a href="/admin/personal/exportar" className="btn">Exportar códigos</a>
+          <Link href="/admin/personal/nuevo" className="btn btn-primary">+ Nuevo trabajador</Link>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2 text-sm">

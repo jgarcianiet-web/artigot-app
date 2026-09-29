@@ -21,6 +21,19 @@ const time = z.string().regex(/^\d{2}:\d{2}$/);
 const optTime = z.union([time, z.literal("")]).transform((v) => v || null);
 const optText = z.string().trim().transform((v) => v || null);
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const optCoord = (max: number) =>
+  z
+    .string()
+    .optional()
+    .transform((v, ctx) => {
+      if (!v) return null;
+      const n = Number(v);
+      if (!Number.isFinite(n) || Math.abs(n) > max) {
+        ctx.addIssue({ code: "custom", message: "Ubicación no válida" });
+        return z.NEVER;
+      }
+      return n;
+    });
 
 // ---------- Sesión ----------
 
@@ -151,9 +164,11 @@ const eventSchema = z.object({
   type: z.enum(EVENT_TYPES),
   date: date,
   startTime: time,
-  endTime: optTime,
+  endTime: z.string().regex(/^\d{2}:\d{2}$/, "Hora de fin obligatoria (marca el cierre del fichaje)"),
   unloadTime: optTime,
   venue: z.string().trim().min(2, "Lugar obligatorio"),
+  lat: optCoord(90),
+  lng: optCoord(180),
   client: optText,
   notes: optText,
   needCamareros: z.coerce.number().int().min(0).max(500),
@@ -177,6 +192,7 @@ export async function saveEvent(_prev: string | null, form: FormData) {
       before.startTime !== event.startTime && `hora: ${event.startTime}`,
       before.unloadTime !== event.unloadTime && `descarga: ${event.unloadTime ?? "sin hora"}`,
       before.venue !== event.venue && `lugar: ${event.venue}`,
+      before.endTime !== event.endTime && `hora de fin: ${event.endTime}`,
     ].filter(Boolean);
     if (changes.length) {
       after(async () => {
@@ -312,12 +328,19 @@ export async function saveTimesheet(eventId: string, form: FormData) {
     const checkOut = optTime.safeParse(form.get(`out_${a.id}`) ?? "");
     const override = String(form.get(`hours_${a.id}`) ?? "").replace(",", ".").trim();
     const hours = override === "" ? null : Number(override);
+    const newIn = checkIn.success ? checkIn.data : a.checkIn;
+    const newOut = checkOut.success ? checkOut.data : a.checkOut;
+    // Si RRHH cambia una hora, deja de ser un fichaje por GPS: se marca como manual
+    const inChanged = newIn !== a.checkIn;
+    const outChanged = newOut !== a.checkOut;
     await db.assignment.update({
       where: { id: a.id },
       data: {
-        checkIn: checkIn.success ? checkIn.data : a.checkIn,
-        checkOut: checkOut.success ? checkOut.data : a.checkOut,
+        checkIn: newIn,
+        checkOut: newOut,
         hoursOverride: hours != null && Number.isFinite(hours) && hours >= 0 ? hours : null,
+        ...(inChanged && { checkInManual: newIn !== null, checkInLat: null, checkInLng: null, checkInDistance: null, checkInAccuracy: null }),
+        ...(outChanged && { checkOutManual: newOut !== null, checkOutLat: null, checkOutLng: null, checkOutDistance: null, checkOutAccuracy: null }),
       },
     });
   }

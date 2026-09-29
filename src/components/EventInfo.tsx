@@ -10,6 +10,8 @@ type Props = {
     endTime: string | null;
     unloadTime: string | null;
     venue: string;
+    lat?: number | null;
+    lng?: number | null;
     notes: string | null;
   };
 };
@@ -29,7 +31,9 @@ export function EventInfo({ event, role }: Props) {
       </div>
       <a
         className="text-sm text-brand-700 underline"
-        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.venue)}`}
+        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+          event.lat != null && event.lng != null ? `${event.lat},${event.lng}` : event.venue,
+        )}`}
         target="_blank"
       >
         {event.venue}

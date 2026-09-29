@@ -49,14 +49,14 @@ async function main() {
   await db.event.create({
     data: {
       name: "Boda Laura y Pablo", type: "BODA", date: addDays(10), startTime: "18:00", endTime: "02:00", unloadTime: "12:00",
-      venue: "Finca El Olivar", client: "Laura García", notes: "Uniforme negro. Parking en la entrada lateral.",
+      venue: "Finca El Olivar", lat: 39.5147, lng: -0.4253, client: "Laura García", notes: "Uniforme negro. Parking en la entrada lateral.",
       needCamareros: 8, needMaitres: 1, needMozos: 4,
     },
   });
   await db.event.create({
     data: {
       name: "Cena de empresa Levante", type: "EVENTO", date: addDays(4), startTime: "20:30", endTime: "00:30",
-      venue: "Hotel Mediterráneo", needCamareros: 5, needMaitres: 1, needMozos: 2, unloadTime: "17:00",
+      venue: "Hotel Mediterráneo", lat: 39.4699, lng: -0.3763, needCamareros: 5, needMaitres: 1, needMozos: 2, unloadTime: "17:00",
     },
   });
   console.log("Datos de ejemplo cargados.");

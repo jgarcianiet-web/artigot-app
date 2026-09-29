@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { saveEvent } from "@/app/actions";
 import { SubmitButton } from "@/components/client";
+import { LocationPicker } from "@/components/LocationPicker";
 import { EVENT_TYPE_LABEL, EVENT_TYPES } from "@/lib/domain";
 
 type Event = {
@@ -14,6 +15,8 @@ type Event = {
   endTime: string | null;
   unloadTime: string | null;
   venue: string;
+  lat: number | null;
+  lng: number | null;
   client: string | null;
   notes: string | null;
   needCamareros: number;
@@ -21,7 +24,7 @@ type Event = {
   needMozos: number;
 };
 
-export function EventForm({ event }: { event?: Event }) {
+export function EventForm({ event, radius, defaultDate }: { event?: Event; radius: number; defaultDate?: string }) {
   const [error, action] = useActionState(saveEvent, null);
   return (
     <form action={action} className="card max-w-3xl space-y-5">
@@ -41,15 +44,15 @@ export function EventForm({ event }: { event?: Event }) {
         </div>
         <div>
           <label className="label">Fecha</label>
-          <input name="date" type="date" className="input" defaultValue={event?.date} required />
+          <input name="date" type="date" className="input" defaultValue={event?.date ?? defaultDate} required />
         </div>
         <div>
           <label className="label">Hora de servicio</label>
           <input name="startTime" type="time" className="input" defaultValue={event?.startTime ?? "18:00"} required />
         </div>
         <div>
-          <label className="label">Hora fin prevista</label>
-          <input name="endTime" type="time" className="input" defaultValue={event?.endTime ?? ""} />
+          <label className="label">Hora de fin</label>
+          <input name="endTime" type="time" className="input" defaultValue={event?.endTime ?? ""} required />
         </div>
         <div className="sm:col-span-2">
           <label className="label">Lugar / finca</label>
@@ -60,6 +63,17 @@ export function EventForm({ event }: { event?: Event }) {
           <input name="client" className="input" defaultValue={event?.client ?? ""} />
         </div>
       </div>
+
+      <fieldset className="rounded-lg border border-stone-200 p-4">
+        <legend className="px-1 text-sm font-semibold">Ubicación para el fichaje</legend>
+        <p className="mb-2 text-xs text-stone-500">
+          El personal solo puede fichar a menos de {radius} m de este punto, desde 30 min antes de su citación hasta 30 min después de la hora de fin.
+        </p>
+        <LocationPicker
+          initial={event?.lat != null && event?.lng != null ? { lat: event.lat, lng: event.lng } : null}
+          radius={radius}
+        />
+      </fieldset>
 
       <fieldset className="rounded-lg border border-stone-200 p-4">
         <legend className="px-1 text-sm font-semibold">Personal necesario</legend>

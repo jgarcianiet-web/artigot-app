@@ -1,10 +1,12 @@
 import Link from "next/link";
+import { ClockButtons } from "@/components/ClockButtons";
 import { EventInfo } from "@/components/EventInfo";
 import { requireWorker } from "@/lib/auth";
 import { unreadCounts } from "@/lib/chat";
+import { CLOCK_RADIUS_M, clockWindow, hhmm } from "@/lib/clockRules";
 import { db } from "@/lib/db";
 import { addDays, callTime, formatDate, num, ROLE_LABEL, today, workedHours, type Role } from "@/lib/domain";
-import { clock, respond, toggleUnavailable } from "./actions";
+import { respond, toggleUnavailable } from "./actions";
 
 const DAYS_AHEAD = 56;
 
@@ -23,9 +25,12 @@ export default async function WorkerHome() {
     },
   });
 
-  const yesterday = addDays(t, -1);
+  // Tarjeta de fichaje: el día del evento y, si pasa de medianoche, hasta que cierra la ventana de fichaje
+  const now = new Date();
   const clockable = worker.assignments.filter(
-    (a) => a.status === "CONFIRMADO" && (a.event.date === t || (a.event.date === yesterday && a.checkIn && !a.checkOut)),
+    (a) =>
+      a.status === "CONFIRMADO" &&
+      (a.event.date === t || (a.event.date === addDays(t, -1) && now <= clockWindow(a.event, a.role).closesAt)),
   );
   const pending = worker.assignments.filter((a) => a.status === "CONVOCADO" && a.event.date >= t);
   const upcoming = worker.assignments.filter((a) => a.status === "CONFIRMADO" && a.event.date >= t && !clockable.includes(a));
@@ -64,18 +69,15 @@ export default async function WorkerHome() {
         <section key={a.id} className="card space-y-3 border-brand-600 ring-2 ring-brand-100">
           <h2>Hoy trabajas</h2>
           <EventInfo event={a.event} role={a.role} />
-          <div className="grid grid-cols-2 gap-2">
-            <form action={clock.bind(null, a.id, "in")}>
-              <button className="btn btn-success w-full py-4 text-base" disabled={!!a.checkIn || a.event.date !== t}>
-                {a.checkIn ? `Entrada ${a.checkIn}` : "Fichar entrada"}
-              </button>
-            </form>
-            <form action={clock.bind(null, a.id, "out")}>
-              <button className="btn btn-primary w-full py-4 text-base" disabled={!a.checkIn || !!a.checkOut}>
-                {a.checkOut ? `Salida ${a.checkOut}` : "Fichar salida"}
-              </button>
-            </form>
-          </div>
+          <ClockButtons
+            assignmentId={a.id}
+            checkIn={a.checkIn}
+            checkOut={a.checkOut}
+            windowText={(() => {
+              const w = clockWindow(a.event, a.role);
+              return `Fichaje con ubicación: de ${hhmm(w.opensAt)} a ${hhmm(w.closesAt)}, a menos de ${CLOCK_RADIUS_M} m del evento.`;
+            })()}
+          />
           <ChatLink eventId={a.eventId} />
         </section>
       ))}

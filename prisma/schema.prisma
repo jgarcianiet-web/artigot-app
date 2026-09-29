@@ -53,6 +53,9 @@ model Event {
   endTime       String?
   unloadTime    String?
   venue         String
+  // Punto exacto del evento para validar el fichaje por geolocalización
+  lat           Float?
+  lng           Float?
   client        String?
   notes         String?
   needCamareros Int          @default(0)
@@ -77,6 +80,17 @@ model Assignment {
   respondedAt   DateTime?
   checkIn       String?
   checkOut      String?
+  // Datos del fichaje por GPS (distancia al evento y precisión en metros). *Manual = corregido por RRHH
+  checkInLat      Float?
+  checkInLng      Float?
+  checkInDistance Int?
+  checkInAccuracy Int?
+  checkInManual   Boolean @default(false)
+  checkOutLat      Float?
+  checkOutLng      Float?
+  checkOutDistance Int?
+  checkOutAccuracy Int?
+  checkOutManual   Boolean @default(false)
   hoursOverride Float?
   notes         String?
   createdAt     DateTime  @default(now())

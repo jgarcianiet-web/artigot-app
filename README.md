@@ -14,12 +14,26 @@ Aplicación para que RRHH gestione de forma rápida el personal de **bodas y eve
 - **Personal**: fichas con puesto, teléfono, valoración, zona, días no disponibles e historial. En cada ficha aparece su **código de acceso** a la app y en qué dispositivos tiene los avisos activos.
 - **Eventos y convocatoria**: número de camareros, maîtres y mozos necesarios y hora de descarga de los mozos. **Autocompletar** convoca en un clic a los mejores candidatos libres ese día. Cada convocado **recibe un aviso en el móvil** y acepta o rechaza desde la app.
 - **Chat del evento**: lo ven RRHH y el personal **confirmado** en ese evento. Quien rechaza o es cancelado deja de verlo. Los mensajes llegan al momento y quien no tiene la app abierta recibe una notificación push. El menú **Chats** reúne todos los chats, con los no leídos primero.
-- **Fichaje, liquidación y tarifas**: horas por persona (admite turnos que pasan de medianoche) e importes con el mínimo de horas por puesto. Exportación a Excel.
+- **Calendario**: vista mensual con los eventos coloreados por cobertura (verde completo, ámbar faltan respuestas, rojo faltan personas), el personal libre de cada día y alta de un evento pulsando el día.
+- **Importar desde Excel**: sube vuestra lista (.xlsx o CSV). Reconoce las columnas aunque se llamen distinto («Móvil», «Categoría», «Apellidos»…) y entiende «camarera», «metre» o «mozo de descarga». Muestra una vista previa con errores y duplicados antes de guardar. Se puede volver a importar sin duplicar a nadie (se identifica por teléfono). Hay plantilla descargable y **exportación de los códigos de acceso** a Excel para repartirlos.
+- **Fichaje con geolocalización** (ver reglas abajo), liquidación y tarifas: horas por persona (admite turnos que pasan de medianoche) e importes con el mínimo de horas por puesto. Exportación a Excel.
 
 **Personal (app)**
 - Entra una sola vez con su **teléfono y el código de 6 cifras** que le da RRHH.
 - Acepta o rechaza convocatorias, ficha entrada y salida y marca los días que no puede trabajar.
 - Chat de cada evento confirmado, con avisos de mensajes, convocatorias, cambios de hora o lugar y cancelaciones.
+
+**Reglas del fichaje**
+
+| Regla | Detalle |
+|---|---|
+| Distancia | A **200 m como máximo** del punto del evento, que RRHH fija en el mapa al crearlo: buscando la dirección, pegando un enlace de Google Maps o con «Estoy aquí». Configurable con `CLOCK_RADIUS_M`. |
+| Horario | Desde **30 min antes de la citación** del puesto (para los mozos, la hora de descarga) hasta **30 min después de la hora de fin** del evento. Los eventos que pasan de medianoche y los cambios de hora se calculan bien. |
+| Precisión | Si el GPS da una precisión peor de ±200 m, pide repetir con mejor señal. |
+| Quién decide | El **servidor**, con su propia hora: cambiar la hora del móvil no sirve. Se guardan la distancia y la precisión de cada fichaje, y RRHH las ve (📍 89 m). |
+| Correcciones | RRHH puede corregir horas en la hoja del evento; quedan marcadas como **✎ manual**. |
+
+Sin ubicación fijada, el evento muestra un aviso y el personal no puede fichar. Aviso: como cualquier sistema basado en GPS, un móvil manipulado con apps de «ubicación falsa» podría engañarlo. La distancia registrada y las correcciones manuales permiten revisar los casos dudosos.
 
 **Avisos que se envían**
 

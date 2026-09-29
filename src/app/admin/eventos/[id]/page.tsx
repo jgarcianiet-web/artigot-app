@@ -14,6 +14,7 @@ import { ConfirmButton, SelectAll, SubmitButton } from "@/components/client";
 import { CoverageBar, Stars, StatusBadge } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
 import { unreadCounts } from "@/lib/chat";
+import { CLOCK_RADIUS_M, clockWindow, hhmm } from "@/lib/clockRules";
 import { db } from "@/lib/db";
 import {
   callTime,
@@ -28,6 +29,16 @@ import {
   workedHours,
 } from "@/lib/domain";
 import { candidatesFor, coverage, gaps } from "@/lib/staffing";
+
+function ClockTag({ distance, accuracy, manual }: { distance: number | null; accuracy: number | null; manual: boolean }) {
+  if (manual) return <div className="text-[11px] text-stone-500">✎ manual</div>;
+  if (distance == null) return null;
+  return (
+    <div className="text-[11px] text-emerald-700" title={`Precisión del GPS: ±${accuracy ?? "?"} m`}>
+      📍 {distance} m
+    </div>
+  );
+}
 
 const STATUS_ORDER: Record<string, number> = { CONFIRMADO: 0, CONVOCADO: 1, RECHAZADO: 2, CANCELADO: 3 };
 
@@ -74,6 +85,12 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
             {event.venue}
             {event.client && ` · Cliente: ${event.client}`}
           </p>
+          {event.lat == null && (
+            <p className="mt-1 text-sm font-medium text-amber-700">
+              ⚠ Sin ubicación: el personal no podrá fichar.{" "}
+              <Link href={`/admin/eventos/${event.id}/editar`} className="underline">Fijar en el mapa</Link>
+            </p>
+          )}
           {event.notes && <p className="mt-2 max-w-2xl text-sm whitespace-pre-line text-stone-600">{event.notes}</p>}
         </div>
         <div className="flex flex-wrap gap-2">
@@ -225,7 +242,9 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
             <SubmitButton>Guardar horas</SubmitButton>
           </div>
           <p className="text-xs text-stone-500">
-            Los trabajadores fichan desde su enlace personal. Aquí puedes corregir entrada/salida o fijar las horas a mano (tienen prioridad).
+            El personal ficha desde la app con su ubicación (a menos de {CLOCK_RADIUS_M} m, de {hhmm(clockWindow(event, "CAMARERO").opensAt)} a{" "}
+            {hhmm(clockWindow(event, "CAMARERO").closesAt)}; los mozos desde {hhmm(clockWindow(event, "MOZO").opensAt)}). 📍 = distancia
+            al evento al fichar. ✎ = hora corregida por RRHH. Las horas manuales tienen prioridad.
           </p>
           <div className="overflow-x-auto">
             <table className="table">
@@ -250,8 +269,14 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
                     <tr key={a.id}>
                       <td className="whitespace-nowrap">{a.worker.name}</td>
                       <td>{ROLE_LABEL[a.role as keyof typeof ROLE_LABEL]}</td>
-                      <td><input type="time" name={`in_${a.id}`} defaultValue={a.checkIn ?? ""} className="input w-28" /></td>
-                      <td><input type="time" name={`out_${a.id}`} defaultValue={a.checkOut ?? ""} className="input w-28" /></td>
+                      <td>
+                        <input type="time" name={`in_${a.id}`} defaultValue={a.checkIn ?? ""} className="input w-28" />
+                        <ClockTag distance={a.checkInDistance} accuracy={a.checkInAccuracy} manual={a.checkInManual} />
+                      </td>
+                      <td>
+                        <input type="time" name={`out_${a.id}`} defaultValue={a.checkOut ?? ""} className="input w-28" />
+                        <ClockTag distance={a.checkOutDistance} accuracy={a.checkOutAccuracy} manual={a.checkOutManual} />
+                      </td>
                       <td>
                         <input
                           name={`hours_${a.id}`}
