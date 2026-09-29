@@ -44,6 +44,7 @@ export async function commitImport(_prev: ImportState, form: FormData): Promise<
               phone: r.phone,
               phoneKey: phoneKey(r.phone),
               role: r.role!,
+              roles: [r.role!],
               email: r.email,
               zone: r.zone,
               rating: r.rating ?? 3,
@@ -53,13 +54,14 @@ export async function commitImport(_prev: ImportState, form: FormData): Promise<
           });
           created++;
         } else if (r.status === "actualizar") {
-          // Solo se sobrescriben los datos que vienen rellenos en el Excel
+          // Solo se sobrescriben los datos que vienen rellenos en el Excel; el puesto se añade a los que ya puede hacer
+          const current = await tx.worker.findUniqueOrThrow({ where: { phoneKey: phoneKey(r.phone) }, select: { roles: true } });
           await tx.worker.update({
             where: { phoneKey: phoneKey(r.phone) },
             data: {
               name: r.name,
               phone: r.phone,
-              ...(r.roleRaw && r.role && { role: r.role }),
+              ...(r.roleRaw && r.role && { role: r.role, roles: [...new Set([r.role, ...current.roles])] }),
               ...(r.email && { email: r.email }),
               ...(r.zone && { zone: r.zone }),
               ...(r.rating != null && { rating: r.rating }),

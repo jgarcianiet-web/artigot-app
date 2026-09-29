@@ -57,6 +57,9 @@ export default async function WorkerDetail({ params }: { params: Promise<{ id: s
           <h1>{worker.name}</h1>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-stone-600">
             <RoleBadge role={worker.role} />
+            {worker.roles.filter((r) => r !== worker.role).map((r) => (
+              <span key={r} className="opacity-70"><RoleBadge role={r} /></span>
+            ))}
             <Stars value={worker.rating} />
             <a href={`tel:${worker.phone}`}>{worker.phone}</a>
             {worker.email && <span>· {worker.email}</span>}

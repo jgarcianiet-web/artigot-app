@@ -23,9 +23,14 @@ Aplicación para que RRHH gestione de forma rápida el personal de **bodas y eve
 - Acepta o rechaza convocatorias, ficha entrada y salida y marca los días que no puede trabajar.
 - Chat de cada evento confirmado, con avisos de mensajes, convocatorias, cambios de hora o lugar y cancelaciones.
 
-**Valoraciones de los maîtres y selección automática**
+**Puestos: camarero, camarero responsable, maître y mozo**
 
-- El **maître confirmado** de cada evento valora a su equipo (camareros y mozos) desde el móvil, de 1 a 5 en cuatro criterios: puntualidad, imagen y uniforme, calidad del servicio, y actitud y equipo. Puede marcar «No se presentó» y dejar un comentario para RRHH. Solo lo ve RRHH.
+- El **camarero responsable** va a los eventos pequeños y cumple la función del maître. Cada evento indica cuántos necesita de cada puesto.
+- Cada trabajador tiene un **puesto principal** y los **puestos que también puede hacer** (en su ficha). El puesto en cada evento se decide al convocar: un mismo camarero puede ir como responsable en un evento y como maître en otro.
+
+**Valoraciones y selección automática**
+
+- El **maître o camarero responsable** confirmado de cada evento valora a su equipo (camareros y mozos) desde el móvil, de 1 a 5 en cuatro criterios: puntualidad, imagen y uniforme, calidad del servicio, y actitud y equipo. Puede marcar «No se presentó» y dejar un comentario para RRHH. Solo lo ve RRHH.
 - Puede valorar desde la hora de servicio hasta 7 días después. Al fichar la salida recibe un aviso, y RRHH puede enviarle un recordatorio desde el evento. **Si se retrasa más de un día, no puede aceptar nuevas convocatorias** hasta completarlas.
 - Con esas valoraciones, cada trabajador tiene una **puntuación de 0 a 100** (`src/lib/scoring.ts`):
 
@@ -35,7 +40,8 @@ Aplicación para que RRHH gestione de forma rápida el personal de **bodas y eve
 | Fiabilidad (12 meses) | −25 por cada ausencia, −8 por retirarse después de confirmar y −4 por fichar más de 10 min tarde. |
 | Rotación | −2 por cada servicio de los últimos 30 días, para repartir el trabajo entre quienes están igualados. |
 
-- En cada evento, **⚡ Selección automática** convoca a los mejor puntuados que estén libres ese día. En la lista de candidatos, al pasar el ratón por la puntuación se ve su desglose. La ficha de cada trabajador muestra su puntuación, la media por criterio y todas sus valoraciones.
+- En cada evento, **⚡ Selección automática** convoca a los mejor puntuados que estén libres ese día. Cubre primero maître y responsable, y nunca convoca a la misma persona para dos puestos.
+- **Reposición automática** (activada por defecto en cada evento): si alguien rechaza, se retira o RRHH marca que «No puede», se convoca solo al siguiente mejor puntuado del mismo puesto y RRHH recibe un aviso con el nombre del sustituto, o de que no queda nadie libre. A quien rechazó no se le vuelve a convocar a ese evento. En la lista de candidatos, al pasar el ratón por la puntuación se ve su desglose. La ficha de cada trabajador muestra su puntuación, la media por criterio y todas sus valoraciones.
 
 **Reglas del fichaje**
 

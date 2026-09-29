@@ -1,17 +1,28 @@
-export const ROLES = ["CAMARERO", "MAITRE", "MOZO"] as const;
+export const ROLES = ["CAMARERO", "RESPONSABLE", "MAITRE", "MOZO"] as const;
 export type Role = (typeof ROLES)[number];
 
 export const ROLE_LABEL: Record<Role, string> = {
   CAMARERO: "Camarero",
+  RESPONSABLE: "Camarero responsable",
   MAITRE: "Maître",
   MOZO: "Mozo",
 };
 
 export const ROLE_PLURAL: Record<Role, string> = {
   CAMARERO: "Camareros",
+  RESPONSABLE: "Responsables",
   MAITRE: "Maîtres",
   MOZO: "Mozos",
 };
+
+/** Puestos que dirigen el evento y valoran al equipo: el maître o, en eventos pequeños, el camarero responsable. */
+export const LEAD_ROLES: readonly string[] = ["MAITRE", "RESPONSABLE"];
+export const isLeadRole = (role: string) => LEAD_ROLES.includes(role);
+
+export type Needs = { needCamareros: number; needResponsables: number; needMaitres: number; needMozos: number };
+
+/** Puestos que puede desempeñar un trabajador (siempre incluye el principal). */
+export const workerRoles = (w: { role: string; roles: string[] }) => [...new Set([w.role, ...w.roles])].filter(isRole);
 
 export const EVENT_TYPES = ["BODA", "EVENTO", "OTRO"] as const;
 export const EVENT_TYPE_LABEL: Record<string, string> = {
@@ -31,11 +42,9 @@ export function isRole(value: unknown): value is Role {
   return typeof value === "string" && (ROLES as readonly string[]).includes(value);
 }
 
-export function needFor(
-  event: { needCamareros: number; needMaitres: number; needMozos: number },
-  role: Role,
-) {
+export function needFor(event: Needs, role: Role) {
   if (role === "CAMARERO") return event.needCamareros;
+  if (role === "RESPONSABLE") return event.needResponsables;
   if (role === "MAITRE") return event.needMaitres;
   return event.needMozos;
 }

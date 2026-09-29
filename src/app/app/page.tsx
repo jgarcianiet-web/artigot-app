@@ -6,7 +6,7 @@ import { unreadCounts } from "@/lib/chat";
 import { CLOCK_RADIUS_M, clockWindow, hhmm } from "@/lib/clockRules";
 import { db } from "@/lib/db";
 import { pendingReviews } from "@/lib/reviews";
-import { addDays, callTime, formatDate, num, ROLE_LABEL, today, workedHours, type Role } from "@/lib/domain";
+import { addDays, callTime, isLeadRole, formatDate, num, ROLE_LABEL, today, workedHours, type Role } from "@/lib/domain";
 import { respond, toggleUnavailable } from "./actions";
 
 const DAYS_AHEAD = 56;
@@ -44,7 +44,7 @@ export default async function WorkerHome() {
     [...clockable, ...upcoming].map((a) => a.eventId),
   );
 
-  const toReview = worker.role === "MAITRE" || worker.assignments.some((a) => a.role === "MAITRE") ? await pendingReviews(me.id) : [];
+  const toReview = worker.assignments.some((a) => isLeadRole(a.role)) ? await pendingReviews(me.id) : [];
   const blocked = toReview.some((p) => p.overdue);
 
   const unavailable = new Set(worker.unavailabilities.map((u) => u.date));
@@ -75,7 +75,7 @@ export default async function WorkerHome() {
           <p className="text-sm">
             {blocked
               ? "Tienes valoraciones atrasadas. Hasta que las completes no podrás aceptar nuevas convocatorias."
-              : "Como maître, puntúa al personal de tus eventos. RRHH lo usa para elegir los equipos."}
+              : "Como responsable del evento, puntúa al personal. RRHH lo usa para elegir los equipos."}
           </p>
           {toReview.map((p) => (
             <Link key={p.id} href={`/app/eventos/${p.id}/valorar`} className="btn w-full justify-between">

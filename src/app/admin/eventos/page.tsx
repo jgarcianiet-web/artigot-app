@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Empty } from "@/components/ui";
 import { db } from "@/lib/db";
-import { EVENT_TYPE_LABEL, formatDate, today } from "@/lib/domain";
+import { EVENT_TYPE_LABEL, formatDate, ROLE_PLURAL, ROLES, today } from "@/lib/domain";
 import { coverage } from "@/lib/staffing";
 
 export default async function EventList({ searchParams }: { searchParams: Promise<{ pasados?: string }> }) {
@@ -35,9 +35,9 @@ export default async function EventList({ searchParams }: { searchParams: Promis
                 <th>Fecha</th>
                 <th>Evento</th>
                 <th className="hidden md:table-cell">Lugar</th>
-                <th className="text-center">Camareros</th>
-                <th className="text-center">Maîtres</th>
-                <th className="text-center">Mozos</th>
+                {ROLES.map((r) => (
+                  <th key={r} className="text-center">{ROLE_PLURAL[r]}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
