@@ -1,14 +1,15 @@
 import Link from "next/link";
-import { Empty, RoleBadge, Stars } from "@/components/ui";
+import { Empty, RoleBadge, ScoreBadge } from "@/components/ui";
 import { db } from "@/lib/db";
 import { isRole, ROLE_PLURAL, ROLES, today } from "@/lib/domain";
+import { computeScores, explainScore } from "@/lib/scoring";
 
 export default async function StaffList({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; role?: string; inactivos?: string }>;
+  searchParams: Promise<{ q?: string; role?: string; inactivos?: string; orden?: string }>;
 }) {
-  const { q = "", role = "", inactivos } = await searchParams;
+  const { q = "", role = "", inactivos, orden = "puntuacion" } = await searchParams;
   const t = today();
   const workers = await db.worker.findMany({
     where: {
@@ -27,6 +28,10 @@ export default async function StaffList({
     orderBy: [{ role: "asc" }, { name: "asc" }],
   });
 
+  const scores = await computeScores(workers.map((w) => w.id), t);
+  if (orden === "puntuacion") {
+    workers.sort((a, b) => a.role.localeCompare(b.role) || scores.get(b.id)!.score - scores.get(a.id)!.score);
+  }
   const counts = await db.worker.groupBy({ by: ["role"], where: { active: true }, _count: true });
 
   return (
@@ -56,6 +61,10 @@ export default async function StaffList({
             <option key={r} value={r}>{ROLE_PLURAL[r]}</option>
           ))}
         </select>
+        <select name="orden" defaultValue={orden} className="input w-auto">
+          <option value="puntuacion">Por puntuación</option>
+          <option value="nombre">Por nombre</option>
+        </select>
         <label className="flex items-center gap-1.5 text-sm">
           <input type="checkbox" name="inactivos" value="1" defaultChecked={!!inactivos} /> Incluir inactivos
         </label>
@@ -71,7 +80,7 @@ export default async function StaffList({
               <tr>
                 <th>Nombre</th>
                 <th>Puesto</th>
-                <th>Valoración</th>
+                <th title="Puntuación del algoritmo (0-100)">Puntuación</th>
                 <th>Teléfono</th>
                 <th className="hidden md:table-cell">Zona</th>
                 <th className="text-right">Servicios</th>
@@ -86,7 +95,7 @@ export default async function StaffList({
                     {!w.active && <span className="ml-2 text-xs text-stone-500">Inactivo</span>}
                   </td>
                   <td><RoleBadge role={w.role} /></td>
-                  <td><Stars value={w.rating} /></td>
+                  <td><ScoreBadge score={scores.get(w.id)!.score} title={explainScore(scores.get(w.id)!)} /></td>
                   <td className="whitespace-nowrap"><a href={`tel:${w.phone}`}>{w.phone}</a></td>
                   <td className="hidden text-stone-500 md:table-cell">{w.zone}</td>
                   <td className="text-right">{w._count.assignments}</td>

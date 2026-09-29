@@ -5,6 +5,7 @@ import { requireWorker } from "@/lib/auth";
 import { unreadCounts } from "@/lib/chat";
 import { CLOCK_RADIUS_M, clockWindow, hhmm } from "@/lib/clockRules";
 import { db } from "@/lib/db";
+import { pendingReviews } from "@/lib/reviews";
 import { addDays, callTime, formatDate, num, ROLE_LABEL, today, workedHours, type Role } from "@/lib/domain";
 import { respond, toggleUnavailable } from "./actions";
 
@@ -43,6 +44,9 @@ export default async function WorkerHome() {
     [...clockable, ...upcoming].map((a) => a.eventId),
   );
 
+  const toReview = worker.role === "MAITRE" || worker.assignments.some((a) => a.role === "MAITRE") ? await pendingReviews(me.id) : [];
+  const blocked = toReview.some((p) => p.overdue);
+
   const unavailable = new Set(worker.unavailabilities.map((u) => u.date));
   const busy = new Set(worker.assignments.filter((a) => ["CONVOCADO", "CONFIRMADO"].includes(a.status)).map((a) => a.event.date));
   const offset = (new Date(`${t}T12:00:00Z`).getUTCDay() + 6) % 7; // semana empieza en lunes
@@ -64,6 +68,23 @@ export default async function WorkerHome() {
         <p className="text-sm text-stone-500">Artigot · {ROLE_LABEL[worker.role as Role]}</p>
         <h1>Hola, {worker.name.split(" ")[0]}</h1>
       </header>
+
+      {toReview.length > 0 && (
+        <section className={`card space-y-2 ${blocked ? "border-red-300 bg-red-50" : "border-amber-300 bg-amber-50"}`}>
+          <h2>⭐ Valora a tu equipo</h2>
+          <p className="text-sm">
+            {blocked
+              ? "Tienes valoraciones atrasadas. Hasta que las completes no podrás aceptar nuevas convocatorias."
+              : "Como maître, puntúa al personal de tus eventos. RRHH lo usa para elegir los equipos."}
+          </p>
+          {toReview.map((p) => (
+            <Link key={p.id} href={`/app/eventos/${p.id}/valorar`} className="btn w-full justify-between">
+              <span>{p.name} · {formatDate(p.date)}</span>
+              <span className="text-xs">{p.missing} de {p.total} pendientes</span>
+            </Link>
+          ))}
+        </section>
+      )}
 
       {clockable.map((a) => (
         <section key={a.id} className="card space-y-3 border-brand-600 ring-2 ring-brand-100">
@@ -90,7 +111,9 @@ export default async function WorkerHome() {
             <EventInfo event={a.event} role={a.role} />
             <div className="grid grid-cols-2 gap-2">
               <form action={respond.bind(null, a.id, true)}>
-                <button className="btn btn-success w-full py-3">Acepto</button>
+                <button className="btn btn-success w-full py-3" disabled={blocked} title={blocked ? "Completa antes tus valoraciones pendientes" : undefined}>
+                  Acepto
+                </button>
               </form>
               <form action={respond.bind(null, a.id, false)}>
                 <button className="btn btn-danger w-full py-3">No puedo</button>

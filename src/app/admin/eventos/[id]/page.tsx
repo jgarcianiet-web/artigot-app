@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   autoFill,
+  remindReviews,
   deleteEvent,
   duplicateEvent,
   inviteWorkers,
@@ -11,7 +12,7 @@ import {
   setEventStatus,
 } from "@/app/actions";
 import { ConfirmButton, SelectAll, SubmitButton } from "@/components/client";
-import { CoverageBar, Stars, StatusBadge } from "@/components/ui";
+import { CoverageBar, ScoreBadge, StatusBadge } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
 import { unreadCounts } from "@/lib/chat";
 import { CLOCK_RADIUS_M, clockWindow, hhmm } from "@/lib/clockRules";
@@ -28,6 +29,8 @@ import {
   ROLES,
   workedHours,
 } from "@/lib/domain";
+import { REVIEW_DAYS, reviewWindowOpen } from "@/lib/reviews";
+import { CRITERIA, explainScore, reviewAverage } from "@/lib/scoring";
 import { candidatesFor, coverage, gaps } from "@/lib/staffing";
 
 function ClockTag({ distance, accuracy, manual }: { distance: number | null; accuracy: number | null; manual: boolean }) {
@@ -50,8 +53,9 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
   });
   if (!event) notFound();
 
-  const [candidates, rates, unread, messageCount] = await Promise.all([
+  const [candidates, reviews, rates, unread, messageCount] = await Promise.all([
     candidatesFor(event),
+    db.review.findMany({ where: { eventId: event.id }, include: { reviewer: { select: { name: true } } } }),
     db.rate.findMany(),
     unreadCounts({ kind: "admin", name: adminName }, [event.id]),
     db.message.count({ where: { eventId: event.id } }),
@@ -63,6 +67,12 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
   const totalMissing = ROLES.reduce((s, r) => s + missing[r], 0);
   const fillable = ROLES.reduce((s, r) => s + Math.min(missing[r], candidates[r].length), 0);
   const confirmed = event.assignments.filter((a) => a.status === "CONFIRMADO");
+  const maitres = confirmed.filter((a) => a.role === "MAITRE");
+  const teamSize = confirmed.length - maitres.length;
+  const pendingReviewCount = maitres.reduce(
+    (n, m) => n + teamSize - reviews.filter((r) => r.reviewerId === m.workerId).length,
+    0,
+  );
 
 
   let totalHours = 0;
@@ -121,7 +131,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
               <span className="text-sm text-stone-500">
                 Faltan {totalMissing} · {fillable} candidatos disponibles
               </span>
-              <SubmitButton className="btn btn-primary" >Autocompletar convocatoria</SubmitButton>
+              <SubmitButton className="btn btn-primary">⚡ Selección automática</SubmitButton>
             </form>
           )}
         </div>
@@ -140,7 +150,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
           ))}
         </div>
         <p className="text-xs text-stone-500">
-          «Autocompletar» convoca a los mejor valorados que estén libres ese día, priorizando a quien menos ha trabajado en los últimos 30 días. Cada convocado recibe un aviso en el móvil para aceptar o rechazar; al aceptar entra en el chat del evento.
+          «Selección automática» convoca a quienes tienen mejor puntuación entre los libres ese día. La puntuación (0-100) sale de las valoraciones de los maîtres, resta por ausencias, retiradas y retrasos, y reparte el trabajo entre quienes están igualados. Cada convocado recibe un aviso en el móvil para aceptar o rechazar; al aceptar entra en el chat del evento.
         </p>
       </section>
 
@@ -201,7 +211,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
                       <tr>
                         <th className="w-8"><SelectAll name="workerId" /></th>
                         <th>Nombre</th>
-                        <th>Valoración</th>
+                        <th>Puntuación</th>
                         <th className="text-right" title="Servicios en los últimos 30 días">30 d</th>
                       </tr>
                     </thead>
@@ -221,7 +231,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
                             {c.name}
                             {c.zone && <div className="text-xs text-stone-500">{c.zone}</div>}
                           </td>
-                          <td><Stars value={c.rating} /></td>
+                          <td><ScoreBadge score={c.score.score} title={explainScore(c.score)} /></td>
                           <td className="text-right">{c.recentEvents}</td>
                         </tr>
                       ))}
@@ -233,6 +243,79 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
           </section>
         );
       })}
+
+      {/* Valoraciones del maître */}
+      {confirmed.some((a) => a.role !== "MAITRE") && (
+        <section className="card space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2>Valoraciones del maître</h2>
+            {maitres.length > 0 && pendingReviewCount > 0 && reviewWindowOpen(event) && (
+              <form action={remindReviews.bind(null, event.id)}>
+                <SubmitButton className="btn btn-sm">🔔 Recordar al maître ({pendingReviewCount} pendientes)</SubmitButton>
+              </form>
+            )}
+          </div>
+          {maitres.length === 0 ? (
+            <p className="text-sm text-amber-700">Este evento no tiene maître confirmado: nadie valorará al equipo.</p>
+          ) : (
+            <p className="text-xs text-stone-500">
+              Valora {maitres.map((m) => m.worker.name).join(" y ")}: desde el inicio del servicio hasta {REVIEW_DAYS} días después. Si
+              se retrasa más de un día, no puede aceptar nuevas convocatorias hasta completarlas.
+            </p>
+          )}
+          <div className="overflow-x-auto">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  {CRITERIA.map((c) => (
+                    <th key={c.key} className="text-center">{c.label}</th>
+                  ))}
+                  <th className="text-center">Media</th>
+                  <th>Comentario</th>
+                </tr>
+              </thead>
+              <tbody>
+                {confirmed
+                  .filter((a) => a.role !== "MAITRE")
+                  .map((a) => {
+                    const rs = reviews.filter((r) => r.workerId === a.workerId);
+                    if (!rs.length) {
+                      return (
+                        <tr key={a.id}>
+                          <td>{a.worker.name}</td>
+                          <td colSpan={CRITERIA.length + 2} className="text-sm text-stone-400">Pendiente de valorar</td>
+                        </tr>
+                      );
+                    }
+                    return rs.map((r) => {
+                      const avg = reviewAverage(r);
+                      return (
+                        <tr key={r.id}>
+                          <td>
+                            {a.worker.name}
+                            {rs.length > 1 && <div className="text-xs text-stone-500">por {r.reviewer.name}</div>}
+                          </td>
+                          {r.noShow ? (
+                            <td colSpan={CRITERIA.length + 1} className="text-center font-medium text-red-700">No se presentó</td>
+                          ) : (
+                            <>
+                              {CRITERIA.map((c) => (
+                                <td key={c.key} className="text-center">{r[c.key]}</td>
+                              ))}
+                              <td className="text-center font-semibold">{avg?.toFixed(1).replace(".", ",")}</td>
+                            </>
+                          )}
+                          <td className="max-w-xs text-sm text-stone-600">{r.comment}</td>
+                        </tr>
+                      );
+                    });
+                  })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       {/* Fichaje */}
       {confirmed.length > 0 && (

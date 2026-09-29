@@ -8,7 +8,8 @@ import {
   toggleWorkerActive,
 } from "@/app/actions";
 import { ConfirmButton, CopyButton, SubmitButton } from "@/components/client";
-import { Empty, RoleBadge, Stars, StatusBadge } from "@/components/ui";
+import { Empty, RoleBadge, ScoreBadge, Stars, StatusBadge } from "@/components/ui";
+import { computeScores, CRITERIA, reviewAverage, SCORING } from "@/lib/scoring";
 import { db } from "@/lib/db";
 import { appUrl, formatDate, num, today, workedHours } from "@/lib/domain";
 
@@ -22,6 +23,11 @@ export default async function WorkerDetail({ params }: { params: Promise<{ id: s
       unavailabilities: { where: { date: { gte: t } }, orderBy: { date: "asc" } },
       assignments: { include: { event: true }, orderBy: { event: { date: "desc" } }, take: 50 },
       devices: { select: { kind: true } },
+      reviews: {
+        include: { event: { select: { id: true, name: true, date: true } }, reviewer: { select: { name: true } } },
+        orderBy: { event: { date: "desc" } },
+        take: 30,
+      },
     },
   });
   if (!worker) notFound();
@@ -36,6 +42,12 @@ export default async function WorkerDetail({ params }: { params: Promise<{ id: s
   ]
     .filter(Boolean)
     .join("\n");
+  const score = (await computeScores([worker.id], today())).get(worker.id)!;
+  const criteriaAvg = CRITERIA.map((c) => {
+    const vals = worker.reviews.map((r) => r[c.key]).filter((v): v is number => v != null);
+    return { ...c, avg: vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null };
+  });
+  const fmt = (n: number) => n.toFixed(1).replace(".", ",");
   const deviceKinds = [...new Set(worker.devices.map((d) => DEVICE_LABEL[d.kind] ?? d.kind))];
 
   return (
@@ -63,6 +75,79 @@ export default async function WorkerDetail({ params }: { params: Promise<{ id: s
           </form>
         </div>
       </div>
+
+      <section className="card space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2>Puntuación para la selección automática</h2>
+          <span className="text-3xl"><ScoreBadge score={score.score} /></span>
+        </div>
+        <div className="grid gap-3 text-sm sm:grid-cols-4">
+          <div>
+            <div className="text-xs text-stone-500">Calidad (valoraciones)</div>
+            <div className="font-medium">{fmt(score.quality)} <span className="text-stone-500">· media {fmt(score.average)}/5 · {score.reviewCount} valoraciones</span></div>
+          </div>
+          <div>
+            <div className="text-xs text-stone-500">Fiabilidad (12 meses)</div>
+            <div className={score.penalties.reliability ? "font-medium text-red-700" : "font-medium text-emerald-700"}>
+              {score.penalties.reliability ? `−${score.penalties.reliability}` : "Sin incidencias"}
+            </div>
+            <div className="text-xs text-stone-500">{score.noShows} ausencias · {score.withdrawals} retiradas · {score.lates} retrasos</div>
+          </div>
+          <div>
+            <div className="text-xs text-stone-500">Rotación (30 días)</div>
+            <div className="font-medium">{score.penalties.rotation ? `−${score.penalties.rotation}` : "0"}</div>
+            <div className="text-xs text-stone-500">{score.recentEvents} servicios recientes</div>
+          </div>
+          <div>
+            <div className="text-xs text-stone-500">Por criterio</div>
+            {criteriaAvg.map((c) => (
+              <div key={c.key} className="flex justify-between text-xs">
+                <span>{c.label}</span>
+                <span className="font-medium">{c.avg == null ? "—" : fmt(c.avg)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <p className="text-xs text-stone-500">
+          Las estrellas de RRHH ({worker.rating}/5) cuentan como {SCORING.PRIOR_WEIGHT} valoraciones de partida. Cada ausencia resta {SCORING.NO_SHOW_PENALTY},
+          cada retirada tras confirmar {SCORING.WITHDRAWAL_PENALTY} y cada retraso de más de {SCORING.LATE_GRACE_MIN} min {SCORING.LATE_PENALTY}.
+        </p>
+        {worker.reviews.length > 0 && (
+          <details>
+            <summary className="cursor-pointer text-sm font-medium text-brand-700">Ver valoraciones ({worker.reviews.length})</summary>
+            <div className="mt-2 overflow-x-auto">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Evento</th>
+                    <th>Maître</th>
+                    <th className="text-center">Media</th>
+                    <th>Comentario</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {worker.reviews.map((r) => {
+                    const avg = reviewAverage(r);
+                    return (
+                      <tr key={r.id}>
+                        <td className="whitespace-nowrap">
+                          <Link href={`/admin/eventos/${r.event.id}`} className="link">{r.event.name}</Link>
+                          <div className="text-xs text-stone-500">{formatDate(r.event.date)}</div>
+                        </td>
+                        <td>{r.reviewer.name}</td>
+                        <td className="text-center font-semibold">
+                          {r.noShow ? <span className="text-red-700">No se presentó</span> : avg != null && fmt(avg)}
+                        </td>
+                        <td className="text-sm text-stone-600">{r.comment}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        )}
+      </section>
 
       <section className="card space-y-3">
         <h2>Acceso a la app</h2>

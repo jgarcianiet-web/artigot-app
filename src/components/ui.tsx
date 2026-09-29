@@ -53,3 +53,14 @@ export function CoverageBar({ need, confirmed, pending }: { need: number; confir
 export function Empty({ children }: { children: React.ReactNode }) {
   return <p className="rounded-lg border border-dashed border-stone-300 p-6 text-center text-sm text-stone-500">{children}</p>;
 }
+
+/** Puntuación del algoritmo (0-100) con color según el tramo. */
+export function ScoreBadge({ score, title }: { score: number; title?: string }) {
+  const cls =
+    score >= 75 ? "bg-emerald-100 text-emerald-800" : score >= 50 ? "bg-sky-100 text-sky-800" : score >= 30 ? "bg-amber-100 text-amber-800" : "bg-red-100 text-red-700";
+  return (
+    <span title={title} className={`inline-block min-w-10 cursor-help rounded-full px-2 py-0.5 text-center text-xs font-semibold ${cls}`}>
+      {Math.round(score)}
+    </span>
+  );
+}

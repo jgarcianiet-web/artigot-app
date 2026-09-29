@@ -23,6 +23,20 @@ Aplicación para que RRHH gestione de forma rápida el personal de **bodas y eve
 - Acepta o rechaza convocatorias, ficha entrada y salida y marca los días que no puede trabajar.
 - Chat de cada evento confirmado, con avisos de mensajes, convocatorias, cambios de hora o lugar y cancelaciones.
 
+**Valoraciones de los maîtres y selección automática**
+
+- El **maître confirmado** de cada evento valora a su equipo (camareros y mozos) desde el móvil, de 1 a 5 en cuatro criterios: puntualidad, imagen y uniforme, calidad del servicio, y actitud y equipo. Puede marcar «No se presentó» y dejar un comentario para RRHH. Solo lo ve RRHH.
+- Puede valorar desde la hora de servicio hasta 7 días después. Al fichar la salida recibe un aviso, y RRHH puede enviarle un recordatorio desde el evento. **Si se retrasa más de un día, no puede aceptar nuevas convocatorias** hasta completarlas.
+- Con esas valoraciones, cada trabajador tiene una **puntuación de 0 a 100** (`src/lib/scoring.ts`):
+
+| Componente | Cálculo |
+|---|---|
+| Calidad | Media de las valoraciones; las recientes pesan más (una valoración pierde la mitad de su peso cada 180 días). Las estrellas que RRHH pone en la ficha cuentan como 2 valoraciones de partida. |
+| Fiabilidad (12 meses) | −25 por cada ausencia, −8 por retirarse después de confirmar y −4 por fichar más de 10 min tarde. |
+| Rotación | −2 por cada servicio de los últimos 30 días, para repartir el trabajo entre quienes están igualados. |
+
+- En cada evento, **⚡ Selección automática** convoca a los mejor puntuados que estén libres ese día. En la lista de candidatos, al pasar el ratón por la puntuación se ve su desglose. La ficha de cada trabajador muestra su puntuación, la media por criterio y todas sus valoraciones.
+
 **Reglas del fichaje**
 
 | Regla | Detalle |

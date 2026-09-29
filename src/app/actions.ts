@@ -318,6 +318,22 @@ export async function removeAssignment(id: string) {
   revalidatePath(`/admin/eventos/${a.eventId}`);
 }
 
+/** Aviso al maître para que valore a su equipo. */
+export async function remindReviews(eventId: string) {
+  await requireAdmin();
+  const event = await db.event.findUniqueOrThrow({
+    where: { id: eventId },
+    include: { assignments: { where: { status: "CONFIRMADO", role: "MAITRE" }, select: { workerId: true } } },
+  });
+  await notify({
+    workerIds: event.assignments.map((a) => a.workerId),
+    workerUrl: `/app/eventos/${eventId}/valorar`,
+    title: "Valora a tu equipo",
+    body: `RRHH te recuerda que falta valorar al personal de ${event.name}.`,
+    tag: `rev-${eventId}`,
+  });
+}
+
 // ---------- Fichaje ----------
 
 export async function saveTimesheet(eventId: string, form: FormData) {

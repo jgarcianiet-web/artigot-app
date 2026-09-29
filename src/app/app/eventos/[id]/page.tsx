@@ -7,6 +7,7 @@ import { requireWorker } from "@/lib/auth";
 import { recentMessages } from "@/lib/chat";
 import { db } from "@/lib/db";
 import { today } from "@/lib/domain";
+import { reviewWindowOpen } from "@/lib/reviews";
 import { respond } from "../../actions";
 
 export default async function WorkerEvent({ params }: { params: Promise<{ id: string }> }) {
@@ -47,6 +48,10 @@ export default async function WorkerEvent({ params }: { params: Promise<{ id: st
           )}
         </div>
       </details>
+
+      {confirmed && a.role === "MAITRE" && reviewWindowOpen(a.event) && (
+        <Link href={`/app/eventos/${a.eventId}/valorar`} className="btn btn-primary w-full">⭐ Valorar a mi equipo</Link>
+      )}
 
       {confirmed ? (
         <Chat

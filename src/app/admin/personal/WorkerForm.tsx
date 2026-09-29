@@ -43,7 +43,7 @@ export function WorkerForm({ worker }: { worker?: Worker }) {
           </select>
         </div>
         <div>
-          <label className="label">Valoración</label>
+          <label className="label" title="Punto de partida de la puntuación; luego mandan las valoraciones de los maîtres">Valoración inicial de RRHH</label>
           <select name="rating" className="input" defaultValue={worker?.rating ?? 3}>
             {[5, 4, 3, 2, 1].map((n) => (
               <option key={n} value={n}>{"★".repeat(n)} ({n})</option>

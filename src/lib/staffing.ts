@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { addDays, needFor, ROLES, type Role } from "./domain";
+import { computeScores, type Score } from "./scoring";
 
 export const ACTIVE_STATUSES = ["CONVOCADO", "CONFIRMADO"];
 
@@ -11,13 +12,14 @@ export type Candidate = {
   rating: number;
   zone: string | null;
   recentEvents: number;
+  score: Score;
 };
 
 /**
  * Trabajadores disponibles para un evento, por puesto.
  * Excluye: inactivos, no disponibles ese día, ya ocupados en otro evento ese día
- * y los que ya están en este evento. Ordena por valoración y, a igualdad,
- * por quien menos ha trabajado en los últimos 30 días (reparto equitativo).
+ * y los que ya están en este evento. Ordena por la puntuación del algoritmo
+ * (valoraciones de los maîtres, fiabilidad y rotación; ver scoring.ts).
  */
 export async function candidatesFor(event: { id: string; date: string }) {
   const [workers, recent] = await Promise.all([
@@ -46,6 +48,7 @@ export async function candidatesFor(event: { id: string; date: string }) {
     }),
   ]);
   const recentByWorker = new Map(recent.map((r) => [r.workerId, r._count]));
+  const scores = await computeScores(workers.map((w) => w.id), event.date);
 
   const byRole = Object.fromEntries(ROLES.map((r) => [r, [] as Candidate[]])) as Record<Role, Candidate[]>;
   for (const w of workers) {
@@ -59,10 +62,13 @@ export async function candidatesFor(event: { id: string; date: string }) {
       rating: w.rating,
       zone: w.zone,
       recentEvents: recentByWorker.get(w.id) ?? 0,
+      score: scores.get(w.id)!,
     });
   }
   for (const role of ROLES) {
-    byRole[role].sort((a, b) => b.rating - a.rating || a.recentEvents - b.recentEvents || a.name.localeCompare(b.name));
+    byRole[role].sort(
+      (a, b) => b.score.score - a.score.score || a.recentEvents - b.recentEvents || a.name.localeCompare(b.name),
+    );
   }
   return byRole;
 }
