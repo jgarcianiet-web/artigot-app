@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Artigot</string>
+    <string name="title_activity_main">Artigot</string>
+    <string name="package_name">es.artigot.personal</string>
+    <string name="custom_url_scheme">es.artigot.personal</string>
+</resources>

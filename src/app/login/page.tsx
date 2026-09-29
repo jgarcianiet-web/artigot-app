@@ -13,13 +13,20 @@ export default function LoginPage() {
           <p className="text-sm text-stone-500">Acceso de Recursos Humanos</p>
         </div>
         <div>
+          <label className="label" htmlFor="name">Tu nombre</label>
+          <input id="name" name="name" className="input" required autoFocus autoComplete="name" placeholder="Aparece en el chat de los eventos" />
+        </div>
+        <div>
           <label className="label" htmlFor="password">Contraseña</label>
-          <input id="password" name="password" type="password" className="input" required autoFocus />
+          <input id="password" name="password" type="password" className="input" required autoComplete="current-password" />
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
         <button className="btn btn-primary w-full" disabled={pending}>
           {pending ? "Entrando…" : "Entrar"}
         </button>
+        <p className="text-center text-xs text-stone-400">
+          ¿Eres camarero, maître o mozo? <a href="/entrar" className="hover:underline">Entra aquí</a>
+        </p>
       </form>
     </main>
   );

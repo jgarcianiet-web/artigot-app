@@ -3,14 +3,16 @@ import { notFound } from "next/navigation";
 import {
   addUnavailability,
   deleteWorker,
-  regenerateToken,
+  regenerateAccessCode,
   removeUnavailability,
   toggleWorkerActive,
 } from "@/app/actions";
 import { ConfirmButton, CopyButton, SubmitButton } from "@/components/client";
 import { Empty, RoleBadge, Stars, StatusBadge } from "@/components/ui";
 import { db } from "@/lib/db";
-import { appUrl, formatDate, num, today, whatsappLink, workedHours } from "@/lib/domain";
+import { appUrl, formatDate, num, today, workedHours } from "@/lib/domain";
+
+const DEVICE_LABEL: Record<string, string> = { web: "Navegador / web app", fcm: "App Android", apns: "App iPhone" };
 
 export default async function WorkerDetail({ params }: { params: Promise<{ id: string }> }) {
   const t = today();
@@ -19,12 +21,22 @@ export default async function WorkerDetail({ params }: { params: Promise<{ id: s
     include: {
       unavailabilities: { where: { date: { gte: t } }, orderBy: { date: "asc" } },
       assignments: { include: { event: true }, orderBy: { event: { date: "desc" } }, take: 50 },
+      devices: { select: { kind: true } },
     },
   });
   if (!worker) notFound();
 
-  const portal = `${appUrl()}/p/${worker.token}`;
-  const welcome = `Hola ${worker.name.split(" ")[0]}, este es tu enlace personal para ver tus convocatorias, confirmar servicios, fichar y marcar los días que no puedes trabajar: ${portal}`;
+  const instructions = [
+    `Hola ${worker.name.split(" ")[0]}, ya tienes acceso a la app de Artigot para ver convocatorias, confirmar, fichar y hablar en el chat de cada evento.`,
+    `Entra en ${appUrl()} (o en la app) con:`,
+    `Teléfono: ${worker.phone}`,
+    `Código: ${worker.accessCode}`,
+    process.env.ANDROID_APK_URL && `App Android: ${process.env.ANDROID_APK_URL}`,
+    process.env.IOS_APP_URL && `App iPhone: ${process.env.IOS_APP_URL}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const deviceKinds = [...new Set(worker.devices.map((d) => DEVICE_LABEL[d.kind] ?? d.kind))];
 
   return (
     <div className="space-y-6">
@@ -52,17 +64,31 @@ export default async function WorkerDetail({ params }: { params: Promise<{ id: s
         </div>
       </div>
 
-      <section className="card space-y-2">
-        <h2>Enlace personal del trabajador</h2>
-        <p className="text-sm text-stone-500">
-          Con este enlace el trabajador confirma convocatorias, ficha entrada y salida y marca sus días no disponibles. No necesita contraseña: no lo compartas con otras personas.
-        </p>
-        <code className="block overflow-x-auto rounded bg-stone-100 px-2 py-1 text-xs">{portal}</code>
+      <section className="card space-y-3">
+        <h2>Acceso a la app</h2>
+        <div className="flex flex-wrap items-end gap-6">
+          <div>
+            <div className="text-xs text-stone-500">Teléfono</div>
+            <div className="font-medium">{worker.phone}</div>
+          </div>
+          <div>
+            <div className="text-xs text-stone-500">Código de acceso</div>
+            <div className="font-mono text-2xl tracking-[0.3em]">{worker.accessCode}</div>
+          </div>
+          <div>
+            <div className="text-xs text-stone-500">Avisos activos en</div>
+            <div className="text-sm">{deviceKinds.length ? deviceKinds.join(", ") : <span className="text-amber-700">ningún dispositivo todavía</span>}</div>
+          </div>
+        </div>
+        {worker.lockedUntil && worker.lockedUntil > new Date() && (
+          <p className="text-sm text-red-600">Bloqueado por intentos fallidos. Genera un código nuevo para desbloquearlo.</p>
+        )}
         <div className="flex flex-wrap gap-2">
-          <a href={whatsappLink(worker.phone, welcome)} target="_blank" className="btn btn-sm btn-success">Enviar por WhatsApp</a>
-          <CopyButton text={portal} label="Copiar enlace" />
-          <form action={regenerateToken.bind(null, worker.id)}>
-            <ConfirmButton className="btn btn-sm" message="El enlace actual dejará de funcionar. ¿Continuar?">Generar enlace nuevo</ConfirmButton>
+          <CopyButton text={instructions} label="Copiar instrucciones de acceso" />
+          <form action={regenerateAccessCode.bind(null, worker.id)}>
+            <ConfirmButton className="btn btn-sm" message="Se cerrará su sesión en todos sus dispositivos y tendrá que entrar con el código nuevo. ¿Continuar?">
+              Generar código nuevo
+            </ConfirmButton>
           </form>
         </div>
       </section>

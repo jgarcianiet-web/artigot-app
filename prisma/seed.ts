@@ -1,8 +1,8 @@
-import { randomBytes } from "node:crypto";
+import { randomInt } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 
 const db = new PrismaClient();
-const token = () => randomBytes(18).toString("base64url");
+const accessCode = () => String(randomInt(0, 1_000_000)).padStart(6, "0");
 
 function addDays(days: number) {
   const d = new Date();
@@ -33,7 +33,15 @@ async function main() {
   for (const [role, list] of Object.entries(names)) {
     for (const [i, name] of list.entries()) {
       await db.worker.create({
-        data: { name, role, phone: String(phone++), rating: 5 - (i % 3), token: token(), zone: i % 2 ? "Valencia" : "Alicante" },
+        data: {
+          name,
+          role,
+          phone: String(phone),
+          phoneKey: String(phone++),
+          accessCode: accessCode(),
+          rating: 5 - (i % 3),
+          zone: i % 2 ? "Valencia" : "Alicante",
+        },
       });
     }
   }

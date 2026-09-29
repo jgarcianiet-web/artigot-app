@@ -111,26 +111,6 @@ export const euro = (n: number) =>
 
 export const num = (n: number) => new Intl.NumberFormat("es-ES", { maximumFractionDigits: 2 }).format(n);
 
-export function whatsappLink(phone: string, text: string) {
-  let digits = phone.replace(/\D/g, "");
-  if (digits.length === 9) digits = `34${digits}`; // móviles españoles sin prefijo
-  return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
-}
-
 export function appUrl() {
   return (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
-}
-
-export function inviteMessage(
-  worker: { name: string; token: string },
-  event: { name: string; type: string; date: string; startTime: string; unloadTime: string | null; venue: string },
-  role: string,
-) {
-  const first = worker.name.split(" ")[0];
-  const tipo = EVENT_TYPE_LABEL[event.type]?.toLowerCase() ?? "evento";
-  return (
-    `Hola ${first}, te convocamos como ${ROLE_LABEL[role as Role]?.toLowerCase() ?? role} para ${tipo === "boda" ? "la boda" : "el evento"} ` +
-    `"${event.name}" el ${formatDate(event.date, { long: true })} a las ${callTime(event, role)} en ${event.venue}. ` +
-    `Confirma o rechaza aquí: ${appUrl()}/p/${worker.token}`
-  );
 }

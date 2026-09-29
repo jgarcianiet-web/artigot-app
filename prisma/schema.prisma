@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -18,10 +18,17 @@ model Worker {
   zone            String?
   notes           String?
   active          Boolean          @default(true)
-  token           String           @unique
+  // Acceso a la app: teléfono normalizado + código de 6 cifras que RRHH entrega al trabajador
+  phoneKey        String           @unique
+  accessCode      String
+  sessionVersion  Int              @default(0)
+  failedLogins    Int              @default(0)
+  lockedUntil     DateTime?
   createdAt       DateTime         @default(now())
   unavailabilities Unavailability[]
   assignments     Assignment[]
+  messages        Message[]
+  devices         Device[]
 }
 
 // Días en los que el trabajador no está disponible (fecha YYYY-MM-DD)
@@ -54,6 +61,8 @@ model Event {
   status        String       @default("ABIERTO")
   createdAt     DateTime     @default(now())
   assignments   Assignment[]
+  messages      Message[]
+  reads         ChatRead[]
 
   @@index([date])
 }
@@ -82,4 +91,43 @@ model Rate {
   role       String @id
   hourlyRate Float
   minHours   Float  @default(0)
+}
+
+// Mensaje del chat de un evento. workerId nulo = escrito por RRHH (authorName = nombre de quien escribe)
+model Message {
+  id         String   @id @default(cuid())
+  eventId    String
+  workerId   String?
+  authorName String
+  body       String
+  createdAt  DateTime @default(now())
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  worker     Worker?  @relation(fields: [workerId], references: [id], onDelete: SetNull)
+
+  @@index([eventId, createdAt])
+}
+
+// Última lectura del chat. reader = "w:<workerId>" para trabajadores, "rrhh" para RRHH (bandeja compartida)
+model ChatRead {
+  id         String   @id @default(cuid())
+  eventId    String
+  reader     String
+  lastReadAt DateTime
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, reader])
+}
+
+// Dispositivo que recibe notificaciones. kind: web (Web Push) | fcm (Android) | apns (iOS)
+model Device {
+  id        String   @id @default(cuid())
+  kind      String
+  token     String   @unique
+  keys      Json?
+  workerId  String?
+  adminName String?
+  createdAt DateTime @default(now())
+  worker    Worker?  @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@index([workerId])
 }

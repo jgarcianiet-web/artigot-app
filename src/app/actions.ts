@@ -1,15 +1,22 @@
 "use server";
 
-import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { checkPassword, createSession, destroySession, requireAdmin } from "@/lib/auth";
+import {
+  checkPassword,
+  createAdminSession,
+  destroySession,
+  newAccessCode,
+  phoneKey,
+  requireAdmin,
+} from "@/lib/auth";
 import { db } from "@/lib/db";
-import { EVENT_TYPES, ROLES } from "@/lib/domain";
+import { forgetDevice } from "@/lib/devices";
+import { callTime, EVENT_TYPES, formatDate, ROLE_LABEL, ROLES, type Role } from "@/lib/domain";
+import { notify } from "@/lib/push";
 import { candidatesFor, gaps } from "@/lib/staffing";
-
-const newToken = () => randomBytes(18).toString("base64url");
 const time = z.string().regex(/^\d{2}:\d{2}$/);
 const optTime = z.union([time, z.literal("")]).transform((v) => v || null);
 const optText = z.string().trim().transform((v) => v || null);
@@ -18,14 +25,41 @@ const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 // ---------- Sesión ----------
 
 export async function login(_prev: string | null, form: FormData) {
-  if (!checkPassword(String(form.get("password") ?? ""))) return "Contraseña incorrecta";
-  await createSession();
+  const name = String(form.get("name") ?? "").trim().slice(0, 40);
+  if (name.length < 2) return "Escribe tu nombre (aparece en el chat)";
+  if (!checkPassword(String(form.get("password") ?? ""))) {
+    await new Promise((r) => setTimeout(r, 800)); // frena intentos por fuerza bruta
+    return "Contraseña incorrecta";
+  }
+  await createAdminSession(name);
   redirect("/admin");
 }
 
 export async function logout() {
+  await forgetDevice();
   await destroySession();
   redirect("/login");
+}
+
+// ---------- Avisos ----------
+
+type EventInfo = { id: string; name: string; date: string; startTime: string; unloadTime: string | null };
+
+/** Aviso de convocatoria a cada trabajador, tras responder a RRHH (no retrasa la pantalla). */
+function notifyInvited(event: EventInfo, invited: { workerId: string; role: string }[]) {
+  if (!invited.length) return;
+  after(async () => {
+    for (const role of ROLES) {
+      const ids = invited.filter((i) => i.role === role).map((i) => i.workerId);
+      await notify({
+        workerIds: ids,
+        workerUrl: `/app/eventos/${event.id}`,
+        title: "Nueva convocatoria",
+        body: `${event.name} · ${formatDate(event.date)} a las ${callTime(event, role)} (${ROLE_LABEL[role as Role].toLowerCase()}). Toca para aceptar o rechazar.`,
+        tag: `inv-${event.id}`,
+      });
+    }
+  });
 }
 
 // ---------- Personal ----------
@@ -45,9 +79,14 @@ export async function saveWorker(_prev: string | null, form: FormData) {
   const parsed = workerSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return parsed.error.issues[0].message;
   const id = form.get("id") ? String(form.get("id")) : null;
+  const key = phoneKey(parsed.data.phone);
+  if (key.length < 9) return "El teléfono debe tener al menos 9 cifras";
+  const clash = await db.worker.findUnique({ where: { phoneKey: key } });
+  if (clash && clash.id !== id) return `Ese teléfono ya es de ${clash.name}`;
+  const data = { ...parsed.data, phoneKey: key };
   const worker = id
-    ? await db.worker.update({ where: { id }, data: parsed.data })
-    : await db.worker.create({ data: { ...parsed.data, token: newToken() } });
+    ? await db.worker.update({ where: { id }, data })
+    : await db.worker.create({ data: { ...data, accessCode: newAccessCode() } });
   revalidatePath("/admin", "layout");
   redirect(`/admin/personal/${worker.id}`);
 }
@@ -56,12 +95,18 @@ export async function toggleWorkerActive(id: string) {
   await requireAdmin();
   const w = await db.worker.findUniqueOrThrow({ where: { id } });
   await db.worker.update({ where: { id }, data: { active: !w.active } });
+  if (w.active) await db.device.deleteMany({ where: { workerId: id } });
   revalidatePath("/admin", "layout");
 }
 
-export async function regenerateToken(id: string) {
+/** Nuevo código de acceso: cierra la sesión en todos sus dispositivos. */
+export async function regenerateAccessCode(id: string) {
   await requireAdmin();
-  await db.worker.update({ where: { id }, data: { token: newToken() } });
+  await db.worker.update({
+    where: { id },
+    data: { accessCode: newAccessCode(), sessionVersion: { increment: 1 }, failedLogins: 0, lockedUntil: null },
+  });
+  await db.device.deleteMany({ where: { workerId: id } });
   revalidatePath(`/admin/personal/${id}`);
 }
 
@@ -121,9 +166,34 @@ export async function saveEvent(_prev: string | null, form: FormData) {
   const parsed = eventSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return parsed.error.issues[0].message;
   const id = form.get("id") ? String(form.get("id")) : null;
+  const before = id ? await db.event.findUniqueOrThrow({ where: { id } }) : null;
   const event = id
     ? await db.event.update({ where: { id }, data: parsed.data })
     : await db.event.create({ data: parsed.data });
+
+  if (before) {
+    const changes = [
+      before.date !== event.date && `fecha: ${formatDate(event.date)}`,
+      before.startTime !== event.startTime && `hora: ${event.startTime}`,
+      before.unloadTime !== event.unloadTime && `descarga: ${event.unloadTime ?? "sin hora"}`,
+      before.venue !== event.venue && `lugar: ${event.venue}`,
+    ].filter(Boolean);
+    if (changes.length) {
+      after(async () => {
+        const people = await db.assignment.findMany({
+          where: { eventId: event.id, status: { in: ["CONVOCADO", "CONFIRMADO"] } },
+          select: { workerId: true },
+        });
+        await notify({
+          workerIds: people.map((p) => p.workerId),
+          workerUrl: `/app/eventos/${event.id}`,
+          title: `Cambios en ${event.name}`,
+          body: `Nueva ${changes.join(", ")}`,
+          tag: `upd-${event.id}`,
+        });
+      });
+    }
+  }
   revalidatePath("/admin", "layout");
   redirect(`/admin/eventos/${event.id}`);
 }
@@ -143,7 +213,21 @@ export async function setEventStatus(id: string, status: "ABIERTO" | "CERRADO") 
 
 export async function deleteEvent(id: string) {
   await requireAdmin();
+  const event = await db.event.findUniqueOrThrow({
+    where: { id },
+    include: { assignments: { where: { status: { in: ["CONVOCADO", "CONFIRMADO"] } }, select: { workerId: true } } },
+  });
   await db.event.delete({ where: { id } });
+  const workerIds = event.assignments.map((a) => a.workerId);
+  after(() =>
+    notify({
+      workerIds,
+      workerUrl: "/app",
+      title: "Evento cancelado",
+      body: `${event.name} del ${formatDate(event.date)} se ha cancelado.`,
+      tag: `del-${id}`,
+    }),
+  );
   revalidatePath("/admin", "layout");
   redirect("/admin/eventos");
 }
@@ -157,6 +241,7 @@ export async function inviteWorkers(eventId: string, form: FormData) {
   if (!ids.length) return;
   const available = Object.values(await candidatesFor(event)).flat();
   const allowed = new Map(available.map((c) => [c.id, c]));
+  const invited = [];
   for (const id of ids) {
     const c = allowed.get(id);
     if (!c) continue;
@@ -165,7 +250,9 @@ export async function inviteWorkers(eventId: string, form: FormData) {
       create: { eventId, workerId: id, role: c.role },
       update: { status: "CONVOCADO", role: c.role, respondedAt: null },
     });
+    invited.push({ workerId: id, role: c.role });
   }
+  notifyInvited(event, invited);
   revalidatePath(`/admin/eventos/${eventId}`);
 }
 
@@ -175,11 +262,14 @@ export async function autoFill(eventId: string) {
   const event = await db.event.findUniqueOrThrow({ where: { id: eventId }, include: { assignments: true } });
   const missing = gaps(event, event.assignments);
   const candidates = await candidatesFor(event);
+  const invited = [];
   for (const role of ROLES) {
     for (const c of candidates[role].slice(0, missing[role])) {
       await db.assignment.create({ data: { eventId, workerId: c.id, role } });
+      invited.push({ workerId: c.id, role });
     }
   }
+  notifyInvited(event, invited);
   revalidatePath(`/admin/eventos/${eventId}`);
 }
 
@@ -189,7 +279,20 @@ export async function setAssignmentStatus(id: string, status: string) {
   const a = await db.assignment.update({
     where: { id },
     data: { status, respondedAt: status === "CONVOCADO" ? null : new Date() },
+    include: { event: true },
   });
+  if (status === "CONVOCADO") notifyInvited(a.event, [a]);
+  if (status === "CANCELADO") {
+    after(() =>
+      notify({
+        workerIds: [a.workerId],
+        workerUrl: "/app",
+        title: "Convocatoria cancelada",
+        body: `Ya no te necesitamos en ${a.event.name} del ${formatDate(a.event.date)}. ¡Gracias!`,
+        tag: `inv-${a.eventId}`,
+      }),
+    );
+  }
   revalidatePath(`/admin/eventos/${a.eventId}`);
 }
 

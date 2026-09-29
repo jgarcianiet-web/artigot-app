@@ -1,17 +1,22 @@
 import Link from "next/link";
+import { PushSetup } from "@/components/PushSetup";
 import { requireAdmin } from "@/lib/auth";
+import { pushConfig } from "@/lib/push";
 import { logout } from "../actions";
+
+export const dynamic = "force-dynamic";
 
 const NAV = [
   { href: "/admin", label: "Panel" },
   { href: "/admin/eventos", label: "Eventos" },
+  { href: "/admin/chats", label: "Chats" },
   { href: "/admin/personal", label: "Personal" },
   { href: "/admin/liquidacion", label: "Liquidación" },
   { href: "/admin/tarifas", label: "Tarifas" },
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  await requireAdmin();
+  const name = await requireAdmin();
   return (
     <div className="min-h-screen">
       <header className="border-b border-stone-200 bg-white">
@@ -24,12 +29,16 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               </Link>
             ))}
           </nav>
-          <form action={logout} className="ml-auto">
+          <form action={logout} className="ml-auto flex items-center gap-3">
+            <span className="text-sm text-stone-500">{name}</span>
             <button className="text-sm text-stone-500 hover:text-stone-800">Salir</button>
           </form>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+      <main className="mx-auto max-w-6xl space-y-4 px-4 py-6">
+        <PushSetup config={pushConfig()} />
+        {children}
+      </main>
     </div>
   );
 }

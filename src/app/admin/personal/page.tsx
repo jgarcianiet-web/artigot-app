@@ -14,7 +14,11 @@ export default async function StaffList({
     where: {
       active: inactivos ? undefined : true,
       role: isRole(role) ? role : undefined,
-      OR: q ? [{ name: { contains: q } }, { phone: { contains: q } }, { zone: { contains: q } }] : undefined,
+      OR: q ? [
+            { name: { contains: q, mode: "insensitive" } },
+            { phone: { contains: q } },
+            { zone: { contains: q, mode: "insensitive" } },
+          ] : undefined,
     },
     include: {
       unavailabilities: { where: { date: t }, select: { id: true } },

@@ -1,0 +1,107 @@
+name: App Android (APK)
+
+# Genera el APK de la app Android y lo publica como release de GitHub.
+# Necesita la variable de repositorio APP_URL (dirección pública de la web en Railway).
+# Opcionales (secretos):
+#   GOOGLE_SERVICES_JSON     contenido de google-services.json (Firebase) -> notificaciones push
+#   ANDROID_KEYSTORE_BASE64  keystore en base64 + ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+#                            -> APK de release firmado siempre con la misma clave (sin él se genera un APK de depuración)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["android/**", "capacitor.config.ts", "package.json", "package-lock.json", ".github/workflows/android.yml"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    env:
+      CAP_SERVER_URL: ${{ vars.APP_URL }}
+      VERSION_CODE: ${{ github.run_number }}
+      VERSION_NAME: 1.0.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Comprobar APP_URL
+        run: |
+          if [ -z "$CAP_SERVER_URL" ]; then
+            echo "::error::Define la variable de repositorio APP_URL (Settings > Secrets and variables > Actions > Variables)"
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - run: npm ci
+
+      - name: Firebase (notificaciones)
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+          else
+            echo "::warning::Sin GOOGLE_SERVICES_JSON: la app funcionará pero no recibirá notificaciones push"
+          fi
+
+      - name: Sincronizar Capacitor
+        run: npx cap sync android
+
+      - name: Keystore de firma
+        id: keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            echo "path=$RUNNER_TEMP/release.keystore" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Compilar APK
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ steps.keystore.outputs.path }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          if [ -n "$ANDROID_KEYSTORE_PATH" ]; then
+            ./gradlew --no-daemon assembleRelease
+            cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/artigot.apk"
+          else
+            ./gradlew --no-daemon assembleDebug
+            cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/artigot.apk"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: artigot-android-${{ env.VERSION_NAME }}
+          path: ${{ runner.temp }}/artigot.apk
+
+      - name: Publicar release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-${{ env.VERSION_NAME }}
+          name: Android ${{ env.VERSION_NAME }}
+          target_commitish: ${{ github.sha }}
+          files: ${{ runner.temp }}/artigot.apk
+          body: |
+            APK de Artigot Personal conectado a ${{ vars.APP_URL }}.
+            Instálalo en el móvil Android (permite «instalar apps de origen desconocido» si lo pide).

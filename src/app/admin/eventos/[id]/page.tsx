@@ -10,21 +10,21 @@ import {
   setAssignmentStatus,
   setEventStatus,
 } from "@/app/actions";
-import { ConfirmButton, CopyButton, SelectAll, SubmitButton } from "@/components/client";
+import { ConfirmButton, SelectAll, SubmitButton } from "@/components/client";
 import { CoverageBar, Stars, StatusBadge } from "@/components/ui";
+import { requireAdmin } from "@/lib/auth";
+import { unreadCounts } from "@/lib/chat";
 import { db } from "@/lib/db";
 import {
   callTime,
   euro,
   EVENT_TYPE_LABEL,
   formatDate,
-  inviteMessage,
   num,
   payable,
   ROLE_LABEL,
   ROLE_PLURAL,
   ROLES,
-  whatsappLink,
   workedHours,
 } from "@/lib/domain";
 import { candidatesFor, coverage, gaps } from "@/lib/staffing";
@@ -32,13 +32,20 @@ import { candidatesFor, coverage, gaps } from "@/lib/staffing";
 const STATUS_ORDER: Record<string, number> = { CONFIRMADO: 0, CONVOCADO: 1, RECHAZADO: 2, CANCELADO: 3 };
 
 export default async function EventDetail({ params }: { params: Promise<{ id: string }> }) {
+  const adminName = await requireAdmin();
   const event = await db.event.findUnique({
     where: { id: (await params).id },
     include: { assignments: { include: { worker: true }, orderBy: { worker: { name: "asc" } } } },
   });
   if (!event) notFound();
 
-  const [candidates, rates] = await Promise.all([candidatesFor(event), db.rate.findMany()]);
+  const [candidates, rates, unread, messageCount] = await Promise.all([
+    candidatesFor(event),
+    db.rate.findMany(),
+    unreadCounts({ kind: "admin", name: adminName }, [event.id]),
+    db.message.count({ where: { eventId: event.id } }),
+  ]);
+  const unreadChat = unread.get(event.id) ?? 0;
   const rateByRole = new Map(rates.map((r) => [r.role, r]));
   const cov = coverage(event, event.assignments);
   const missing = gaps(event, event.assignments);
@@ -46,15 +53,6 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
   const fillable = ROLES.reduce((s, r) => s + Math.min(missing[r], candidates[r].length), 0);
   const confirmed = event.assignments.filter((a) => a.status === "CONFIRMADO");
 
-  const teamList = [
-    `${event.name} — ${formatDate(event.date, { long: true })}`,
-    `${event.venue}`,
-    ...ROLES.flatMap((role) => {
-      const people = confirmed.filter((a) => a.role === role);
-      if (!people.length) return [];
-      return [`\n${ROLE_PLURAL[role]} (${callTime(event, role)}):`, ...people.map((a) => `- ${a.worker.name} · ${a.worker.phone}`)];
-    }),
-  ].join("\n");
 
   let totalHours = 0;
   let totalCost = 0;
@@ -79,6 +77,11 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
           {event.notes && <p className="mt-2 max-w-2xl text-sm whitespace-pre-line text-stone-600">{event.notes}</p>}
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link href={`/admin/eventos/${event.id}/chat`} className="btn btn-primary">
+            💬 Chat del evento
+            {unreadChat > 0 && <span className="rounded-full bg-white px-1.5 text-xs text-brand-700">{unreadChat}</span>}
+            {unreadChat === 0 && messageCount > 0 && <span className="text-xs opacity-80">({messageCount})</span>}
+          </Link>
           <Link href={`/admin/eventos/${event.id}/editar`} className="btn">Editar</Link>
           <form action={duplicateEvent.bind(null, event.id)}>
             <SubmitButton className="btn">Duplicar</SubmitButton>
@@ -120,7 +123,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
           ))}
         </div>
         <p className="text-xs text-stone-500">
-          «Autocompletar» convoca a los mejor valorados que estén libres ese día, priorizando a quien menos ha trabajado en los últimos 30 días. Después envía a cada uno su mensaje por WhatsApp.
+          «Autocompletar» convoca a los mejor valorados que estén libres ese día, priorizando a quien menos ha trabajado en los últimos 30 días. Cada convocado recibe un aviso en el móvil para aceptar o rechazar; al aceptar entra en el chat del evento.
         </p>
       </section>
 
@@ -142,15 +145,6 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
                   <li key={a.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
                     <Link href={`/admin/personal/${a.workerId}`} className="link mr-auto">{a.worker.name}</Link>
                     <StatusBadge status={a.status} />
-                    {a.status === "CONVOCADO" && (
-                      <a
-                        href={whatsappLink(a.worker.phone, inviteMessage(a.worker, event, a.role))}
-                        target="_blank"
-                        className="btn btn-sm btn-success"
-                      >
-                        WhatsApp
-                      </a>
-                    )}
                     {a.status !== "CONFIRMADO" && (
                       <form action={setAssignmentStatus.bind(null, a.id, "CONFIRMADO")}>
                         <button className="btn btn-sm" title="Marcar como confirmado (p. ej. confirmó por teléfono)">✓</button>
@@ -222,17 +216,6 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
           </section>
         );
       })}
-
-      {/* Equipo confirmado */}
-      {confirmed.length > 0 && (
-        <section className="card space-y-2">
-          <div className="flex items-center justify-between">
-            <h2>Equipo confirmado</h2>
-            <CopyButton text={teamList} label="Copiar lista para el maître" />
-          </div>
-          <pre className="overflow-x-auto rounded bg-stone-100 p-3 text-xs whitespace-pre-wrap">{teamList}</pre>
-        </section>
-      )}
 
       {/* Fichaje */}
       {confirmed.length > 0 && (
