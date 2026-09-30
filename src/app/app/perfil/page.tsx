@@ -4,7 +4,8 @@ import { requireWorker } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate, ROLE_LABEL, today, type Role } from "@/lib/domain";
 import { DOC_LABEL, docState } from "@/lib/staff";
-import { deleteMyDocument, logout, saveMyData, uploadMyDocument } from "../actions";
+import { privacySignature } from "@/lib/privacy";
+import { deleteMyDocument, logout, saveMyData, startPrivacySignature, uploadMyDocument } from "../actions";
 
 const STATE = {
   "sin-caducidad": "",
@@ -24,6 +25,7 @@ export default async function MyProfile() {
       contracts: { orderBy: { createdAt: "desc" }, take: 20, select: { id: true, title: true, signedAt: true } },
     },
   });
+  const privacy = await privacySignature(me.id);
   return (
     <div className="space-y-5">
       <header>
@@ -77,7 +79,23 @@ export default async function MyProfile() {
             );
           })}
         </ul>
-        <DocumentUploadForm action={uploadMyDocument} />
+        {privacy ? (
+          <>
+            <DocumentUploadForm action={uploadMyDocument} />
+            <p className="text-xs text-stone-500">
+              🔒 Protección de datos firmada el {formatDate(privacy.signedAt!.toISOString().slice(0, 10))} ·{" "}
+              <a href={`/api/contracts/${privacy.id}/pdf`} target="_blank" className="underline">ver PDF</a>
+            </p>
+          </>
+        ) : (
+          <div className="card space-y-2 border-violet-300 bg-violet-50">
+            <p className="font-medium">🔒 Antes de subir tus documentos</p>
+            <p className="text-sm">Tienes que leer y firmar la información sobre protección de datos: qué datos tratamos, para qué, con quién los compartimos y tus derechos.</p>
+            <form action={startPrivacySignature}>
+              <button className="btn btn-primary w-full">Leer y firmar</button>
+            </form>
+          </div>
+        )}
       </section>
 
       {worker.loans.length > 0 && (

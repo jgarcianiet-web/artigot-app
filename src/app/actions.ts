@@ -20,6 +20,7 @@ import { db } from "@/lib/db";
 import { forgetDevice } from "@/lib/devices";
 import { hireCandidate } from "@/lib/candidates";
 import { DEFAULT_TEMPLATE, generateContracts } from "@/lib/contracts";
+import { DEFAULT_PRIVACY_TEMPLATE, ensurePrivacyDoc, getPrivacy } from "@/lib/privacy";
 import { addDocument } from "@/lib/documents";
 import { createIncident, type IncidentResult } from "@/lib/incidents";
 import { lines, validDniNie, validIban } from "@/lib/staff";
@@ -626,6 +627,39 @@ export async function saveCompany(_prev: string | null, form: FormData) {
   await db.setting.upsert({ where: { key: "empresa" }, create: { key: "empresa", value }, update: { value } });
   revalidatePath("/admin/ajustes/empresa");
   return "Guardado. Los documentos nuevos usarán estos datos; los ya generados no cambian.";
+}
+
+export async function savePrivacy(_prev: string | null, form: FormData) {
+  await requireAdmin();
+  const current = await getPrivacy();
+  const email = String(form.get("email") ?? "").trim();
+  const text = String(form.get("template") ?? "").replace(/\r\n/g, "\n").trim();
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "El email no es válido.";
+  const bump = form.get("newVersion") === "1";
+  const value = { email, template: text === DEFAULT_PRIVACY_TEMPLATE.trim() ? "" : text, version: current.version + (bump ? 1 : 0) };
+  await db.setting.upsert({ where: { key: "privacidad" }, create: { key: "privacidad", value }, update: { value } });
+  // Los documentos sin firmar de versiones anteriores ya no sirven
+  await db.contract.deleteMany({ where: { kind: "RGPD", signedAt: null, version: { not: value.version } } });
+  let asked = 0;
+  if (bump) {
+    // Quien firmó la versión anterior tiene que firmar la nueva
+    const signed = await db.contract.findMany({ where: { kind: "RGPD", signedAt: { not: null }, worker: { active: true } }, select: { workerId: true }, distinct: ["workerId"] });
+    for (const { workerId } of signed) await ensurePrivacyDoc(workerId);
+    asked = signed.length;
+    if (asked) {
+      after(() =>
+        notify({
+          workerIds: signed.map((x) => x.workerId),
+          workerUrl: "/app",
+          title: "Protección de datos",
+          body: "Hemos actualizado la información sobre protección de datos. Léela y fírmala en la app.",
+          tag: "rgpd",
+        }),
+      );
+    }
+  }
+  revalidatePath("/admin/ajustes/empresa");
+  return bump ? `Nueva versión publicada. Se ha pedido la firma a ${asked} personas.` : "Guardado. Se aplica a las próximas firmas.";
 }
 
 export async function saveA3(_prev: string | null, form: FormData) {
