@@ -3,6 +3,8 @@
 import { useActionState } from "react";
 import { saveWorker } from "@/app/actions";
 import { ActionForm, SubmitButton } from "@/components/client";
+import { IDENTITY_FILE_KEYS, IdentityFields } from "@/components/IdentityFields";
+import { shrinkFormImages } from "@/lib/image";
 import { ROLE_LABEL, ROLES } from "@/lib/domain";
 
 type Worker = {
@@ -21,13 +23,14 @@ type Worker = {
   birthDate: string | null;
   address: string | null;
   a3Code: string | null;
-  irpf: number | null;
 };
 
-export function WorkerForm({ worker }: { worker?: Worker }) {
+type DocStatus = Record<string, { fileId: string | null; verified: boolean }>;
+
+export function WorkerForm({ worker, docs = {} }: { worker?: Worker; docs?: DocStatus }) {
   const [error, action] = useActionState(saveWorker, null);
   return (
-    <ActionForm action={action} className="card max-w-2xl space-y-4">
+    <ActionForm action={action} prepare={(f) => shrinkFormImages(f, IDENTITY_FILE_KEYS)} className="card max-w-2xl space-y-4">
       {worker && <input type="hidden" name="id" value={worker.id} />}
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
@@ -78,18 +81,8 @@ export function WorkerForm({ worker }: { worker?: Worker }) {
         </div>
         <fieldset className="grid gap-4 rounded-lg border border-stone-200 p-4 sm:col-span-2 sm:grid-cols-2">
           <legend className="px-1 text-sm font-semibold">Datos laborales (también los puede completar el trabajador en su app)</legend>
-          <div>
-            <label className="label">DNI / NIE</label>
-            <input name="dni" className="input" defaultValue={worker?.dni ?? ""} />
-          </div>
-          <div>
-            <label className="label">Nº Seguridad Social</label>
-            <input name="nss" inputMode="numeric" className="input" defaultValue={worker?.nss ?? ""} />
-          </div>
-          <div>
-            <label className="label">IBAN</label>
-            <input name="iban" className="input" defaultValue={worker?.iban ?? ""} />
-          </div>
+          <p className="text-xs text-stone-500 sm:col-span-2">El DNI, la Seguridad Social y el IBAN siempre van con su documento adjunto.</p>
+          <IdentityFields values={{ dni: worker?.dni ?? null, nss: worker?.nss ?? null, iban: worker?.iban ?? null }} docs={docs} required={false} inputClass="input mt-1" />
           <div>
             <label className="label">Fecha de nacimiento</label>
             <input name="birthDate" type="date" className="input" defaultValue={worker?.birthDate ?? ""} />
@@ -98,14 +91,11 @@ export function WorkerForm({ worker }: { worker?: Worker }) {
             <label className="label">Dirección</label>
             <input name="address" className="input" defaultValue={worker?.address ?? ""} />
           </div>
-          <div>
-            <label className="label">Código de trabajador en A3</label>
-            <input name="a3Code" className="input" defaultValue={worker?.a3Code ?? ""} />
-          </div>
-          <div>
-            <label className="label">IRPF (%)</label>
-            <input name="irpf" inputMode="decimal" className="input" defaultValue={worker?.irpf != null ? String(worker.irpf).replace(".", ",") : ""} placeholder="El general de Ajustes" />
-          </div>
+        </fieldset>
+        <fieldset className="rounded-lg border border-stone-200 bg-stone-50 p-4 sm:col-span-2">
+          <legend className="px-1 text-sm font-semibold">Solo RRHH (el trabajador no lo ve)</legend>
+          <label className="label" htmlFor="a3Code">Código de trabajador en A3</label>
+          <input id="a3Code" name="a3Code" className="input" defaultValue={worker?.a3Code ?? ""} />
         </fieldset>
         <div className="sm:col-span-2">
           <label className="label">Notas (opcional)</label>

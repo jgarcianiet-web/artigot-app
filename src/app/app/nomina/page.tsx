@@ -21,12 +21,12 @@ export default async function MyPay({ searchParams }: { searchParams: Promise<{ 
   const [m, s, worker] = await Promise.all([
     workerMonth(me.id, month),
     getPaySettings(),
-    db.worker.findUniqueOrThrow({ where: { id: me.id }, select: { irpf: true, iban: true } }),
+    db.worker.findUniqueOrThrow({ where: { id: me.id }, select: { iban: true } }),
   ]);
   const record = (await monthRecordDocs(month, me.id))[0];
   const halves = await Promise.all([1, 2].map((n) => payPeriod(halfFromKey(`${month}-${n}`)!, { workerId: me.id })));
   const [y, mm] = month.split("-").map(Number);
-  const irpfPct = worker.irpf ?? s.irpfPct;
+  const irpfPct = s.irpfPct;
   const monthNet = halves.reduce((t, p) => t + (p.rows[0]?.net ?? 0), 0);
 
   return (

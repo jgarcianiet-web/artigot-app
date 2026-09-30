@@ -2,7 +2,8 @@
 
 import { startTransition, useActionState, useEffect, useRef, useState } from "react";
 import { ActionForm, SubmitButton } from "@/components/client";
-import { shrinkImage } from "@/lib/image";
+import { shrinkFormImages, shrinkImage } from "@/lib/image";
+import { IDENTITY_FILE_KEYS, IdentityFields } from "./IdentityFields";
 
 type Result = { ok: boolean; message: string } | null;
 type Action = (prev: Result, form: FormData) => Promise<Result>;
@@ -23,16 +24,16 @@ function Message({ r }: { r: Result }) {
 
 type Data = { dni: string | null; nss: string | null; iban: string | null; birthDate: string | null; address: string | null; email: string | null };
 
-export function MyDataForm({ action, data }: { action: Action; data: Data }) {
+type DocStatus = Record<string, { fileId: string | null; verified: boolean }>;
+
+export function MyDataForm({ action, data, docs }: { action: Action; data: Data; docs: DocStatus }) {
   const [r, run] = useActionState(action, null);
   return (
-    <ActionForm action={run} className="card space-y-3">
+    <ActionForm action={run} prepare={(f) => shrinkFormImages(f, IDENTITY_FILE_KEYS)} className="card space-y-3">
       <h2>Mis datos</h2>
-      <p className="text-xs text-stone-500">Los necesita RRHH para darte de alta y pagarte. Solo los ve RRHH.</p>
+      <p className="text-xs text-stone-500">Los necesita RRHH para darte de alta y pagarte. El DNI, la Seguridad Social y el IBAN son obligatorios y van con su documento. Solo los ve RRHH.</p>
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="text-sm">DNI / NIE<input name="dni" className="input mt-1 text-base" defaultValue={data.dni ?? ""} autoComplete="off" /></label>
-        <label className="text-sm">Nº Seguridad Social<input name="nss" inputMode="numeric" className="input mt-1 text-base" defaultValue={data.nss ?? ""} /></label>
-        <label className="text-sm sm:col-span-2">IBAN (cuenta para la nómina)<input name="iban" className="input mt-1 text-base" defaultValue={data.iban ?? ""} autoComplete="off" /></label>
+        <IdentityFields values={{ dni: data.dni, nss: data.nss, iban: data.iban }} docs={docs} required inputClass="input mt-1 text-base" />
         <label className="text-sm">Fecha de nacimiento<input name="birthDate" type="date" className="input mt-1 text-base" defaultValue={data.birthDate ?? ""} /></label>
         <label className="text-sm">Email<input name="email" type="email" className="input mt-1 text-base" defaultValue={data.email ?? ""} /></label>
         <label className="text-sm sm:col-span-2">Dirección<input name="address" className="input mt-1 text-base" defaultValue={data.address ?? ""} /></label>
