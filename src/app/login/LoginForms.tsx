@@ -3,14 +3,15 @@
 import { ActionForm } from "@/components/client";
 import { useActionState } from "react";
 import { login, setupFirstAdmin } from "../actions";
+import { Logo } from "@/components/Logo";
 
 export function LoginForm() {
   const [error, action, pending] = useActionState(login, null);
   return (
     <ActionForm action={action} className="card w-full max-w-sm space-y-4">
-      <div>
-        <h1>Artigot Personal</h1>
-        <p className="text-sm text-stone-500">Acceso de Recursos Humanos</p>
+      <div className="space-y-3 text-center">
+        <Logo height={56} className="mx-auto" />
+        <h1 className="text-base font-medium text-stone-600">Acceso de Recursos Humanos</h1>
       </div>
       <div>
         <label className="label" htmlFor="email">Email</label>
@@ -34,6 +35,7 @@ export function SetupForm() {
   return (
     <ActionForm action={action} className="card w-full max-w-sm space-y-4">
       <div>
+        <Logo height={40} className="mb-4" />
         <h1>Primer acceso</h1>
         <p className="text-sm text-stone-500">
           Crea el primer usuario de RRHH. Necesitas la clave de instalación (la variable <code>ADMIN_PASSWORD</code> del servidor).
