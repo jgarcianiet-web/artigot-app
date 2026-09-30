@@ -22,6 +22,9 @@ concurrency:
 
 jobs:
   apk:
+    # Los lanzamientos automáticos (push a main) se saltan hasta que exista APP_URL,
+    # para no fallar mientras la app no esté desplegada. A mano, sin APP_URL, sí da error.
+    if: ${{ vars.APP_URL != '' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     env:
       CAP_SERVER_URL: ${{ vars.APP_URL }}
