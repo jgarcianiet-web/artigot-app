@@ -202,6 +202,7 @@ export default async function WorkerDetail({ params }: { params: Promise<{ id: s
             <dt className="text-stone-500">IBAN</dt><dd className="font-mono text-xs">{worker.iban ? formatIban(worker.iban) : <Missing />}</dd>
             <dt className="text-stone-500">Nacimiento</dt><dd>{worker.birthDate ? formatDate(worker.birthDate, { long: true }) : <Missing />}</dd>
             <dt className="text-stone-500">Dirección</dt><dd>{worker.address ?? <Missing />}</dd>
+            <dt className="text-stone-500">Código A3</dt><dd>{worker.a3Code ?? <Missing />}</dd>
           </dl>
           <h3 className="pt-2 font-semibold">Documentos</h3>
           {worker.documents.length === 0 && <p className="text-sm text-stone-500">Sin documentos.</p>}

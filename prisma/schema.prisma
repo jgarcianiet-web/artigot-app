@@ -26,6 +26,8 @@ model Worker {
   iban            String?
   birthDate       String?
   address         String?
+  // Código del trabajador en A3Nom (para la exportación de horas)
+  a3Code          String?
   active          Boolean          @default(true)
   // Acceso a la app: teléfono normalizado + código de 6 cifras que RRHH entrega al trabajador
   phoneKey        String           @unique
@@ -47,6 +49,8 @@ model Worker {
   swapsTo         SwapRequest[]    @relation("swapTo")
   files           StoredFile[]
   incidentsAbout  Incident[]       @relation("incidentWorker")
+  contracts       Contract[]
+  candidate       Candidate?
 }
 
 // Días en los que el trabajador no está disponible (fecha YYYY-MM-DD)
@@ -132,6 +136,7 @@ model Assignment {
   event         Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
   worker        Worker    @relation(fields: [workerId], references: [id], onDelete: Cascade)
   swaps         SwapRequest[]
+  contract      Contract?
 
   @@unique([eventId, workerId])
 }
@@ -225,6 +230,8 @@ model StoredFile {
   workerId   String?
   worker     Worker?  @relation(fields: [workerId], references: [id], onDelete: Cascade)
   document   WorkerDocument?
+  candidate  Candidate?
+  signatureOf Contract?
 }
 
 // Incidencia del evento. type: ROTURA | QUEJA | ACCIDENTE | PERSONAL | OTRO
@@ -374,4 +381,50 @@ model Setting {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+// Candidato que se apunta desde el formulario público «Trabaja con nosotros».
+// status: NUEVO | CONTACTADO | DESCARTADO | CONTRATADO
+model Candidate {
+  id           String      @id @default(cuid())
+  name         String
+  phone        String
+  phoneKey     String
+  email        String?
+  zone         String?
+  roles        String[]
+  experience   String?
+  availability String?
+  fileId       String?     @unique
+  status       String      @default("NUEVO")
+  notes        String?
+  consentAt    DateTime
+  workerId     String?     @unique
+  createdAt    DateTime    @default(now())
+  file         StoredFile? @relation(fields: [fileId], references: [id], onDelete: SetNull)
+  worker       Worker?     @relation(fields: [workerId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+}
+
+// Documento de condiciones del servicio para firmar por el trabajador (texto congelado al generarlo)
+model Contract {
+  id              String      @id @default(cuid())
+  assignmentId    String      @unique
+  workerId        String
+  eventId         String
+  title           String
+  body            String
+  createdBy       String
+  createdAt       DateTime    @default(now())
+  signedAt        DateTime?
+  signerName      String?
+  signerIp        String?
+  signatureFileId String?     @unique
+  assignment      Assignment  @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  worker          Worker      @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  signature       StoredFile? @relation(fields: [signatureFileId], references: [id], onDelete: SetNull)
+
+  @@index([eventId])
+  @@index([workerId])
 }

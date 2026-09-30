@@ -13,6 +13,7 @@ const NAV = [
   { href: "/admin/chats", label: "Chats" },
   { href: "/admin/incidencias", label: "Incidencias" },
   { href: "/admin/personal", label: "Personal" },
+  { href: "/admin/candidatos", label: "Candidatos" },
   { href: "/admin/liquidacion", label: "Liquidación" },
   { href: "/admin/informes", label: "Informes" },
   { href: "/admin/ajustes", label: "Ajustes" },

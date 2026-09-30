@@ -20,6 +20,7 @@ type Worker = {
   iban: string | null;
   birthDate: string | null;
   address: string | null;
+  a3Code: string | null;
 };
 
 export function WorkerForm({ worker }: { worker?: Worker }) {
@@ -92,9 +93,13 @@ export function WorkerForm({ worker }: { worker?: Worker }) {
             <label className="label">Fecha de nacimiento</label>
             <input name="birthDate" type="date" className="input" defaultValue={worker?.birthDate ?? ""} />
           </div>
-          <div className="sm:col-span-2">
+          <div>
             <label className="label">Dirección</label>
             <input name="address" className="input" defaultValue={worker?.address ?? ""} />
+          </div>
+          <div>
+            <label className="label">Código de trabajador en A3</label>
+            <input name="a3Code" className="input" defaultValue={worker?.a3Code ?? ""} />
           </div>
         </fieldset>
         <div className="sm:col-span-2">

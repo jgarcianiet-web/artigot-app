@@ -13,6 +13,8 @@ export default async function Settings() {
     { href: "/admin/clientes", title: "Clientes", text: "Contacto y notas de cada cliente", n: clients },
     { href: "/admin/plantillas", title: "Plantillas de evento", text: "Personal, horario y notas habituales para crear eventos en segundos", n: templates },
     { href: "/admin/ajustes/uniforme", title: "Uniforme por puesto", text: "Lo que cada puesto debe llevar siempre (lista «Qué llevar» de la app)" },
+    { href: "/admin/ajustes/empresa", title: "Empresa y contratos", text: "Razón social, CIF y texto del documento de condiciones que firma el personal" },
+    { href: "/admin/ajustes/a3", title: "Nóminas A3", text: "Códigos de empresa, concepto y trabajador para exportar las horas a A3" },
     { href: "/admin/tarifas", title: "Tarifas", text: "€/hora y mínimo de horas por puesto" },
     { href: "/admin/usuarios", title: "Usuarios de RRHH", text: "Quién puede entrar en la gestión", n: users },
   ];

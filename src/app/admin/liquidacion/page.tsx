@@ -33,6 +33,7 @@ export default async function Payroll({ searchParams }: { searchParams: Promise<
         <div className="ml-auto flex gap-2">
           <a href={`/admin/liquidacion/exportar?${qs}`} className="btn">Exportar resumen (Excel)</a>
           <a href={`/admin/liquidacion/exportar?${qs}&detalle=1`} className="btn">Exportar detalle (Excel)</a>
+          <a href={`/admin/liquidacion/a3?${qs}`} className="btn btn-primary">Exportar a A3</a>
         </div>
       </form>
 
