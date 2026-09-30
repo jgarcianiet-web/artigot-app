@@ -34,6 +34,7 @@ export default async function WorkerDetail({ params }: { params: Promise<{ id: s
       assignments: { include: { event: true }, orderBy: { event: { date: "desc" } }, take: 50 },
       devices: { select: { kind: true } },
       documents: { orderBy: { createdAt: "desc" } },
+      employments: { orderBy: { startDate: "desc" }, take: 20 },
       loans: { orderBy: [{ returnedAt: "asc" }, { deliveredAt: "desc" }] },
       reviews: {
         include: { event: { select: { id: true, name: true, date: true } }, reviewer: { select: { name: true } } },
@@ -203,7 +204,21 @@ export default async function WorkerDetail({ params }: { params: Promise<{ id: s
             <dt className="text-stone-500">Nacimiento</dt><dd>{worker.birthDate ? formatDate(worker.birthDate, { long: true }) : <Missing />}</dd>
             <dt className="text-stone-500">Dirección</dt><dd>{worker.address ?? <Missing />}</dd>
             <dt className="text-stone-500">Código A3</dt><dd>{worker.a3Code ?? <Missing />}</dd>
+            <dt className="text-stone-500">IRPF</dt><dd>{worker.irpf != null ? `${String(worker.irpf).replace(".", ",")} %` : "General"}</dd>
           </dl>
+          <h3 className="pt-2 font-semibold">Altas y bajas</h3>
+          {worker.employments.length === 0 ? (
+            <p className="text-sm text-stone-500">Sin altas registradas. <Link href="/admin/altas" className="link">Registrar</Link></p>
+          ) : (
+            <ul className="divide-y divide-stone-100 text-sm">
+              {worker.employments.map((e) => (
+                <li key={e.id} className="flex justify-between gap-2 py-1.5">
+                  <span>{formatDate(e.startDate)} → {e.endDate ? formatDate(e.endDate) : "sin baja"}</span>
+                  <span className="text-xs text-stone-500">{e.contractType}{e.startReported ? "" : " · alta sin comunicar"}</span>
+                </li>
+              ))}
+            </ul>
+          )}
           <h3 className="pt-2 font-semibold">Documentos</h3>
           {worker.documents.length === 0 && <p className="text-sm text-stone-500">Sin documentos.</p>}
           <ul className="divide-y divide-stone-100 text-sm">

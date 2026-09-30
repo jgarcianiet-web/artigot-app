@@ -28,6 +28,8 @@ model Worker {
   address         String?
   // Código del trabajador en A3Nom (para la exportación de horas)
   a3Code          String?
+  // % de retención de IRPF propio (si es null se usa el general de Ajustes → Pagos)
+  irpf            Float?
   active          Boolean          @default(true)
   // Acceso a la app: teléfono normalizado + código de 6 cifras que RRHH entrega al trabajador
   phoneKey        String           @unique
@@ -51,6 +53,8 @@ model Worker {
   incidentsAbout  Incident[]       @relation("incidentWorker")
   contracts       Contract[]
   candidate       Candidate?
+  payLines        PayLine[]
+  employments     Employment[]
 }
 
 // Días en los que el trabajador no está disponible (fecha YYYY-MM-DD)
@@ -427,4 +431,78 @@ model Contract {
 
   @@index([eventId])
   @@index([workerId])
+}
+
+// Quincena de pago (pagamos a quincena vencida: 1-15 el día 22, 16-fin la primera semana del mes siguiente).
+// ABIERTA: importes calculados en vivo. CERRADA: importes congelados (al generar la remesa). PAGADA.
+model PayPeriod {
+  id          String       @id @default(cuid())
+  from        String
+  to          String
+  payDate     String
+  status      String       @default("ABIERTA")
+  closedAt    DateTime?
+  paidAt      DateTime?
+  updatedBy   String?
+  createdAt   DateTime     @default(now())
+  lines       PayLine[]
+  remittances Remittance[]
+
+  @@unique([from, to])
+}
+
+// Línea de pago de un trabajador en una quincena. Mientras está ABIERTA solo guarda el neto real
+// si RRHH lo ha puesto o importado (netOverride); al cerrar se congelan todos los importes.
+model PayLine {
+  id          String    @id @default(cuid())
+  periodId    String
+  workerId    String
+  services    Int       @default(0)
+  hours       Float     @default(0)
+  gross       Float     @default(0)
+  ss          Float     @default(0)
+  irpf        Float     @default(0)
+  netEstimate Float     @default(0)
+  netOverride Float?
+  iban        String?
+  period      PayPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  worker      Worker    @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, workerId])
+}
+
+// Remesa SEPA (pain.001.001.03) generada para pagar una quincena
+model Remittance {
+  id        String    @id @default(cuid())
+  periodId  String
+  msgId     String    @unique
+  count     Int
+  total     Float
+  execDate  String
+  xml       String
+  createdBy String
+  createdAt DateTime  @default(now())
+  period    PayPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+}
+
+// Altas y bajas en la Seguridad Social (sustituye al Excel de altas y bajas)
+model Employment {
+  id              String    @id @default(cuid())
+  workerId        String
+  startDate       String
+  endDate         String?
+  contractType    String
+  category        String?
+  hoursPerWeek    Float?
+  endReason       String?
+  notes           String?
+  // Comunicado a la Seguridad Social (Sistema RED)
+  startReported   Boolean   @default(false)
+  endReported     Boolean   @default(false)
+  createdBy       String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  worker          Worker    @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@index([workerId, startDate])
 }

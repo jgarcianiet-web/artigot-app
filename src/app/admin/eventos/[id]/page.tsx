@@ -347,7 +347,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
         </section>
       )}
 
-      {confirmed.length > 0 && <Contracts eventId={event.id} confirmed={confirmed} />}
+      {confirmed.length > 0 && <Contracts eventId={event.id} eventDate={event.date} confirmed={confirmed} />}
 
       {/* Fichaje */}
       {confirmed.length > 0 && (

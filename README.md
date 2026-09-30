@@ -28,7 +28,7 @@ Aplicación para que RRHH gestione de forma rápida el personal de **bodas y eve
 - **Mis datos**: DNI/NIE, Seguridad Social, IBAN, nacimiento, dirección y email. Los completa el trabajador desde su app o RRHH desde la ficha. El DNI/NIE y el IBAN se validan con su dígito de control.
 - **Documentos**: DNI, tarjeta de la Seguridad Social, carnet de manipulador, cuenta bancaria, contrato… en foto o PDF y con fecha de caducidad. RRHH los revisa. **Aviso 30 días antes de caducar y el día que caducan**, al trabajador y a RRHH, y resumen en el panel. Solo los ven RRHH y el propio trabajador.
 - **Cambio de turno**: quien no puede ir propone a un compañero libre y capacitado para ese puesto, el compañero acepta desde su app y **RRHH lo aprueba con un clic**. El compañero queda confirmado y quien cedió el turno no recibe penalización.
-- **Nómina en la app**: servicios, horas e importe bruto estimado de cada mes, con el detalle por evento.
+- **Nómina en la app**: servicios, horas e **importe neto** por quincena, con la **fecha prevista de pago** y el aviso cuando se paga. Mientras no hay neto definitivo se muestra el estimado (bruto − Seguridad Social − IRPF).
 - **Uniforme y material**: el uniforme de cada puesto (Ajustes → Uniforme) más «Qué llevar» de cada evento forman una lista con casillas en la app. RRHH registra el **material prestado** (chaquetas, sacacorchos…) y su devolución, y el trabajador ve lo que tiene.
 
 **Selección, contratos y nóminas**
@@ -36,6 +36,12 @@ Aplicación para que RRHH gestione de forma rápida el personal de **bodas y eve
 - **Documento de condiciones del servicio**: en cada evento, «Enviar a firmar» genera un documento por confirmado con sus datos (DNI, NSS, puesto, horario, tarifa) y le avisa. El trabajador lo lee y **firma con el dedo** en la app. Se guarda la firma, la fecha, la hora y la IP, y se genera un **PDF** que pueden descargar él y RRHH. El texto se edita en Ajustes → Empresa y contratos. ⚠️ El texto por defecto es orientativo: debe revisarlo vuestra asesoría laboral.
 - **Datos para el alta en la Seguridad Social**: Excel por evento con DNI, NSS, nacimiento, dirección, puesto y horario de cada confirmado, marcando lo que falta.
 - **Exportación a A3**: en Liquidación, «Exportar a A3» (Excel o CSV con `;`). Genera una línea por trabajador y puesto con código de empresa, código de trabajador, NIF, concepto, unidades (horas), precio, importe y periodo. Los códigos se configuran en Ajustes → Nóminas A3, que además lista al personal sin código de A3.
+
+**Pagos y altas**
+- **Pagos por quincena vencida**: del 1 al 15 se paga el día 22 y del 16 a fin de mes, la primera semana del mes siguiente. Los días se configuran en Ajustes → Pagos y remesas; si caen en fin de semana pasan al lunes. En «Pagos» RRHH cambia la fecha prevista de cada quincena (y avisa al personal), revisa el bruto, la Seguridad Social, el IRPF y el neto de cada persona, y pone o **importa desde A3 el neto real**.
+- **Remesa bancaria SEPA** (ISO 20022 pain.001.001.03, transferencias de nóminas): se genera desde la quincena y se sube en la banca online. Paga el neto definitivo (o el estimado) a quien tenga IBAN válido y avisa de quien no lo tiene. Al generarla, los importes quedan congelados. Después se marca como pagada y cada persona recibe un aviso con su importe. El IBAN de la empresa, el BIC (opcional) y el sufijo del ordenante se configuran en Ajustes → Pagos y remesas; la razón social y el CIF, en Empresa y contratos.
+- **IRPF por trabajador**: en su ficha; si no tiene uno propio se usa el general.
+- **Altas y bajas en la Seguridad Social** (sustituye al Excel): cada alta con tipo de contrato, categoría, jornada, fecha de baja, motivo y si ya se ha comunicado por RED. Hay vistas «De alta ahora», «Movimientos del mes», «Sin comunicar» e histórico. Se importa el Excel que ya teníais (con vista previa, sin duplicar al reimportar) y se exporta a Excel. El panel y cada evento avisan de quién está convocado sin alta, y «Registrar altas» crea en un clic el alta eventual del día para el equipo del evento.
 
 **Personal (app)**
 - Entra una sola vez con su **teléfono y el código de 6 cifras** que le da RRHH.

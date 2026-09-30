@@ -150,6 +150,11 @@ const workerSchema = z.object({
   birthDate: optText,
   address: optText,
   a3Code: optText,
+  irpf: z
+    .string()
+    .trim()
+    .transform((v) => (v ? Number(v.replace(",", ".")) : null))
+    .refine((v) => v === null || (Number.isFinite(v) && v >= 0 && v <= 50), "El IRPF tiene que estar entre 0 y 50 %"),
 });
 
 export async function saveWorker(_prev: string | null, form: FormData) {
