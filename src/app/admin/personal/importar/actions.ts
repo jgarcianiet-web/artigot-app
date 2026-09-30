@@ -5,6 +5,7 @@ import { newAccessCode, phoneKey, requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isRole } from "@/lib/domain";
 import { analyzeFile, type ImportPreview } from "@/lib/importStaff";
+import { auditAdmin } from "@/lib/audit";
 
 export type ImportState =
   | { step: "idle" }
@@ -27,7 +28,7 @@ export async function previewImport(_prev: ImportState, form: FormData): Promise
 
 /** Paso 2: se vuelve a leer y validar el mismo archivo en el servidor y se guarda. */
 export async function commitImport(_prev: ImportState, form: FormData): Promise<ImportState> {
-  await requireAdmin();
+  const by = await requireAdmin();
   const opts = options(form);
   const result = await analyzeFile(form.get("file") as File, opts);
   if ("error" in result) return { step: "error", error: result.error };
@@ -74,6 +75,7 @@ export async function commitImport(_prev: ImportState, form: FormData): Promise<
     },
     { timeout: 60_000 },
   );
+  await auditAdmin(by, "Trabajador", "Importación", `Importación de personal desde Excel: ${created} nuevos, ${updated} actualizados`);
   revalidatePath("/admin", "layout");
   return { step: "done", created, updated, skipped: result.counts.existe, errors: result.counts.error };
 }

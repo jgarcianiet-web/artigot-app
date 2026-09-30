@@ -7,11 +7,13 @@ import { after } from "next/server";
 import { destroySession, requireWorker, workerLogin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { forgetDevice } from "@/lib/devices";
-import { checkClock, clockWindow } from "@/lib/clockRules";
+import { checkClock, clockWindow, hhmm } from "@/lib/clockRules";
 import { createIncident, type IncidentResult } from "@/lib/incidents";
 import { addDocument } from "@/lib/documents";
 import { storeSignature } from "@/lib/files";
 import { ensurePrivacyDoc, privacySignature } from "@/lib/privacy";
+import { eventTransport, isTransport, MAX_SEATS } from "@/lib/transport";
+import { answerPoll } from "@/lib/polls";
 import { DOC_LABEL, validDniNie, validIban } from "@/lib/staff";
 import { answerSwap, OPEN_SWAP, proposeSwap } from "@/lib/swaps";
 import { formatDate, isLeadRole, isRole, nowTime, type Role, today } from "@/lib/domain";
@@ -19,6 +21,7 @@ import { autoReplace } from "@/lib/staffing";
 import { notify } from "@/lib/push";
 import { isEventLead, pendingReviews, reviewTeam, reviewWindowOpen } from "@/lib/reviews";
 import { CRITERIA } from "@/lib/scoring";
+import { audit, diff } from "@/lib/audit";
 
 export async function login(_prev: string | null, form: FormData) {
   const error = await workerLogin(String(form.get("phone") ?? ""), String(form.get("code") ?? ""));
@@ -115,6 +118,55 @@ export async function clock(
   };
 }
 
+/**
+ * Fichaje hecho sin cobertura: el móvil guardó la hora y la ubicación y lo envía al recuperar la señal.
+ * La hora se corrige con el desfase del reloj del móvil (capturedAt y sentAt son de su reloj, y se
+ * compara sentAt con la hora del servidor), y se aplican las mismas reglas en ese momento.
+ * Es idempotente: si ya estaba registrado, se da por bueno.
+ */
+export async function clockOffline(
+  assignmentId: string,
+  kind: "in" | "out",
+  position: { lat: number; lng: number; accuracy: number },
+  capturedAt: number,
+  sentAt: number,
+): Promise<ClockResult & { done: boolean }> {
+  const worker = await requireWorker();
+  const a = await db.assignment.findUnique({ where: { id: assignmentId }, include: { event: true } });
+  // Fichaje guardado en este móvil por otra persona (o de una convocatoria borrada): se descarta
+  if (!a || a.workerId !== worker.id) return { ok: false, done: true, message: "Se ha descartado un fichaje guardado en este móvil que no es tuyo." };
+  const label = kind === "in" ? "entrada" : "salida";
+  if (a.status !== "CONFIRMADO") return { ok: false, done: true, message: "Tu fichaje sin cobertura no se ha podido registrar: ya no estás confirmado en este evento." };
+  if (kind === "in" && a.checkIn) return { ok: true, done: true, message: `Entrada ya registrada a las ${a.checkIn}.` };
+  if (kind === "out" && a.checkOut) return { ok: true, done: true, message: `Salida ya registrada a las ${a.checkOut}.` };
+  if (kind === "out" && !a.checkIn) return { ok: false, done: false, message: "La salida se enviará cuando se registre la entrada." };
+
+  const skew = Date.now() - Number(sentAt);
+  const at = new Date(Number(capturedAt) + (Number.isFinite(skew) ? skew : 0));
+  if (!Number.isFinite(at.getTime()) || at.getTime() > Date.now() + 60_000) {
+    return { ok: false, done: true, message: `La hora de tu fichaje de ${label} no es válida. Avisa a RRHH.` };
+  }
+  if (Date.now() - at.getTime() > 48 * 3_600_000) {
+    return { ok: false, done: true, message: `Tu fichaje de ${label} sin cobertura tiene más de 48 horas y ya no se puede registrar. Avisa a RRHH.` };
+  }
+  const pos = { lat: Number(position?.lat), lng: Number(position?.lng), accuracy: Number(position?.accuracy) };
+  const check = checkClock({ event: a.event, role: a.role, position: pos, now: at });
+  if (!check.ok) return { ok: false, done: true, message: `Tu fichaje de ${label} sin cobertura no se ha registrado: ${check.reason}` };
+  const time = hhmm(at);
+  const accuracy = Math.round(pos.accuracy);
+  await db.assignment.update({
+    where: { id: a.id },
+    data:
+      kind === "in"
+        ? { checkIn: time, checkInLat: pos.lat, checkInLng: pos.lng, checkInDistance: check.distance, checkInAccuracy: accuracy, checkInManual: false, checkInOffline: true }
+        : { checkOut: time, checkOutLat: pos.lat, checkOutLng: pos.lng, checkOutDistance: check.distance, checkOutAccuracy: accuracy, checkOutManual: false, checkOutOffline: true },
+  });
+  await audit(worker.name, "Trabajador", "Horas", "Fichaje sin cobertura", `${worker.name}: ${label} ${time} en ${a.event.name}, enviada al recuperar la cobertura (desfase del reloj del móvil: ${Math.round(skew / 1000)} s)`, { entityId: a.eventId });
+  revalidatePath("/app", "layout");
+  revalidatePath(`/admin/eventos/${a.eventId}`);
+  return { ok: true, done: true, message: `${kind === "in" ? "Entrada" : "Salida"} de las ${time} registrada (fichada sin cobertura).` };
+}
+
 export async function toggleUnavailable(date: string) {
   const worker = await requireWorker();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today()) return;
@@ -186,6 +238,8 @@ export async function markArrival(assignmentId: string) {
     where: { id: a.id },
     data: { checkIn: nowTime(), checkInManual: true, notes: `Llegada marcada por ${me.name}` },
   });
+  const who = await db.worker.findUnique({ where: { id: a.workerId }, select: { name: true } });
+  await audit(me.name, "Trabajador", "Horas", "Llegada marcada", `${me.name} marca la llegada de ${who?.name ?? "?"} en ${a.event.name}`, { entityId: a.eventId });
   revalidatePath(`/app/eventos/${a.eventId}/equipo`);
   revalidatePath(`/admin/eventos/${a.eventId}`);
 }
@@ -215,10 +269,13 @@ export async function saveMyData(_prev: FormResult, form: FormData): Promise<For
   if (nss && nss.length !== 12) return { ok: false, message: "El número de la Seguridad Social tiene 12 cifras." };
   if (birthDate && !/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) return { ok: false, message: "Fecha de nacimiento no válida." };
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, message: "Email no válido." };
-  await db.worker.update({
+  const before = await db.worker.findUniqueOrThrow({ where: { id: me.id } });
+  const after_ = await db.worker.update({
     where: { id: me.id },
     data: { dni: dni || null, iban: iban || null, nss: nss || null, birthDate: birthDate || null, address: address || null, email: email || null },
   });
+  const d = diff(before, after_, { dni: "DNI", nss: "NSS", iban: "IBAN", birthDate: "Nacimiento", address: "Dirección", email: "Email" });
+  if (d.changed) await audit(me.name, "Trabajador", "Trabajador", "Datos (desde la app)", `${me.name}: ${d.text}`, { entityId: me.id, data: d.data });
   revalidatePath("/app/perfil");
   return { ok: true, message: "Datos guardados." };
 }
@@ -289,7 +346,20 @@ export async function signContract(contractId: string, _prev: FormResult, form: 
   if (png.length < 500) return { ok: false, message: "La firma es demasiado corta. Firma de nuevo." };
   const sig = await storeSignature(png, me.id);
   const ip = (await headers()).get("x-forwarded-for")?.split(",")[0].trim() ?? null;
-  await db.contract.update({ where: { id: c.id }, data: { signedAt: new Date(), signerName: me.name, signerIp: ip, signatureFileId: sig.id } });
+  const note = String(form.get("note") ?? "").trim().slice(0, 1000) || null;
+  await db.contract.update({ where: { id: c.id }, data: { signedAt: new Date(), signerName: me.name, signerIp: ip, signatureFileId: sig.id, signerNote: note } });
+  await audit(me.name, "Trabajador", "Documento", "Firmado", `${me.name} firma «${c.title}»${note ? ` con observaciones: ${note}` : ""}`, { entityId: me.id });
+  if (note) {
+    after(() =>
+      notify({
+        admins: true,
+        adminUrl: c.kind === "JORNADA" ? "/admin/jornada" : `/admin/personal/${me.id}`,
+        title: "Observaciones al firmar",
+        body: `${me.name} ha firmado «${c.title}» con observaciones: ${note.slice(0, 120)}`,
+        tag: `nota-${c.id}`,
+      }),
+    );
+  }
   revalidatePath("/app", "layout");
   if (c.eventId) revalidatePath(`/admin/eventos/${c.eventId}`);
   revalidatePath(`/admin/personal/${me.id}`);
@@ -302,4 +372,82 @@ export async function startPrivacySignature() {
   if (await privacySignature(me.id)) redirect("/app/perfil");
   const doc = await ensurePrivacyDoc(me.id);
   redirect(`/app/firmar/${doc.id}`);
+}
+
+// ---------- Transporte ----------
+
+/** Cómo va al evento: por su cuenta, con su coche (y plazas libres) o necesita que le lleven. */
+export async function setMyTransport(assignmentId: string, form: FormData) {
+  const { a, worker } = await ownAssignment(assignmentId);
+  if (a.status !== "CONFIRMADO" || a.event.date < today()) return;
+  const mode = String(form.get("transport") ?? "");
+  if (!isTransport(mode)) return;
+  const seats = mode === "CONDUZCO" ? Math.max(0, Math.min(MAX_SEATS, Math.round(Number(form.get("seats")) || 0))) : null;
+  // Si deja de llevar coche (o tiene menos plazas), sus pasajeros se quedan sin coche y se les avisa
+  const passengers = await db.assignment.findMany({ where: { rideWithId: a.id }, select: { id: true, workerId: true }, orderBy: { createdAt: "asc" } });
+  const dropped = mode === "CONDUZCO" ? passengers.slice(seats ?? 0) : passengers;
+  await db.$transaction([
+    db.assignment.update({ where: { id: a.id }, data: { transport: mode, seats, ...(mode !== "NECESITO" && { rideWithId: null }) } }),
+    db.assignment.updateMany({ where: { id: { in: dropped.map((p) => p.id) } }, data: { rideWithId: null } }),
+    ...(mode === "CONDUZCO" ? [db.worker.update({ where: { id: worker.id }, data: { carSeats: seats } })] : []),
+  ]);
+  if (dropped.length) {
+    after(() =>
+      notify({
+        workerIds: dropped.map((p) => p.workerId),
+        workerUrl: `/app/eventos/${a.eventId}`,
+        title: "Te has quedado sin coche",
+        body: `${worker.name} ya no puede llevarte a ${a.event.name}. Busca otro coche en la app o avisa a RRHH.`,
+        tag: `coche-${a.eventId}`,
+      }),
+    );
+  }
+  revalidatePath(`/app/eventos/${a.eventId}`);
+  revalidatePath(`/admin/eventos/${a.eventId}`);
+}
+
+/** Se apunta al coche de un compañero con plazas libres. */
+export async function joinRide(assignmentId: string, driverAssignmentId: string) {
+  const { a, worker } = await ownAssignment(assignmentId);
+  if (a.status !== "CONFIRMADO" || a.event.date < today()) return;
+  const t = await eventTransport(a.eventId);
+  const car = t.cars.find((c) => c.driver.id === driverAssignmentId);
+  if (!car || car.driver.id === a.id || (car.free <= 0 && !car.passengers.some((p) => p.id === a.id))) return;
+  await db.assignment.update({ where: { id: a.id }, data: { transport: "NECESITO", seats: null, rideWithId: car.driver.id } });
+  const phone = (await db.worker.findUnique({ where: { id: worker.id }, select: { phone: true } }))?.phone ?? "";
+  after(() =>
+    notify({
+      workerIds: [car.driver.workerId],
+      workerUrl: `/app/eventos/${a.eventId}`,
+      title: "Nuevo pasajero",
+      body: `${worker.name} irá en tu coche a ${a.event.name}. Tel. ${phone}`,
+      tag: `coche-${a.eventId}`,
+    }),
+  );
+  revalidatePath(`/app/eventos/${a.eventId}`);
+  revalidatePath(`/admin/eventos/${a.eventId}`);
+}
+
+export async function leaveRide(assignmentId: string) {
+  const { a, worker } = await ownAssignment(assignmentId);
+  if (!a.rideWithId) return;
+  const driver = await db.assignment.findUnique({ where: { id: a.rideWithId }, select: { workerId: true } });
+  await db.assignment.update({ where: { id: a.id }, data: { rideWithId: null } });
+  if (driver) {
+    after(() =>
+      notify({ workerIds: [driver.workerId], workerUrl: `/app/eventos/${a.eventId}`, title: "Un pasajero menos", body: `${worker.name} ya no irá en tu coche a ${a.event.name}.`, tag: `coche-${a.eventId}` }),
+    );
+  }
+  revalidatePath(`/app/eventos/${a.eventId}`);
+  revalidatePath(`/admin/eventos/${a.eventId}`);
+}
+
+// ---------- Sondeos de disponibilidad ----------
+
+export async function answerPollAction(pollId: string, date: string, available: boolean) {
+  const me = await requireWorker();
+  if (await answerPoll(me.id, pollId, date, available)) {
+    revalidatePath("/app");
+    revalidatePath(`/admin/sondeos/${pollId}`);
+  }
 }

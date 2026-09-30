@@ -20,8 +20,18 @@ export function SignForm({ id, kind }: { id: string; kind: string }) {
       <SignaturePad />
       <label className="flex items-start gap-2 text-sm">
         <input type="checkbox" name="accept" value="1" className="mt-0.5 size-4" required />
-        {kind === "RGPD" ? "He leído y entendido la información sobre protección de datos." : "He leído el documento y estoy conforme con las condiciones."}
+        {kind === "RGPD"
+          ? "He leído y entendido la información sobre protección de datos."
+          : kind === "JORNADA"
+            ? "He revisado mi registro de jornada de este mes."
+            : "He leído el documento y estoy conforme con las condiciones."}
       </label>
+      {kind === "JORNADA" && (
+        <label className="block text-sm">
+          Observaciones (opcional)
+          <textarea name="note" rows={2} maxLength={1000} className="input mt-1 text-base" placeholder="Si alguna hora no es correcta, indícalo aquí. RRHH lo revisará." />
+        </label>
+      )}
       {r && !r.ok && <p className="text-sm text-red-600">{r.message}</p>}
       <SubmitButton>Firmar</SubmitButton>
     </ActionForm>

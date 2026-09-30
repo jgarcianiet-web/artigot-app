@@ -5,6 +5,7 @@ import { addDays, callTime, formatDate, isLeadRole, LEAD_ROLES, ROLE_LABEL, type
 import { notify } from "./push";
 import { REVIEW_DAYS } from "./reviews";
 import { DOC_LABEL, DOC_WARN_DAYS } from "./staff";
+import { generateTimeRecords, monthLabel, shiftMonth } from "./timeRecord";
 
 /**
  * Avisos automáticos. Se comprueban cada pocos minutos; cada aviso se registra en ReminderLog
@@ -84,7 +85,7 @@ export async function runReminders(now = new Date()) {
         workerIds: [a.workerId],
         workerUrl: `/app/eventos/${a.eventId}`,
         title: `Mañana: ${a.event.name}`,
-        body: `Citación a las ${callTime(a.event, a.role)} en ${a.event.venue}${a.event.notes ? ". Revisa las notas del evento." : "."}`,
+        body: `Citación a las ${callTime(a.event, a.role)} en ${a.event.venue}.${a.event.meetingPoint ? ` Punto de encuentro: ${a.event.meetingPoint}${a.event.meetingTime ? ` a las ${a.event.meetingTime}` : ""}.` : ""}${a.event.notes ? " Revisa las notas del evento." : ""}`,
         tag: `manana-${a.eventId}`,
       });
       sent.push(`dia-antes:${a.id}`);
@@ -182,6 +183,24 @@ export async function runReminders(now = new Date()) {
       tag: `doc-${d.id}`,
     });
     sent.push(key);
+  }
+
+  // 6. Registro de jornada: el día 2 de cada mes (desde las 10:00) se envía a firmar el del mes anterior
+  if (Number(today.slice(8)) >= 2 && now >= madridTime(today, REMINDERS.REVIEW_REMINDER_HOUR)) {
+    const prev = shiftMonth(today.slice(0, 7), -1);
+    if (await claim(`jornada:${prev}`)) {
+      const r = await generateTimeRecords(prev, "Automático", { inRequest: false });
+      if (r.total) {
+        await notify({
+          admins: true,
+          adminUrl: `/admin/jornada?mes=${prev}`,
+          title: "Registro de jornada enviado",
+          body: `Se ha enviado a firmar el registro de jornada de ${monthLabel(prev)} a ${r.created} personas.`,
+          tag: `jornada-${prev}`,
+        });
+      }
+      sent.push(`jornada:${prev}`);
+    }
   }
 
   return sent;

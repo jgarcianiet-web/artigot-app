@@ -14,6 +14,7 @@ import {
 import { ConfirmButton, SelectAll, SubmitButton } from "@/components/client";
 import { SaveTemplate } from "./SaveTemplate";
 import { Contracts } from "./Contracts";
+import { AdminTransport } from "./Transport";
 import { SwapApprovals } from "@/components/SwapApprovals";
 import { CoverageBar, ScoreBadge, StatusBadge } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
@@ -37,12 +38,12 @@ import { REVIEW_DAYS, reviewWindowOpen } from "@/lib/reviews";
 import { CRITERIA, explainScore, reviewAverage } from "@/lib/scoring";
 import { candidatesFor, coverage, gaps } from "@/lib/staffing";
 
-function ClockTag({ distance, accuracy, manual }: { distance: number | null; accuracy: number | null; manual: boolean }) {
+function ClockTag({ distance, accuracy, manual, offline }: { distance: number | null; accuracy: number | null; manual: boolean; offline: boolean }) {
   if (manual) return <div className="text-[11px] text-stone-500">✎ manual</div>;
   if (distance == null) return null;
   return (
-    <div className="text-[11px] text-emerald-700" title={`Precisión del GPS: ±${accuracy ?? "?"} m`}>
-      📍 {distance} m
+    <div className="text-[11px] text-emerald-700" title={`Precisión del GPS: ±${accuracy ?? "?"} m${offline ? ". Fichado sin cobertura y enviado después" : ""}`}>
+      📍 {distance} m{offline && <span className="ml-1 text-amber-700">· sin cobertura</span>}
     </div>
   );
 }
@@ -256,6 +257,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
                           </td>
                           <td>
                             {c.name}
+                            {c.available && <span className="ml-1.5 rounded bg-emerald-100 px-1.5 text-[11px] text-emerald-800" title="Ha dicho en un sondeo que puede trabajar este día">✓ disponible</span>}
                             {c.zone && <div className="text-xs text-stone-500">{c.zone}</div>}
                             {c.mainRole !== role && (
                               <div className="text-xs text-stone-500">Puesto principal: {ROLE_LABEL[c.mainRole as keyof typeof ROLE_LABEL]?.toLowerCase()}</div>
@@ -347,6 +349,8 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
         </section>
       )}
 
+      {confirmed.length > 0 && <AdminTransport eventId={event.id} meetingPoint={event.meetingPoint} meetingTime={event.meetingTime} />}
+
       {confirmed.length > 0 && <Contracts eventId={event.id} eventDate={event.date} confirmed={confirmed} />}
 
       {/* Fichaje */}
@@ -359,7 +363,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
           <p className="text-xs text-stone-500">
             El personal ficha desde la app con su ubicación (a menos de {CLOCK_RADIUS_M} m, de {hhmm(clockWindow(event, "CAMARERO").opensAt)} a{" "}
             {hhmm(clockWindow(event, "CAMARERO").closesAt)}; los mozos desde {hhmm(clockWindow(event, "MOZO").opensAt)}). 📍 = distancia
-            al evento al fichar. ✎ = hora corregida por RRHH. Las horas manuales tienen prioridad.
+            al evento al fichar. ✎ = hora corregida por RRHH. «Sin cobertura» = fichado sin señal con la hora del momento y enviado después. Las horas manuales tienen prioridad.
           </p>
           <div className="overflow-x-auto">
             <table className="table">
@@ -386,11 +390,11 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
                       <td>{ROLE_LABEL[a.role as keyof typeof ROLE_LABEL]}</td>
                       <td>
                         <input type="time" name={`in_${a.id}`} defaultValue={a.checkIn ?? ""} className="input w-28" />
-                        <ClockTag distance={a.checkInDistance} accuracy={a.checkInAccuracy} manual={a.checkInManual} />
+                        <ClockTag distance={a.checkInDistance} accuracy={a.checkInAccuracy} manual={a.checkInManual} offline={a.checkInOffline} />
                       </td>
                       <td>
                         <input type="time" name={`out_${a.id}`} defaultValue={a.checkOut ?? ""} className="input w-28" />
-                        <ClockTag distance={a.checkOutDistance} accuracy={a.checkOutAccuracy} manual={a.checkOutManual} />
+                        <ClockTag distance={a.checkOutDistance} accuracy={a.checkOutAccuracy} manual={a.checkOutManual} offline={a.checkOutOffline} />
                       </td>
                       <td>
                         <input

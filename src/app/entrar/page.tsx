@@ -2,12 +2,16 @@
 
 import { ActionForm } from "@/components/client";
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import { login } from "../app/actions";
 import { Logo } from "@/components/Logo";
 
 export default function WorkerLogin() {
   const [error, action, pending] = useActionState(login, null);
+  // Al llegar aquí (sesión cerrada) se borra la copia de la app guardada para usarla sin cobertura
+  useEffect(() => {
+    caches?.delete("artigot-paginas-v1").catch(() => {});
+  }, []);
   return (
     <main className="flex min-h-dvh items-center justify-center p-4">
       <ActionForm action={action} className="card w-full max-w-sm space-y-4">

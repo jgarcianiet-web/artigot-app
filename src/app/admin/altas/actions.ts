@@ -5,6 +5,7 @@ import { newAccessCode, phoneKey, requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { addDays, formatDate, ROLE_LABEL, type Role } from "@/lib/domain";
 import { analyzeEmployments, CONTRACT_TYPES, covers, END_REASONS, type EmploymentImportRow } from "@/lib/employment";
+import { auditAdmin } from "@/lib/audit";
 
 const isDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
 const refresh = (workerId?: string) => {
@@ -38,12 +39,14 @@ export async function saveEmployment(_prev: string | null, form: FormData) {
   const data = { workerId, startDate, endDate, contractType, category: get("category") || null, hoursPerWeek: hours, notes: get("notes") || null };
   if (id) await db.employment.update({ where: { id }, data });
   else await db.employment.create({ data: { ...data, createdBy: by } });
+  const wn = await db.worker.findUnique({ where: { id: workerId }, select: { name: true } });
+  await auditAdmin(by, "Alta S. S.", id ? "Modificada" : "Alta", `${wn?.name}: alta ${startDate}${endDate ? ` → baja ${endDate}` : ""} (${contractType})`, { entityId: workerId });
   refresh(workerId);
   return id ? "Alta actualizada." : "Alta registrada.";
 }
 
 export async function endEmployment(id: string, _prev: string | null, form: FormData) {
-  await requireAdmin();
+  const by = await requireAdmin();
   const endDate = String(form.get("endDate") ?? "");
   const endReason = String(form.get("endReason") ?? "");
   const e = await db.employment.findUnique({ where: { id } });
@@ -53,20 +56,25 @@ export async function endEmployment(id: string, _prev: string | null, form: Form
   const clash = await overlap(e.workerId, e.startDate, endDate, id);
   if (clash) return "Coincide con otra alta de esta persona.";
   await db.employment.update({ where: { id }, data: { endDate, endReason, endReported: false } });
+  const wn = await db.worker.findUnique({ where: { id: e.workerId }, select: { name: true } });
+  await auditAdmin(by, "Alta S. S.", "Baja", `${wn?.name}: baja ${endDate} (${endReason})`, { entityId: e.workerId });
   refresh(e.workerId);
   return "Baja registrada.";
 }
 
 export async function toggleReported(id: string, which: "start" | "end") {
-  await requireAdmin();
-  const e = await db.employment.findUniqueOrThrow({ where: { id } });
+  const by = await requireAdmin();
+  const e = await db.employment.findUniqueOrThrow({ where: { id }, include: { worker: { select: { name: true } } } });
+  const now = which === "start" ? !e.startReported : !e.endReported;
+  await auditAdmin(by, "Alta S. S.", "Comunicación RED", `${e.worker.name}: ${which === "start" ? `alta del ${e.startDate}` : `baja del ${e.endDate}`} ${now ? "comunicada" : "marcada como no comunicada"}`, { entityId: e.workerId });
   await db.employment.update({ where: { id }, data: which === "start" ? { startReported: !e.startReported } : { endReported: !e.endReported } });
   refresh(e.workerId);
 }
 
 export async function deleteEmployment(id: string) {
-  await requireAdmin();
-  const e = await db.employment.delete({ where: { id } });
+  const by = await requireAdmin();
+  const e = await db.employment.delete({ where: { id }, include: { worker: { select: { name: true } } } });
+  await auditAdmin(by, "Alta S. S.", "Borrada", `${e.worker.name}: borrada el alta del ${e.startDate}${e.endDate ? ` (baja ${e.endDate})` : ""}`, { entityId: e.workerId });
   refresh(e.workerId);
 }
 
@@ -91,6 +99,7 @@ export async function registerEventAltas(eventId: string) {
     });
     n++;
   }
+  if (n) await auditAdmin(by, "Alta S. S.", "Altas del evento", `${n} altas registradas para ${event.name} (${event.date})`, { entityId: eventId });
   refresh();
   revalidatePath(`/admin/eventos/${eventId}`);
   return n;
@@ -140,6 +149,7 @@ export async function importEmployments(_prev: ImportState, form: FormData): Pro
       created++;
     }
   }
+  await auditAdmin(by, "Alta S. S.", "Importación", `Importación de altas y bajas desde Excel: ${created} nuevas, ${updated} actualizadas, ${newWorkers} personas nuevas`);
   refresh();
   return { done: `Importadas ${created} altas nuevas y ${updated} actualizadas${newWorkers ? `; ${newWorkers} personas nuevas añadidas a Personal` : ""}.` };
 }
