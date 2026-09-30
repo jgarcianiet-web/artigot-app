@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { privacySignature } from "@/lib/privacy";
 import { notFound } from "next/navigation";
 import {
   addLoan,
@@ -44,6 +45,7 @@ export default async function WorkerDetail({ params }: { params: Promise<{ id: s
     },
   });
   if (!worker) notFound();
+  const privacy = await privacySignature(worker.id);
 
   const instructions = [
     `Hola ${worker.name.split(" ")[0]}, ya tienes acceso a la app de Artigot para ver convocatorias, confirmar, fichar y hablar en el chat de cada evento.`,
@@ -198,6 +200,14 @@ export default async function WorkerDetail({ params }: { params: Promise<{ id: s
         <section className="card space-y-3">
           <h2>Datos laborales</h2>
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+            <dt className="text-stone-500">Protección de datos</dt>
+            <dd>
+              {privacy ? (
+                <span className="text-emerald-700">✓ Firmada el {formatDate(privacy.signedAt!.toISOString().slice(0, 10))} · <a href={`/api/contracts/${privacy.id}/pdf`} target="_blank" className="link">PDF</a></span>
+              ) : (
+                <span className="text-amber-700">Sin firmar (se le pide al subir documentos)</span>
+              )}
+            </dd>
             <dt className="text-stone-500">DNI / NIE</dt><dd>{worker.dni ?? <Missing />}</dd>
             <dt className="text-stone-500">Seguridad Social</dt><dd>{worker.nss ?? <Missing />}</dd>
             <dt className="text-stone-500">IBAN</dt><dd className="font-mono text-xs">{worker.iban ? formatIban(worker.iban) : <Missing />}</dd>

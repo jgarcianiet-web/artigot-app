@@ -11,6 +11,7 @@ import { checkClock, clockWindow } from "@/lib/clockRules";
 import { createIncident, type IncidentResult } from "@/lib/incidents";
 import { addDocument } from "@/lib/documents";
 import { storeSignature } from "@/lib/files";
+import { ensurePrivacyDoc, privacySignature } from "@/lib/privacy";
 import { DOC_LABEL, validDniNie, validIban } from "@/lib/staff";
 import { answerSwap, OPEN_SWAP, proposeSwap } from "@/lib/swaps";
 import { formatDate, isLeadRole, isRole, nowTime, type Role, today } from "@/lib/domain";
@@ -224,6 +225,9 @@ export async function saveMyData(_prev: FormResult, form: FormData): Promise<For
 
 export async function uploadMyDocument(_prev: FormResult, form: FormData): Promise<FormResult> {
   const me = await requireWorker();
+  if (!(await privacySignature(me.id))) {
+    return { ok: false, message: "Antes de subir documentos tienes que firmar la cláusula de protección de datos." };
+  }
   const r = await addDocument(me.id, form, me.name);
   if (r.ok) {
     after(() =>
@@ -287,6 +291,15 @@ export async function signContract(contractId: string, _prev: FormResult, form: 
   const ip = (await headers()).get("x-forwarded-for")?.split(",")[0].trim() ?? null;
   await db.contract.update({ where: { id: c.id }, data: { signedAt: new Date(), signerName: me.name, signerIp: ip, signatureFileId: sig.id } });
   revalidatePath("/app", "layout");
-  revalidatePath(`/admin/eventos/${c.eventId}`);
+  if (c.eventId) revalidatePath(`/admin/eventos/${c.eventId}`);
+  revalidatePath(`/admin/personal/${me.id}`);
   return { ok: true, message: "¡Firmado! Puedes descargar tu copia en PDF." };
+}
+
+/** Abre la cláusula de protección de datos para firmarla. */
+export async function startPrivacySignature() {
+  const me = await requireWorker();
+  if (await privacySignature(me.id)) redirect("/app/perfil");
+  const doc = await ensurePrivacyDoc(me.id);
+  redirect(`/app/firmar/${doc.id}`);
 }

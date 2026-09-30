@@ -53,7 +53,7 @@ export default async function WorkerHome() {
       include: { event: true, fromWorker: { select: { name: true } }, assignment: { select: { role: true } } },
     }),
     db.contract.findMany({
-      where: { workerId: me.id, signedAt: null, assignment: { status: "CONFIRMADO" } },
+      where: { workerId: me.id, signedAt: null, OR: [{ assignment: { status: "CONFIRMADO" } }, { kind: "RGPD" }] },
       select: { id: true, title: true },
       orderBy: { createdAt: "asc" },
     }),

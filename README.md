@@ -26,6 +26,7 @@ Aplicación para que RRHH gestione de forma rápida el personal de **bodas y eve
 
 **Personal: documentación, turnos, nómina y material**
 - **Mis datos**: DNI/NIE, Seguridad Social, IBAN, nacimiento, dirección y email. Los completa el trabajador desde su app o RRHH desde la ficha. El DNI/NIE y el IBAN se validan con su dígito de control.
+- **Protección de datos**: antes de subir su primer documento, el trabajador lee y **firma en la app la cláusula de protección de datos** (RGPD). El servidor rechaza cualquier subida sin firma. RRHH ve en la ficha quién la ha firmado y descarga el PDF. El texto y el email de contacto se editan en Ajustes → Empresa y contratos; si se publica una versión nueva, quien firmó la anterior recibe un aviso para volver a firmar.
 - **Documentos**: DNI, tarjeta de la Seguridad Social, carnet de manipulador, cuenta bancaria, contrato… en foto o PDF y con fecha de caducidad. RRHH los revisa. **Aviso 30 días antes de caducar y el día que caducan**, al trabajador y a RRHH, y resumen en el panel. Solo los ven RRHH y el propio trabajador.
 - **Cambio de turno**: quien no puede ir propone a un compañero libre y capacitado para ese puesto, el compañero acepta desde su app y **RRHH lo aprueba con un clic**. El compañero queda confirmado y quien cedió el turno no recibe penalización.
 - **Nómina en la app**: servicios, horas e **importe neto** por quincena, con la **fecha prevista de pago** y el aviso cuando se paga. Mientras no hay neto definitivo se muestra el estimado (bruto − Seguridad Social − IRPF).
