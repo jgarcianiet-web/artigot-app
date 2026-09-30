@@ -60,7 +60,7 @@ export default async function Candidates({ searchParams }: { searchParams: Promi
                 <tr key={c.id}>
                   <td><Link href={`/admin/candidatos/${c.id}`} className="link">{c.name}</Link>{c.fileId && <span className="ml-1 text-xs text-stone-500">📎 CV</span>}</td>
                   <td className="space-x-1">{c.roles.map((r) => <RoleBadge key={r} role={r} />)}</td>
-                  <td className="text-stone-500">{c.zone}</td>
+                  <td className="text-stone-500">{c.zone}{c.hasCar && <span className="ml-1" title="Tiene coche">🚗</span>}</td>
                   <td className="whitespace-nowrap"><a href={`tel:${c.phone}`}>{c.phone}</a></td>
                   <td><span className={`rounded-full px-2 py-0.5 text-xs ${CANDIDATE_STATUS[c.status].cls}`}>{CANDIDATE_STATUS[c.status].label}</span></td>
                   <td className="whitespace-nowrap text-stone-500">{when.format(c.createdAt)}</td>

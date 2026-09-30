@@ -31,6 +31,7 @@ export default async function CandidateDetail({ params }: { params: Promise<{ id
       <section className="card space-y-2 text-sm">
         <p><strong>Experiencia:</strong> {c.experience ?? "—"}</p>
         <p><strong>Disponibilidad:</strong> {c.availability ?? "—"}</p>
+        <p><strong>Coche:</strong> {c.hasCar == null ? "—" : c.hasCar ? "🚗 Sí tiene coche" : "No tiene coche"}</p>
         {c.fileId && <a href={`/api/files/${c.fileId}`} target="_blank" className="btn btn-sm">📎 Ver CV / foto</a>}
         <p className="text-xs text-stone-500">Solicitud del {when.format(c.createdAt)} · consentimiento de datos aceptado el {when.format(c.consentAt)}</p>
       </section>
