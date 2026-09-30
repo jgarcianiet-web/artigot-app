@@ -7,9 +7,10 @@ import { destroySession, requireWorker, workerLogin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { forgetDevice } from "@/lib/devices";
 import { checkClock } from "@/lib/clockRules";
-import { formatDate, nowTime, today } from "@/lib/domain";
+import { formatDate, isLeadRole, isRole, nowTime, type Role, today } from "@/lib/domain";
+import { autoReplace } from "@/lib/staffing";
 import { notify } from "@/lib/push";
-import { isEventMaitre, pendingReviews, reviewTeam, reviewWindowOpen } from "@/lib/reviews";
+import { isEventLead, pendingReviews, reviewTeam, reviewWindowOpen } from "@/lib/reviews";
 import { CRITERIA } from "@/lib/scoring";
 
 export async function login(_prev: string | null, form: FormData) {
@@ -36,13 +37,15 @@ export async function respond(assignmentId: string, accept: boolean) {
   if (a.event.date < today() || a.status === "CANCELADO" || a.checkIn) return;
   const status = accept ? "CONFIRMADO" : "RECHAZADO";
   if (a.status === status) return;
-  // Un maître con valoraciones atrasadas no puede aceptar nuevas convocatorias hasta completarlas
+  // Un maître o camarero responsable con valoraciones atrasadas no puede aceptar nuevas convocatorias hasta completarlas
   if (accept && (await pendingReviews(worker.id)).some((p) => p.overdue)) return;
   await db.assignment.update({
     where: { id: a.id },
     // Retirarse después de haber confirmado resta puntos de fiabilidad
     data: { status, respondedAt: new Date(), ...(a.status === "CONFIRMADO" && !accept && { withdrew: true }) },
   });
+  // Quien no va se sustituye automáticamente por el siguiente mejor puntuado del mismo puesto
+  if (!accept && isRole(a.role)) after(() => autoReplace(a.eventId, a.role as Role, worker.name));
   after(() =>
     notify({
       admins: true,
@@ -88,7 +91,7 @@ export async function clock(
   revalidatePath("/app", "layout");
   revalidatePath(`/admin/eventos/${a.eventId}`);
   // Al terminar, se recuerda al maître que valore a su equipo
-  if (kind === "out" && a.role === "MAITRE") {
+  if (kind === "out" && isLeadRole(a.role)) {
     after(() =>
       notify({
         workerIds: [a.workerId],
@@ -114,7 +117,7 @@ export async function toggleUnavailable(date: string) {
   revalidatePath("/app");
 }
 
-// ---------- Valoraciones del maître ----------
+// ---------- Valoraciones del maître / camarero responsable ----------
 
 export type ReviewResult = { ok: boolean; message: string };
 
@@ -123,11 +126,11 @@ const score = (v: FormDataEntryValue | null) => {
   return Number.isInteger(n) && n >= 1 && n <= 5 ? n : null;
 };
 
-/** Guarda las valoraciones del maître para su equipo (solo filas completas). */
+/** Guarda las valoraciones del maître o camarero responsable para su equipo (solo filas completas). */
 export async function saveReviews(eventId: string, _prev: ReviewResult | null, form: FormData): Promise<ReviewResult> {
   const me = await requireWorker();
   const event = await db.event.findUnique({ where: { id: eventId } });
-  if (!event || !(await isEventMaitre(eventId, me.id))) return { ok: false, message: "Solo el maître del evento puede valorar." };
+  if (!event || !(await isEventLead(eventId, me.id))) return { ok: false, message: "Solo el maître o el camarero responsable del evento puede valorar." };
   if (!reviewWindowOpen(event)) return { ok: false, message: "El plazo para valorar este evento no está abierto." };
 
   const team = await reviewTeam(eventId);

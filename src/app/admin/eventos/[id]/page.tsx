@@ -22,6 +22,7 @@ import {
   euro,
   EVENT_TYPE_LABEL,
   formatDate,
+  isLeadRole,
   num,
   payable,
   ROLE_LABEL,
@@ -67,7 +68,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
   const totalMissing = ROLES.reduce((s, r) => s + missing[r], 0);
   const fillable = ROLES.reduce((s, r) => s + Math.min(missing[r], candidates[r].length), 0);
   const confirmed = event.assignments.filter((a) => a.status === "CONFIRMADO");
-  const maitres = confirmed.filter((a) => a.role === "MAITRE");
+  const maitres = confirmed.filter((a) => isLeadRole(a.role)); // maître o camarero responsable
   const teamSize = confirmed.length - maitres.length;
   const pendingReviewCount = maitres.reduce(
     (n, m) => n + teamSize - reviews.filter((r) => r.reviewerId === m.workerId).length,
@@ -150,7 +151,10 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
           ))}
         </div>
         <p className="text-xs text-stone-500">
-          «Selección automática» convoca a quienes tienen mejor puntuación entre los libres ese día. La puntuación (0-100) sale de las valoraciones de los maîtres, resta por ausencias, retiradas y retrasos, y reparte el trabajo entre quienes están igualados. Cada convocado recibe un aviso en el móvil para aceptar o rechazar; al aceptar entra en el chat del evento.
+          «Selección automática» convoca a quienes tienen mejor puntuación entre los libres ese día. La puntuación (0-100) sale de las valoraciones de maîtres y camareros responsables, resta por ausencias, retiradas y retrasos, y reparte el trabajo entre quienes están igualados. Cada convocado recibe un aviso en el móvil para aceptar o rechazar; al aceptar entra en el chat del evento.{" "}
+          {event.autoReplace
+            ? "Reposición automática activada: si alguien rechaza o se retira, se convoca solo al siguiente mejor puntuado del mismo puesto."
+            : "Reposición automática desactivada para este evento."}
         </p>
       </section>
 
@@ -177,6 +181,13 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
                         <button className="btn btn-sm" title="Marcar como confirmado (p. ej. confirmó por teléfono)">✓</button>
                       </form>
                     )}
+                    {a.status === "CONVOCADO" && (
+                      <form action={setAssignmentStatus.bind(null, a.id, "RECHAZADO")}>
+                        <button className="btn btn-sm" title="Avisó de que no puede ir: se marca como rechazado y, si está activada, se convoca a un sustituto">
+                          No puede
+                        </button>
+                      </form>
+                    )}
                     {a.status === "CONFIRMADO" && (
                       <form action={setAssignmentStatus.bind(null, a.id, "CANCELADO")}>
                         <button className="btn btn-sm" title="Cancelar su participación">Cancelar</button>
@@ -195,7 +206,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
               </ul>
             </div>
 
-            <form action={inviteWorkers.bind(null, event.id)} className="card space-y-2">
+            <form action={inviteWorkers.bind(null, event.id, role)} className="card space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <h2>
                   {ROLE_PLURAL[role]} disponibles <span className="text-sm font-normal text-stone-500">({free.length})</span>
@@ -230,6 +241,9 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
                           <td>
                             {c.name}
                             {c.zone && <div className="text-xs text-stone-500">{c.zone}</div>}
+                            {c.mainRole !== role && (
+                              <div className="text-xs text-stone-500">Puesto principal: {ROLE_LABEL[c.mainRole as keyof typeof ROLE_LABEL]?.toLowerCase()}</div>
+                            )}
                           </td>
                           <td><ScoreBadge score={c.score.score} title={explainScore(c.score)} /></td>
                           <td className="text-right">{c.recentEvents}</td>
@@ -244,22 +258,22 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
         );
       })}
 
-      {/* Valoraciones del maître */}
-      {confirmed.some((a) => a.role !== "MAITRE") && (
+      {/* Valoraciones del maître / camarero responsable */}
+      {confirmed.some((a) => !isLeadRole(a.role)) && (
         <section className="card space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2>Valoraciones del maître</h2>
+            <h2>Valoraciones del equipo</h2>
             {maitres.length > 0 && pendingReviewCount > 0 && reviewWindowOpen(event) && (
               <form action={remindReviews.bind(null, event.id)}>
-                <SubmitButton className="btn btn-sm">🔔 Recordar al maître ({pendingReviewCount} pendientes)</SubmitButton>
+                <SubmitButton className="btn btn-sm">🔔 Recordar al responsable ({pendingReviewCount} pendientes)</SubmitButton>
               </form>
             )}
           </div>
           {maitres.length === 0 ? (
-            <p className="text-sm text-amber-700">Este evento no tiene maître confirmado: nadie valorará al equipo.</p>
+            <p className="text-sm text-amber-700">Este evento no tiene maître ni camarero responsable confirmado: nadie valorará al equipo.</p>
           ) : (
             <p className="text-xs text-stone-500">
-              Valora {maitres.map((m) => m.worker.name).join(" y ")}: desde el inicio del servicio hasta {REVIEW_DAYS} días después. Si
+              Valora {maitres.map((m) => `${m.worker.name} (${ROLE_LABEL[m.role as keyof typeof ROLE_LABEL].toLowerCase()})`).join(" y ")}: desde el inicio del servicio hasta {REVIEW_DAYS} días después. Si
               se retrasa más de un día, no puede aceptar nuevas convocatorias hasta completarlas.
             </p>
           )}
@@ -277,7 +291,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
               </thead>
               <tbody>
                 {confirmed
-                  .filter((a) => a.role !== "MAITRE")
+                  .filter((a) => !isLeadRole(a.role))
                   .map((a) => {
                     const rs = reviews.filter((r) => r.workerId === a.workerId);
                     if (!rs.length) {

@@ -11,6 +11,7 @@ type Worker = {
   phone: string;
   email: string | null;
   role: string;
+  roles: string[];
   rating: number;
   zone: string | null;
   notes: string | null;
@@ -35,7 +36,7 @@ export function WorkerForm({ worker }: { worker?: Worker }) {
           <input name="email" type="email" className="input" defaultValue={worker?.email ?? ""} />
         </div>
         <div>
-          <label className="label">Puesto</label>
+          <label className="label">Puesto principal</label>
           <select name="role" className="input" defaultValue={worker?.role ?? "CAMARERO"}>
             {ROLES.map((r) => (
               <option key={r} value={r}>{ROLE_LABEL[r]}</option>
@@ -50,6 +51,20 @@ export function WorkerForm({ worker }: { worker?: Worker }) {
             ))}
           </select>
         </div>
+        <fieldset className="sm:col-span-2">
+          <legend className="label">También puede trabajar como</legend>
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            {ROLES.map((r) => (
+              <label key={r} className="flex items-center gap-2 text-sm">
+                <input type="checkbox" name="roles" value={r} defaultChecked={worker?.roles.includes(r)} className="size-4" />
+                {ROLE_LABEL[r]}
+              </label>
+            ))}
+          </div>
+          <p className="mt-1 text-xs text-stone-500">
+            El puesto en cada evento se elige al convocar: p. ej. un camarero puede ir como camarero responsable en un evento pequeño y como maître en otro.
+          </p>
+        </fieldset>
         <div className="sm:col-span-2">
           <label className="label">Zona / localidad (opcional)</label>
           <input name="zone" className="input" defaultValue={worker?.zone ?? ""} placeholder="p. ej. Valencia centro, tiene coche" />

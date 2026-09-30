@@ -3,14 +3,14 @@ import { notFound } from "next/navigation";
 import { requireWorker } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { addDays, formatDate } from "@/lib/domain";
-import { isEventMaitre, REVIEW_DAYS, reviewTeam, reviewWindowOpen } from "@/lib/reviews";
+import { isEventLead, REVIEW_DAYS, reviewTeam, reviewWindowOpen } from "@/lib/reviews";
 import { ReviewForm } from "./ReviewForm";
 
 export default async function RateTeam({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const me = await requireWorker();
   const event = await db.event.findUnique({ where: { id } });
-  if (!event || !(await isEventMaitre(id, me.id))) notFound();
+  if (!event || !(await isEventLead(id, me.id))) notFound();
 
   const [team, reviews] = await Promise.all([
     reviewTeam(id),
