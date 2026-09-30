@@ -19,6 +19,7 @@ type Event = {
   lng: number | null;
   client: string | null;
   notes: string | null;
+  checklist: string | null;
   needCamareros: number;
   needMaitres: number;
   needResponsables: number;
@@ -195,9 +196,16 @@ export function EventForm({
         <p className="mt-2 text-xs text-stone-500">Si indicas hora de descarga, los mozos serán citados a esa hora en lugar de a la hora de servicio.</p>
       </fieldset>
 
-      <div>
-        <label className="label">Notas para el personal (uniforme, menú…)</label>
-        <textarea name="notes" className="input" rows={3} defaultValue={v.notes ?? ""} />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label className="label">Notas para el personal (menú, horarios…)</label>
+          <textarea name="notes" className="input" rows={4} defaultValue={v.notes ?? ""} />
+        </div>
+        <div>
+          <label className="label">Qué llevar a este evento (una cosa por línea)</label>
+          <textarea name="checklist" className="input" rows={4} defaultValue={v.checklist ?? ""} placeholder={"Pajarita granate\nChaleco negro"} />
+          <p className="mt-1 text-xs text-stone-500">Se suma al uniforme de cada puesto (Ajustes → Uniforme).</p>
+        </div>
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}

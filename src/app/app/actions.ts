@@ -8,6 +8,9 @@ import { db } from "@/lib/db";
 import { forgetDevice } from "@/lib/devices";
 import { checkClock, clockWindow } from "@/lib/clockRules";
 import { createIncident, type IncidentResult } from "@/lib/incidents";
+import { addDocument } from "@/lib/documents";
+import { DOC_LABEL, validDniNie, validIban } from "@/lib/staff";
+import { answerSwap, OPEN_SWAP, proposeSwap } from "@/lib/swaps";
 import { formatDate, isLeadRole, isRole, nowTime, type Role, today } from "@/lib/domain";
 import { autoReplace } from "@/lib/staffing";
 import { notify } from "@/lib/push";
@@ -190,4 +193,77 @@ export async function reportIncident(eventId: string, _prev: IncidentResult | nu
   const r = await createIncident({ kind: "worker", id: me.id, name: me.name, role: me.role }, eventId, form);
   revalidatePath(`/app/eventos/${eventId}/equipo`);
   return r;
+}
+
+// ---------- Mis datos y documentos ----------
+
+export type FormResult = { ok: boolean; message: string } | null;
+
+export async function saveMyData(_prev: FormResult, form: FormData): Promise<FormResult> {
+  const me = await requireWorker();
+  const dni = String(form.get("dni") ?? "").trim().toUpperCase().replace(/[\s-]/g, "");
+  const iban = String(form.get("iban") ?? "").trim().toUpperCase().replace(/\s/g, "");
+  const nss = String(form.get("nss") ?? "").replace(/\D/g, "");
+  const birthDate = String(form.get("birthDate") ?? "");
+  const address = String(form.get("address") ?? "").trim().slice(0, 200);
+  const email = String(form.get("email") ?? "").trim();
+  if (dni && !validDniNie(dni)) return { ok: false, message: "El DNI/NIE no es correcto (revisa la letra)." };
+  if (iban && !validIban(iban)) return { ok: false, message: "El IBAN no es correcto." };
+  if (nss && nss.length !== 12) return { ok: false, message: "El número de la Seguridad Social tiene 12 cifras." };
+  if (birthDate && !/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) return { ok: false, message: "Fecha de nacimiento no válida." };
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, message: "Email no válido." };
+  await db.worker.update({
+    where: { id: me.id },
+    data: { dni: dni || null, iban: iban || null, nss: nss || null, birthDate: birthDate || null, address: address || null, email: email || null },
+  });
+  revalidatePath("/app/perfil");
+  return { ok: true, message: "Datos guardados." };
+}
+
+export async function uploadMyDocument(_prev: FormResult, form: FormData): Promise<FormResult> {
+  const me = await requireWorker();
+  const r = await addDocument(me.id, form, me.name);
+  if (r.ok) {
+    after(() =>
+      notify({
+        admins: true,
+        adminUrl: `/admin/personal/${me.id}`,
+        title: "Documento nuevo",
+        body: `${me.name} ha subido: ${DOC_LABEL[String(form.get("type"))] ?? "documento"}. Revísalo en su ficha.`,
+        tag: `doc-${me.id}`,
+      }),
+    );
+  }
+  revalidatePath("/app/perfil");
+  return r;
+}
+
+export async function deleteMyDocument(id: string) {
+  const me = await requireWorker();
+  const d = await db.workerDocument.findUnique({ where: { id } });
+  if (!d || d.workerId !== me.id || d.verified) return; // los revisados por RRHH solo los borra RRHH
+  await db.workerDocument.delete({ where: { id } });
+  if (d.fileId) await db.storedFile.delete({ where: { id: d.fileId } }).catch(() => {});
+  revalidatePath("/app/perfil");
+}
+
+// ---------- Cambios de turno ----------
+
+export async function proposeMySwap(assignmentId: string, _prev: FormResult, form: FormData): Promise<FormResult> {
+  const me = await requireWorker();
+  const r = await proposeSwap(me.id, assignmentId, String(form.get("toWorkerId") ?? ""), String(form.get("message") ?? "").trim() || null);
+  revalidatePath("/app", "layout");
+  return r;
+}
+
+export async function answerMySwap(swapId: string, accept: boolean) {
+  const me = await requireWorker();
+  await answerSwap(me.id, swapId, accept);
+  revalidatePath("/app", "layout");
+}
+
+export async function cancelMySwap(swapId: string) {
+  const me = await requireWorker();
+  await db.swapRequest.updateMany({ where: { id: swapId, fromWorkerId: me.id, status: { in: OPEN_SWAP } }, data: { status: "CANCELADO" } });
+  revalidatePath("/app", "layout");
 }

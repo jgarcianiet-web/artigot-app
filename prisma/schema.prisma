@@ -20,6 +20,12 @@ model Worker {
   rating          Int              @default(3)
   zone            String?
   notes           String?
+  // Datos laborales (los puede completar el propio trabajador desde la app)
+  dni             String?
+  nss             String?
+  iban            String?
+  birthDate       String?
+  address         String?
   active          Boolean          @default(true)
   // Acceso a la app: teléfono normalizado + código de 6 cifras que RRHH entrega al trabajador
   phoneKey        String           @unique
@@ -35,6 +41,11 @@ model Worker {
   reviews         Review[]         @relation("reviewed")
   reviewsGiven    Review[]         @relation("reviewer")
   incidentsReported Incident[]     @relation("incidentReporter")
+  documents       WorkerDocument[]
+  loans           Loan[]
+  swapsFrom       SwapRequest[]    @relation("swapFrom")
+  swapsTo         SwapRequest[]    @relation("swapTo")
+  files           StoredFile[]
   incidentsAbout  Incident[]       @relation("incidentWorker")
 }
 
@@ -65,6 +76,8 @@ model Event {
   lng           Float?
   client        String?
   notes         String?
+  // Qué debe llevar el personal a este evento (una cosa por línea), además del uniforme de su puesto
+  checklist     String?
   // Finca y cliente guardados (opcionales; venue/client guardan el texto que se muestra)
   venueId       String?
   clientId      String?
@@ -80,6 +93,7 @@ model Event {
   autoReplace   Boolean      @default(true)
   createdAt     DateTime     @default(now())
   assignments   Assignment[]
+  swaps         SwapRequest[]
   messages      Message[]
   reads         ChatRead[]
   reviews       Review[]
@@ -117,6 +131,7 @@ model Assignment {
   createdAt     DateTime  @default(now())
   event         Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
   worker        Worker    @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  swaps         SwapRequest[]
 
   @@unique([eventId, workerId])
 }
@@ -206,6 +221,10 @@ model StoredFile {
   event      Event?   @relation(fields: [eventId], references: [id], onDelete: Cascade)
   incidentId String?
   incident   Incident? @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  // Documentos del trabajador (scope DOC): solo los ven RRHH y el propio trabajador
+  workerId   String?
+  worker     Worker?  @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  document   WorkerDocument?
 }
 
 // Incidencia del evento. type: ROTURA | QUEJA | ACCIDENTE | PERSONAL | OTRO
@@ -290,7 +309,69 @@ model EventTemplate {
   needMaitres      Int      @default(0)
   needMozos        Int      @default(0)
   notes            String?
+  checklist        String?
   venueId          String?
   venue            Venue?   @relation(fields: [venueId], references: [id], onDelete: SetNull)
   createdAt        DateTime @default(now())
+}
+
+// Documento del trabajador. type: DNI | NSS | MANIPULADOR | CUENTA | CONTRATO | OTRO
+model WorkerDocument {
+  id         String      @id @default(cuid())
+  workerId   String
+  type       String
+  label      String?
+  expiresAt  String?
+  fileId     String?     @unique
+  verified   Boolean     @default(false)
+  uploadedBy String
+  createdAt  DateTime    @default(now())
+  worker     Worker      @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  file       StoredFile? @relation(fields: [fileId], references: [id], onDelete: SetNull)
+
+  @@index([workerId])
+  @@index([expiresAt])
+}
+
+// Intercambio de turno: quien no puede ir propone a un compañero, este acepta y RRHH lo aprueba.
+// status: PROPUESTO | ACEPTADO (por el compañero) | APROBADO | RECHAZADO | CANCELADO
+model SwapRequest {
+  id           String     @id @default(cuid())
+  assignmentId String
+  eventId      String
+  fromWorkerId String
+  toWorkerId   String
+  status       String     @default("PROPUESTO")
+  message      String?
+  decidedBy    String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  event        Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  fromWorker   Worker     @relation("swapFrom", fields: [fromWorkerId], references: [id], onDelete: Cascade)
+  toWorker     Worker     @relation("swapTo", fields: [toWorkerId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+}
+
+// Material prestado al trabajador (chaqueta, sacacorchos, bandeja…)
+model Loan {
+  id          String    @id @default(cuid())
+  workerId    String
+  item        String
+  quantity    Int       @default(1)
+  deliveredAt String
+  returnedAt  String?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  worker      Worker    @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@index([workerId])
+}
+
+// Ajustes generales (p. ej. uniforme por puesto: key "uniforme", value { CAMARERO: [..], ... })
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
 }

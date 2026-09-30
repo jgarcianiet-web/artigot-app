@@ -18,7 +18,10 @@ import {
 } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { forgetDevice } from "@/lib/devices";
+import { addDocument } from "@/lib/documents";
 import { createIncident, type IncidentResult } from "@/lib/incidents";
+import { lines, validDniNie, validIban } from "@/lib/staff";
+import { approveSwap, rejectSwap } from "@/lib/swaps";
 import { EVENT_TYPES, formatDate, isRole, LEAD_ROLES, ROLES, type Role } from "@/lib/domain";
 import { notify } from "@/lib/push";
 import { autoReplace, candidatesFor, fillGaps, notifyInvited } from "@/lib/staffing";
@@ -139,6 +142,11 @@ const workerSchema = z.object({
   rating: z.coerce.number().int().min(1).max(5),
   zone: optText,
   notes: optText,
+  dni: optText,
+  nss: optText,
+  iban: optText,
+  birthDate: optText,
+  address: optText,
 });
 
 export async function saveWorker(_prev: string | null, form: FormData) {
@@ -148,6 +156,11 @@ export async function saveWorker(_prev: string | null, form: FormData) {
   const id = form.get("id") ? String(form.get("id")) : null;
   const key = phoneKey(parsed.data.phone);
   if (key.length < 9) return "El teléfono debe tener al menos 9 cifras";
+  if (parsed.data.dni) parsed.data.dni = parsed.data.dni.toUpperCase().replace(/[\s-]/g, "");
+  if (parsed.data.iban) parsed.data.iban = parsed.data.iban.toUpperCase().replace(/\s/g, "");
+  if (parsed.data.nss) parsed.data.nss = parsed.data.nss.replace(/\D/g, "");
+  if (parsed.data.dni && !validDniNie(parsed.data.dni)) return "El DNI/NIE no es correcto (revisa la letra)";
+  if (parsed.data.iban && !validIban(parsed.data.iban)) return "El IBAN no es correcto";
   const clash = await db.worker.findUnique({ where: { phoneKey: key } });
   if (clash && clash.id !== id) return `Ese teléfono ya es de ${clash.name}`;
   // Puestos que puede desempeñar: los marcados más el principal
@@ -227,6 +240,7 @@ const eventSchema = z.object({
   lng: optCoord(180),
   client: optText,
   notes: optText,
+  checklist: optText,
   needCamareros: z.coerce.number().int().min(0).max(500),
   needMaitres: z.coerce.number().int().min(0).max(100),
   needResponsables: z.coerce.number().int().min(0).max(20),
@@ -317,6 +331,7 @@ export async function saveAsTemplate(eventId: string, _prev: string | null, form
     needMaitres: e.needMaitres,
     needMozos: e.needMozos,
     notes: e.notes,
+    checklist: e.checklist,
     venueId: e.venueId,
   };
   await db.eventTemplate.upsert({ where: { name }, create: { name, ...data }, update: data });
@@ -505,6 +520,70 @@ export async function remindReviews(eventId: string) {
     body: `RRHH te recuerda que falta valorar al personal de ${event.name}.`,
     tag: `rev-${eventId}`,
   });
+}
+
+// ---------- Documentos, material, cambios de turno y uniforme ----------
+
+export async function adminUploadDocument(workerId: string, _prev: { ok: boolean; message: string } | null, form: FormData) {
+  const name = await requireAdmin();
+  const r = await addDocument(workerId, form, `${name} (RRHH)`, true);
+  revalidatePath(`/admin/personal/${workerId}`);
+  return r.ok ? { ok: true, message: "Documento añadido." } : r;
+}
+
+export async function verifyDocument(id: string) {
+  await requireAdmin();
+  const d = await db.workerDocument.update({ where: { id }, data: { verified: true } });
+  revalidatePath(`/admin/personal/${d.workerId}`);
+}
+
+export async function deleteDocument(id: string) {
+  await requireAdmin();
+  const d = await db.workerDocument.delete({ where: { id } });
+  if (d.fileId) await db.storedFile.delete({ where: { id: d.fileId } }).catch(() => {});
+  revalidatePath(`/admin/personal/${d.workerId}`);
+}
+
+export async function addLoan(workerId: string, form: FormData) {
+  await requireAdmin();
+  const item = String(form.get("item") ?? "").trim().slice(0, 100);
+  const quantity = Math.max(1, Math.min(99, Number(form.get("quantity")) || 1));
+  const deliveredAt = String(form.get("deliveredAt") ?? "");
+  if (!item || !/^\d{4}-\d{2}-\d{2}$/.test(deliveredAt)) return;
+  await db.loan.create({ data: { workerId, item, quantity, deliveredAt, notes: String(form.get("notes") ?? "").trim() || null } });
+  revalidatePath(`/admin/personal/${workerId}`);
+}
+
+export async function returnLoan(id: string) {
+  await requireAdmin();
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid" }).format(new Date());
+  const l = await db.loan.update({ where: { id }, data: { returnedAt: today } });
+  revalidatePath(`/admin/personal/${l.workerId}`);
+}
+
+export async function deleteLoan(id: string) {
+  await requireAdmin();
+  const l = await db.loan.delete({ where: { id } });
+  revalidatePath(`/admin/personal/${l.workerId}`);
+}
+
+export async function approveSwapAction(id: string) {
+  const name = await requireAdmin();
+  await approveSwap(id, name);
+  revalidatePath("/admin", "layout");
+}
+
+export async function rejectSwapAction(id: string) {
+  const name = await requireAdmin();
+  await rejectSwap(id, name);
+  revalidatePath("/admin", "layout");
+}
+
+export async function saveUniform(form: FormData) {
+  await requireAdmin();
+  const value = Object.fromEntries(ROLES.map((r) => [r, lines(String(form.get(r) ?? "")).slice(0, 30)]));
+  await db.setting.upsert({ where: { key: "uniforme" }, create: { key: "uniforme", value }, update: { value } });
+  revalidatePath("/admin/ajustes/uniforme");
 }
 
 // ---------- Incidencias ----------

@@ -7,7 +7,9 @@ import { CLOCK_RADIUS_M, clockWindow, hhmm } from "@/lib/clockRules";
 import { db } from "@/lib/db";
 import { pendingReviews } from "@/lib/reviews";
 import { addDays, callTime, isLeadRole, formatDate, num, ROLE_LABEL, today, workedHours, type Role } from "@/lib/domain";
-import { respond, toggleUnavailable } from "./actions";
+import { Checklist } from "@/components/StaffForms";
+import { checklistFor, getUniform, lines } from "@/lib/staff";
+import { answerMySwap, respond, toggleUnavailable } from "./actions";
 
 const DAYS_AHEAD = 56;
 
@@ -44,6 +46,13 @@ export default async function WorkerHome() {
     [...clockable, ...upcoming].map((a) => a.eventId),
   );
 
+  const [uniform, swapsForMe] = await Promise.all([
+    getUniform(),
+    db.swapRequest.findMany({
+      where: { toWorkerId: me.id, status: "PROPUESTO", event: { date: { gte: t } } },
+      include: { event: true, fromWorker: { select: { name: true } }, assignment: { select: { role: true } } },
+    }),
+  ]);
   const toReview = worker.assignments.some((a) => isLeadRole(a.role)) ? await pendingReviews(me.id) : [];
   const blocked = toReview.some((p) => p.overdue);
 
@@ -86,10 +95,27 @@ export default async function WorkerHome() {
         </section>
       )}
 
+      {swapsForMe.map((s) => (
+        <section key={s.id} className="card space-y-2 border-sky-300 bg-sky-50">
+          <h2>🔁 ¿Cubres un turno?</h2>
+          <p className="text-sm">
+            <strong>{s.fromWorker.name}</strong> te propone ir en su lugar a <strong>{s.event.name}</strong> el {formatDate(s.event.date)} a las{" "}
+            {callTime(s.event, s.assignment.role)} como {ROLE_LABEL[s.assignment.role as Role].toLowerCase()} ({s.event.venue}).
+          </p>
+          {s.message && <p className="text-sm text-stone-600">«{s.message}»</p>}
+          <div className="grid grid-cols-2 gap-2">
+            <form action={answerMySwap.bind(null, s.id, true)}><button className="btn btn-success w-full">Acepto</button></form>
+            <form action={answerMySwap.bind(null, s.id, false)}><button className="btn btn-danger w-full">No puedo</button></form>
+          </div>
+          <p className="text-xs text-stone-500">Si aceptas, RRHH tiene que aprobar el cambio.</p>
+        </section>
+      ))}
+
       {clockable.map((a) => (
         <section key={a.id} className="card space-y-3 border-brand-600 ring-2 ring-brand-100">
           <h2>Hoy trabajas</h2>
           <EventInfo event={a.event} role={a.role} />
+          <Checklist id={a.id} {...checklistFor(uniform, a.role, a.event.checklist)} extra={lines(a.event.checklist)} />
           <ClockButtons
             assignmentId={a.id}
             checkIn={a.checkIn}

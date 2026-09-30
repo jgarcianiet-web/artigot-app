@@ -13,6 +13,7 @@ import {
 } from "@/app/actions";
 import { ConfirmButton, SelectAll, SubmitButton } from "@/components/client";
 import { SaveTemplate } from "./SaveTemplate";
+import { SwapApprovals } from "@/components/SwapApprovals";
 import { CoverageBar, ScoreBadge, StatusBadge } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
 import { unreadCounts } from "@/lib/chat";
@@ -63,6 +64,10 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
     db.message.count({ where: { eventId: event.id } }),
   ]);
   const unreadChat = unread.get(event.id) ?? 0;
+  const swaps = await db.swapRequest.findMany({
+    where: { eventId: event.id, status: { in: ["PROPUESTO", "ACEPTADO"] } },
+    include: { event: { select: { id: true, name: true, date: true } }, fromWorker: { select: { name: true } }, toWorker: { select: { name: true } }, assignment: { select: { role: true } } },
+  });
   const rateByRole = new Map(rates.map((r) => [r.role, r]));
   const cov = coverage(event, event.assignments);
   const missing = gaps(event, event.assignments);
@@ -125,6 +130,13 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
           </form>
         </div>
       </div>
+
+      {swaps.length > 0 && (
+        <section className="space-y-2">
+          <h2>🔁 Cambios de turno</h2>
+          <SwapApprovals swaps={swaps} showEvent={false} />
+        </section>
+      )}
 
       {/* Cobertura */}
       <section className="card space-y-3">

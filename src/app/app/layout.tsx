@@ -2,7 +2,6 @@ import Link from "next/link";
 import { PushSetup } from "@/components/PushSetup";
 import { requireWorker } from "@/lib/auth";
 import { pushConfig } from "@/lib/push";
-import { logout } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -18,9 +17,8 @@ export default async function WorkerLayout({ children }: { children: React.React
         <div className="mx-auto flex max-w-lg text-sm">
           <Link href="/app" className="flex-1 py-3 text-center font-medium text-stone-700">Inicio</Link>
           <Link href="/app/chats" className="flex-1 py-3 text-center font-medium text-stone-700">Chats</Link>
-          <form action={logout} className="flex-1">
-            <button className="w-full py-3 text-center text-stone-500">Salir</button>
-          </form>
+          <Link href="/app/nomina" className="flex-1 py-3 text-center font-medium text-stone-700">Nómina</Link>
+          <Link href="/app/perfil" className="flex-1 py-3 text-center font-medium text-stone-700">Perfil</Link>
         </div>
       </nav>
     </div>
