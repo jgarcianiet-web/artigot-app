@@ -15,6 +15,9 @@ export type ChatMessage = {
   authorName: string;
   workerId: string | null;
   fromAdmin: boolean;
+  fileId: string | null;
+  lat: number | null;
+  lng: number | null;
 };
 
 export const toChatMessage = (m: {
@@ -23,6 +26,9 @@ export const toChatMessage = (m: {
   createdAt: Date;
   authorName: string;
   workerId: string | null;
+  fileId: string | null;
+  lat: number | null;
+  lng: number | null;
 }): ChatMessage => ({
   id: m.id,
   body: m.body,
@@ -31,6 +37,9 @@ export const toChatMessage = (m: {
   workerId: m.workerId,
   // Un trabajador eliminado deja sus mensajes sin workerId: solo cuentan como RRHH los firmados como tal
   fromAdmin: m.workerId === null && m.authorName.endsWith(RRHH_SUFFIX),
+  fileId: m.fileId,
+  lat: m.lat,
+  lng: m.lng,
 });
 
 /** RRHH ve todos los chats; un trabajador solo el de los eventos en los que está confirmado. */
@@ -48,14 +57,20 @@ export async function recentMessages(eventId: string, take = 200) {
   return rows.reverse().map(toChatMessage);
 }
 
-export async function postMessage(viewer: Viewer, eventId: string, text: string) {
+export type Attachment = { fileId?: string; lat?: number; lng?: number };
+
+export async function postMessage(viewer: Viewer, eventId: string, text: string, attachment: Attachment = {}) {
   const body = text.trim().slice(0, 2000);
-  if (!body) return null;
+  const hasLocation = attachment.lat != null && attachment.lng != null;
+  if (!body && !attachment.fileId && !hasLocation) return null;
   const event = await db.event.findUniqueOrThrow({ where: { id: eventId } });
   const message = await db.message.create({
     data: {
       eventId,
       body,
+      fileId: attachment.fileId,
+      lat: hasLocation ? attachment.lat : null,
+      lng: hasLocation ? attachment.lng : null,
       workerId: viewer.kind === "worker" ? viewer.id : null,
       authorName: viewer.kind === "admin" ? `${viewer.name}${RRHH_SUFFIX}` : viewer.name,
     },
@@ -69,7 +84,9 @@ export async function postMessage(viewer: Viewer, eventId: string, text: string)
       where: { eventId, status: "CONFIRMADO" },
       select: { workerId: true },
     });
-    const preview = body.length > 140 ? `${body.slice(0, 137)}…` : body;
+    const preview = body
+      ? body.length > 140 ? `${body.slice(0, 137)}…` : body
+      : attachment.fileId ? "📷 Foto" : "📍 Ubicación";
     await notify({
       workerIds: members.map((m) => m.workerId).filter((id) => viewer.kind !== "worker" || id !== viewer.id),
       workerUrl: `/app/eventos/${eventId}`,

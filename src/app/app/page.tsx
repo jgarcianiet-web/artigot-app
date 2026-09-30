@@ -100,6 +100,9 @@ export default async function WorkerHome() {
             })()}
           />
           <ChatLink eventId={a.eventId} />
+          {isLeadRole(a.role) && (
+            <Link href={`/app/eventos/${a.eventId}/equipo`} className="btn btn-primary w-full">👥 Panel del equipo e incidencias</Link>
+          )}
         </section>
       ))}
 

@@ -34,6 +34,8 @@ model Worker {
   devices         Device[]
   reviews         Review[]         @relation("reviewed")
   reviewsGiven    Review[]         @relation("reviewer")
+  incidentsReported Incident[]     @relation("incidentReporter")
+  incidentsAbout  Incident[]       @relation("incidentWorker")
 }
 
 // Días en los que el trabajador no está disponible (fecha YYYY-MM-DD)
@@ -76,6 +78,8 @@ model Event {
   messages      Message[]
   reads         ChatRead[]
   reviews       Review[]
+  incidents     Incident[]
+  files         StoredFile[]
 
   @@index([date])
 }
@@ -126,6 +130,10 @@ model Message {
   workerId   String?
   authorName String
   body       String
+  // Adjuntos opcionales: foto (StoredFile) y/o ubicación compartida
+  fileId     String?
+  lat        Float?
+  lng        Float?
   createdAt  DateTime @default(now())
   event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   worker     Worker?  @relation(fields: [workerId], references: [id], onDelete: SetNull)
@@ -178,4 +186,48 @@ model Review {
 
   @@unique([eventId, workerId, reviewerId])
   @@index([workerId, createdAt])
+}
+
+// Archivo subido (fotos del chat e incidencias). Se guarda en la base de datos: sin servicios externos.
+// scope: CHAT | INCIDENT. El acceso se comprueba según el evento al que pertenece.
+model StoredFile {
+  id         String   @id @default(cuid())
+  eventId    String?
+  scope      String
+  mime       String
+  size       Int
+  data       Bytes
+  createdAt  DateTime @default(now())
+  event      Event?   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  incidentId String?
+  incident   Incident? @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+}
+
+// Incidencia del evento. type: ROTURA | QUEJA | ACCIDENTE | PERSONAL | OTRO
+model Incident {
+  id          String       @id @default(cuid())
+  eventId     String
+  type        String
+  description String
+  // Quién la registra: un trabajador (maître/responsable) o RRHH
+  reporterId  String?
+  reporterAdmin String?
+  // Trabajador afectado o implicado (opcional)
+  workerId    String?
+  resolved    Boolean      @default(false)
+  resolution  String?
+  createdAt   DateTime     @default(now())
+  event       Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  reporter    Worker?      @relation("incidentReporter", fields: [reporterId], references: [id], onDelete: SetNull)
+  worker      Worker?      @relation("incidentWorker", fields: [workerId], references: [id], onDelete: SetNull)
+  photos      StoredFile[]
+
+  @@index([eventId])
+  @@index([resolved, createdAt])
+}
+
+// Registro de avisos automáticos ya enviados (evita duplicados). key p. ej. "dia-antes:<assignmentId>"
+model ReminderLog {
+  key    String   @id
+  sentAt DateTime @default(now())
 }

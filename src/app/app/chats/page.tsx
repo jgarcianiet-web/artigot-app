@@ -34,7 +34,7 @@ export default async function WorkerChats() {
                     <span className="shrink-0 text-xs text-stone-500">{formatDate(e.date)}</span>
                   </span>
                   <span className="block truncate text-sm text-stone-500">
-                    {last ? `${last.authorName}: ${last.body}` : "Sin mensajes todavía"}
+                    {last ? `${last.authorName}: ${last.body || (last.fileId ? "📷 Foto" : "📍 Ubicación")}` : "Sin mensajes todavía"}
                   </span>
                 </span>
                 {n > 0 && <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-medium text-white">{n}</span>}

@@ -14,6 +14,7 @@ import {
 } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { forgetDevice } from "@/lib/devices";
+import { createIncident, type IncidentResult } from "@/lib/incidents";
 import { EVENT_TYPES, formatDate, isRole, LEAD_ROLES, ROLES, type Role } from "@/lib/domain";
 import { notify } from "@/lib/push";
 import { autoReplace, candidatesFor, fillGaps, notifyInvited } from "@/lib/staffing";
@@ -306,6 +307,33 @@ export async function remindReviews(eventId: string) {
     body: `RRHH te recuerda que falta valorar al personal de ${event.name}.`,
     tag: `rev-${eventId}`,
   });
+}
+
+// ---------- Incidencias ----------
+
+export async function reportIncidentAdmin(eventId: string, _prev: IncidentResult | null, form: FormData): Promise<IncidentResult> {
+  const name = await requireAdmin();
+  const r = await createIncident({ kind: "admin", name }, eventId, form);
+  revalidatePath(`/admin/eventos/${eventId}/directo`);
+  return r;
+}
+
+export async function resolveIncident(id: string, form: FormData) {
+  const name = await requireAdmin();
+  const resolution = String(form.get("resolution") ?? "").trim().slice(0, 1000);
+  const i = await db.incident.update({
+    where: { id },
+    data: { resolved: true, resolution: resolution ? `${resolution} (${name})` : `Cerrada por ${name}` },
+  });
+  revalidatePath(`/admin/eventos/${i.eventId}/directo`);
+  revalidatePath("/admin/incidencias");
+}
+
+export async function reopenIncident(id: string) {
+  await requireAdmin();
+  const i = await db.incident.update({ where: { id }, data: { resolved: false, resolution: null } });
+  revalidatePath(`/admin/eventos/${i.eventId}/directo`);
+  revalidatePath("/admin/incidencias");
 }
 
 // ---------- Fichaje ----------
