@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { formatDate, ROLE_LABEL, today, type Role } from "@/lib/domain";
 import { DOC_LABEL, docState } from "@/lib/staff";
 import { privacySignature } from "@/lib/privacy";
+import { identityDocStatus } from "@/lib/identityDocs";
 import { deleteMyDocument, logout, saveMyData, startPrivacySignature, uploadMyDocument } from "../actions";
 
 const STATE = {
@@ -33,7 +34,20 @@ export default async function MyProfile() {
         <h1>{worker.name}</h1>
       </header>
 
-      <MyDataForm action={saveMyData} data={worker} />
+      {privacy ? (
+        <MyDataForm action={saveMyData} data={worker} docs={await identityDocStatus(me.id)} />
+      ) : (
+        <section className="card space-y-2 border-violet-300 bg-violet-50">
+          <h2>🔒 Completa tus datos</h2>
+          <p className="text-sm">
+            Para darte de alta y pagarte necesitamos tu DNI, tu número de la Seguridad Social y tu IBAN, con sus documentos. Antes tienes que leer y firmar la
+            información sobre protección de datos: qué datos tratamos, para qué y tus derechos.
+          </p>
+          <form action={startPrivacySignature}>
+            <button className="btn btn-primary w-full">Leer y firmar</button>
+          </form>
+        </section>
+      )}
 
       {worker.contracts.length > 0 && (
         <section className="space-y-2">
@@ -88,13 +102,7 @@ export default async function MyProfile() {
             </p>
           </>
         ) : (
-          <div className="card space-y-2 border-violet-300 bg-violet-50">
-            <p className="font-medium">🔒 Antes de subir tus documentos</p>
-            <p className="text-sm">Tienes que leer y firmar la información sobre protección de datos: qué datos tratamos, para qué, con quién los compartimos y tus derechos.</p>
-            <form action={startPrivacySignature}>
-              <button className="btn btn-primary w-full">Leer y firmar</button>
-            </form>
-          </div>
+          <p className="text-sm text-stone-500">🔒 Para subir documentos, firma primero la protección de datos (arriba).</p>
         )}
       </section>
 

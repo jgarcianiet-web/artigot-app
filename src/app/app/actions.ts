@@ -12,6 +12,7 @@ import { createIncident, type IncidentResult } from "@/lib/incidents";
 import { addDocument } from "@/lib/documents";
 import { storeSignature } from "@/lib/files";
 import { ensurePrivacyDoc, privacySignature } from "@/lib/privacy";
+import { checkIdentityDocs, storeIdentityDocs } from "@/lib/identityDocs";
 import { eventTransport, isTransport, MAX_SEATS } from "@/lib/transport";
 import { answerPoll } from "@/lib/polls";
 import { DOC_LABEL, validDniNie, validIban } from "@/lib/staff";
@@ -264,20 +265,39 @@ export async function saveMyData(_prev: FormResult, form: FormData): Promise<For
   const birthDate = String(form.get("birthDate") ?? "");
   const address = String(form.get("address") ?? "").trim().slice(0, 200);
   const email = String(form.get("email") ?? "").trim();
-  if (dni && !validDniNie(dni)) return { ok: false, message: "El DNI/NIE no es correcto (revisa la letra)." };
-  if (iban && !validIban(iban)) return { ok: false, message: "El IBAN no es correcto." };
-  if (nss && nss.length !== 12) return { ok: false, message: "El número de la Seguridad Social tiene 12 cifras." };
+  if (!(await privacySignature(me.id))) return { ok: false, message: "Antes de completar tus datos tienes que firmar la cláusula de protección de datos." };
+  if (!dni) return { ok: false, message: "Escribe tu DNI / NIE." };
+  if (!nss) return { ok: false, message: "Escribe tu número de la Seguridad Social." };
+  if (!iban) return { ok: false, message: "Escribe tu IBAN." };
+  if (!validDniNie(dni)) return { ok: false, message: "El DNI/NIE no es correcto (revisa la letra)." };
+  if (!validIban(iban)) return { ok: false, message: "El IBAN no es correcto." };
+  if (nss.length !== 12) return { ok: false, message: "El número de la Seguridad Social tiene 12 cifras." };
   if (birthDate && !/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) return { ok: false, message: "Fecha de nacimiento no válida." };
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, message: "Email no válido." };
   const before = await db.worker.findUniqueOrThrow({ where: { id: me.id } });
+  const docError = await checkIdentityDocs(me.id, before, { dni, nss, iban }, form);
+  if (docError) return { ok: false, message: docError };
   const after_ = await db.worker.update({
     where: { id: me.id },
     data: { dni: dni || null, iban: iban || null, nss: nss || null, birthDate: birthDate || null, address: address || null, email: email || null },
   });
   const d = diff(before, after_, { dni: "DNI", nss: "NSS", iban: "IBAN", birthDate: "Nacimiento", address: "Dirección", email: "Email" });
   if (d.changed) await audit(me.name, "Trabajador", "Trabajador", "Datos (desde la app)", `${me.name}: ${d.text}`, { entityId: me.id, data: d.data });
+  let stored: string[];
+  try {
+    stored = await storeIdentityDocs(me.id, form, me.name, false);
+  } catch (e) {
+    return { ok: false, message: (e as Error).message };
+  }
+  if (stored.length) {
+    const what = stored.map((t) => DOC_LABEL[t] ?? t).join(", ");
+    await audit(me.name, "Trabajador", "Documento", "Subido (desde la app)", `${me.name}: ${what}`, { entityId: me.id });
+    after(() =>
+      notify({ admins: true, adminUrl: `/admin/personal/${me.id}`, title: "Documentos nuevos", body: `${me.name} ha subido: ${what}. Revísalos en su ficha.`, tag: `doc-${me.id}` }),
+    );
+  }
   revalidatePath("/app/perfil");
-  return { ok: true, message: "Datos guardados." };
+  return { ok: true, message: stored.length ? "Datos y documentos guardados. RRHH los revisará." : "Datos guardados." };
 }
 
 export async function uploadMyDocument(_prev: FormResult, form: FormData): Promise<FormResult> {

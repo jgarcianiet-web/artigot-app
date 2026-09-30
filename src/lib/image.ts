@@ -15,3 +15,11 @@ export async function shrinkImage(file: File, maxSide = 1600, quality = 0.8): Pr
     return file; // formatos que el navegador no sabe abrir (p. ej. HEIC en escritorio): se sube tal cual
   }
 }
+
+/** Reduce las fotos de los campos indicados de un formulario antes de enviarlo. Uso solo en cliente. */
+export async function shrinkFormImages(form: FormData, keys: string[], maxSide = 2000, quality = 0.85) {
+  for (const k of keys) {
+    const f = form.get(k);
+    if (f instanceof File && f.size > 0 && f.type.startsWith("image/")) form.set(k, await shrinkImage(f, maxSide, quality));
+  }
+}

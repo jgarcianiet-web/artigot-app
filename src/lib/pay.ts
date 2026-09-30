@@ -14,7 +14,7 @@ import { payrollLines } from "./payroll";
 export type PaySettings = {
   /** % de cotización a cargo del trabajador (contingencias comunes, desempleo, FP y MEI) */
   ssPct: number;
-  /** % de IRPF general (cada trabajador puede tener el suyo) */
+  /** % de IRPF para el neto estimado (el real lo da la nómina de A3) */
   irpfPct: number;
   /** Día de pago de la primera quincena (del mismo mes) */
   firstHalfDay: number;
@@ -135,7 +135,7 @@ async function liveRows(h: Half, s: PaySettings, workerId?: string): Promise<Omi
     const w = l.a.worker;
     const r = by.get(w.id) ?? {
       workerId: w.id, name: w.name, dni: w.dni, a3Code: w.a3Code, iban: w.iban,
-      services: 0, hours: 0, gross: 0, ss: 0, irpf: 0, irpfPct: w.irpf ?? s.irpfPct, netEstimate: 0, pending: 0,
+      services: 0, hours: 0, gross: 0, ss: 0, irpf: 0, irpfPct: s.irpfPct, netEstimate: 0, pending: 0,
     };
     r.services++;
     r.hours += l.billedHours ?? 0;
@@ -155,7 +155,7 @@ export async function payPeriod(h: Half, opts: { workerId?: string } = {}) {
   const period = await db.payPeriod.findUnique({
     where: { from_to: { from: h.from, to: h.to } },
     include: {
-      lines: { where: opts.workerId ? { workerId: opts.workerId } : {}, include: { worker: { select: { name: true, dni: true, a3Code: true, iban: true, irpf: true } } } },
+      lines: { where: opts.workerId ? { workerId: opts.workerId } : {}, include: { worker: { select: { name: true, dni: true, a3Code: true, iban: true } } } },
       remittances: { orderBy: { createdAt: "desc" }, select: { id: true, count: true, total: true, execDate: true, createdAt: true, createdBy: true } },
     },
   });

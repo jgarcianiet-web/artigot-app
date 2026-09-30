@@ -24,7 +24,8 @@ import { DEFAULT_TEMPLATE, generateContracts } from "@/lib/contracts";
 import { DEFAULT_PRIVACY_TEMPLATE, ensurePrivacyDoc, getPrivacy } from "@/lib/privacy";
 import { addDocument } from "@/lib/documents";
 import { createIncident, type IncidentResult } from "@/lib/incidents";
-import { lines, validDniNie, validIban } from "@/lib/staff";
+import { DOC_LABEL, lines, validDniNie, validIban } from "@/lib/staff";
+import { checkIdentityDocs, storeIdentityDocs } from "@/lib/identityDocs";
 import { approveSwap, rejectSwap } from "@/lib/swaps";
 import { EVENT_TYPES, formatDate, isRole, LEAD_ROLES, ROLE_LABEL, ROLES, type Role } from "@/lib/domain";
 import { notify } from "@/lib/push";
@@ -158,16 +159,11 @@ const workerSchema = z.object({
   birthDate: optText,
   address: optText,
   a3Code: optText,
-  irpf: z
-    .string()
-    .trim()
-    .transform((v) => (v ? Number(v.replace(",", ".")) : null))
-    .refine((v) => v === null || (Number.isFinite(v) && v >= 0 && v <= 50), "El IRPF tiene que estar entre 0 y 50 %"),
 });
 
 const WORKER_LABELS = {
   name: "Nombre", phone: "Teléfono", email: "Email", role: "Puesto", roles: "Puestos", rating: "Valoración", zone: "Zona",
-  dni: "DNI", nss: "NSS", iban: "IBAN", birthDate: "Nacimiento", address: "Dirección", a3Code: "Código A3", irpf: "IRPF", carSeats: "Plazas en coche",
+  dni: "DNI", nss: "NSS", iban: "IBAN", birthDate: "Nacimiento", address: "Dirección", a3Code: "Código A3", carSeats: "Plazas en coche",
 };
 
 export async function saveWorker(_prev: string | null, form: FormData) {
@@ -188,9 +184,18 @@ export async function saveWorker(_prev: string | null, form: FormData) {
   const roles = [...new Set([parsed.data.role, ...form.getAll("roles").map(String).filter(isRole)])];
   const data = { ...parsed.data, roles, phoneKey: key };
   const before = id ? await db.worker.findUnique({ where: { id } }) : null;
+  const docError = await checkIdentityDocs(id, before, parsed.data, form);
+  if (docError) return docError;
   const worker = id
     ? await db.worker.update({ where: { id }, data })
     : await db.worker.create({ data: { ...data, accessCode: newAccessCode() } });
+  let storedDocs: string[];
+  try {
+    storedDocs = await storeIdentityDocs(worker.id, form, by, true);
+  } catch (e) {
+    return (e as Error).message;
+  }
+  if (storedDocs.length) await auditAdmin(by, "Documento", "Subido", `${worker.name}: ${storedDocs.map((t) => DOC_LABEL[t] ?? t).join(", ")}`, { entityId: worker.id });
   const d = diff(before, worker, WORKER_LABELS);
   if (!before) await auditAdmin(by, "Trabajador", "Alta", `Nueva ficha: ${worker.name}`, { entityId: worker.id });
   else if (d.changed) await auditAdmin(by, "Trabajador", "Datos", `${worker.name}: ${d.text}`, { entityId: worker.id, data: d.data });

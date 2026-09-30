@@ -11,18 +11,33 @@ const PendingContext = createContext(false);
  */
 export function ActionForm({
   action,
+  prepare,
   children,
   ...props
-}: { action: (form: FormData) => void; ref?: Ref<HTMLFormElement> } & Omit<FormHTMLAttributes<HTMLFormElement>, "action" | "onSubmit">) {
+}: {
+  action: (form: FormData) => void;
+  /** Preparación previa al envío (p. ej. reducir fotos). */
+  prepare?: (form: FormData) => Promise<void>;
+  ref?: Ref<HTMLFormElement>;
+} & Omit<FormHTMLAttributes<HTMLFormElement>, "action" | "onSubmit">) {
   const [pending, start] = useTransition();
+  const [preparing, setPreparing] = useState(false);
   return (
-    <PendingContext.Provider value={pending}>
+    <PendingContext.Provider value={pending || preparing}>
       <form
         {...props}
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
           const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
           const data = new FormData(e.currentTarget, submitter);
+          if (prepare) {
+            setPreparing(true);
+            try {
+              await prepare(data);
+            } finally {
+              setPreparing(false);
+            }
+          }
           start(() => action(data));
         }}
       >

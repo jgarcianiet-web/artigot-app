@@ -52,7 +52,7 @@ export default async function Payments({ searchParams }: { searchParams: Promise
         <PayDateForm k={h.key} payDate={p.payDate} disabled={p.status === "PAGADA"} />
         <div className="text-sm text-stone-600">
           <p>El personal ve esta fecha y su neto en la app (Nómina).</p>
-          <p className="mt-1">Neto estimado = bruto − Seguridad Social ({num(p.settings.ssPct)} %) − IRPF ({num(p.settings.irpfPct)} % o el de cada persona). Pon o importa el neto real de A3 para que la remesa pague lo exacto.</p>
+          <p className="mt-1">Neto estimado = bruto − Seguridad Social ({num(p.settings.ssPct)} %) − IRPF ({num(p.settings.irpfPct)} %). Pon o importa el neto real de A3 para que la remesa pague lo exacto.</p>
         </div>
       </section>
 
