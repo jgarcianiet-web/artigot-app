@@ -11,7 +11,7 @@ export default function Apply() {
         <Logo height={48} className="mb-6" />
         <h1>Trabaja con nosotros</h1>
         <p className="text-sm text-stone-600">
-          Buscamos camareros, maîtres y mozos para bodas y eventos. Déjanos tus datos y te llamaremos cuando haya servicios en tu zona.
+          Buscamos camareros y mozos para bodas y eventos. Déjanos tus datos y te llamaremos cuando haya servicios en tu zona.
         </p>
       </div>
       <ApplyForm />

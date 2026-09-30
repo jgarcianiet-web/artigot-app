@@ -414,6 +414,8 @@ model Candidate {
   roles        String[]
   experience   String?
   availability String?
+  // ¿Tiene coche para ir a los eventos?
+  hasCar       Boolean?
   fileId       String?     @unique
   status       String      @default("NUEVO")
   notes        String?
