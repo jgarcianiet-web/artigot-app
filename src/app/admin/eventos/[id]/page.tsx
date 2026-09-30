@@ -13,6 +13,7 @@ import {
 } from "@/app/actions";
 import { ConfirmButton, SelectAll, SubmitButton } from "@/components/client";
 import { SaveTemplate } from "./SaveTemplate";
+import { Contracts } from "./Contracts";
 import { SwapApprovals } from "@/components/SwapApprovals";
 import { CoverageBar, ScoreBadge, StatusBadge } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
@@ -345,6 +346,8 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
           </div>
         </section>
       )}
+
+      {confirmed.length > 0 && <Contracts eventId={event.id} confirmed={confirmed} />}
 
       {/* Fichaje */}
       {confirmed.length > 0 && (

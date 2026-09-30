@@ -18,6 +18,8 @@ import {
 } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { forgetDevice } from "@/lib/devices";
+import { hireCandidate } from "@/lib/candidates";
+import { DEFAULT_TEMPLATE, generateContracts } from "@/lib/contracts";
 import { addDocument } from "@/lib/documents";
 import { createIncident, type IncidentResult } from "@/lib/incidents";
 import { lines, validDniNie, validIban } from "@/lib/staff";
@@ -147,6 +149,7 @@ const workerSchema = z.object({
   iban: optText,
   birthDate: optText,
   address: optText,
+  a3Code: optText,
 });
 
 export async function saveWorker(_prev: string | null, form: FormData) {
@@ -584,6 +587,93 @@ export async function saveUniform(form: FormData) {
   const value = Object.fromEntries(ROLES.map((r) => [r, lines(String(form.get(r) ?? "")).slice(0, 30)]));
   await db.setting.upsert({ where: { key: "uniforme" }, create: { key: "uniforme", value }, update: { value } });
   revalidatePath("/admin/ajustes/uniforme");
+}
+
+// ---------- Contratos y ajustes de empresa ----------
+
+export async function generateContractsAction(eventId: string, _prev: string | null) {
+  const name = await requireAdmin();
+  const { created, missing } = await generateContracts(eventId, name);
+  revalidatePath(`/admin/eventos/${eventId}`);
+  if (!created) return "Todos los confirmados ya tienen su documento.";
+  return `${created} documento(s) generado(s) y enviado(s) a firmar.${missing.length ? ` Faltan DNI o Seguridad Social de: ${missing.join(", ")}.` : ""}`;
+}
+
+export async function deleteContract(id: string) {
+  await requireAdmin();
+  const c = await db.contract.delete({ where: { id } });
+  if (c.signatureFileId) await db.storedFile.delete({ where: { id: c.signatureFileId } }).catch(() => {});
+  revalidatePath(`/admin/eventos/${c.eventId}`);
+}
+
+export async function saveCompany(_prev: string | null, form: FormData) {
+  await requireAdmin();
+  const get = (k: string) => String(form.get(k) ?? "").trim();
+  const template = get("template").replace(/\r\n/g, "\n");
+  const value = {
+    name: get("name"),
+    cif: get("cif").toUpperCase(),
+    address: get("address"),
+    city: get("city"),
+    agreement: get("agreement"),
+    template: template === DEFAULT_TEMPLATE.trim() ? "" : template,
+  };
+  await db.setting.upsert({ where: { key: "empresa" }, create: { key: "empresa", value }, update: { value } });
+  revalidatePath("/admin/ajustes/empresa");
+  return "Guardado. Los documentos nuevos usarán estos datos; los ya generados no cambian.";
+}
+
+export async function saveA3(_prev: string | null, form: FormData) {
+  await requireAdmin();
+  const get = (k: string) => String(form.get(k) ?? "").trim();
+  const roleConcepts = Object.fromEntries(ROLES.map((r) => [r, get(`concept_${r}`)]).filter(([, v]) => v));
+  const value = { companyCode: get("companyCode"), hoursConcept: get("hoursConcept"), hoursConceptName: get("hoursConceptName") || "Horas eventos", roleConcepts };
+  if (!value.companyCode || !value.hoursConcept) return "Indica el código de empresa y el código de concepto de A3.";
+  await db.setting.upsert({ where: { key: "a3" }, create: { key: "a3", value }, update: { value } });
+  revalidatePath("/admin/ajustes/a3");
+  return "Configuración de A3 guardada.";
+}
+
+export async function saveA3Codes(form: FormData) {
+  await requireAdmin();
+  for (const [k, v] of form.entries()) {
+    if (!k.startsWith("a3_")) continue;
+    await db.worker.update({ where: { id: k.slice(3) }, data: { a3Code: String(v).trim() || null } });
+  }
+  revalidatePath("/admin/ajustes/a3");
+}
+
+// ---------- Candidatos ----------
+
+export async function updateCandidate(id: string, form: FormData) {
+  await requireAdmin();
+  const status = String(form.get("status") ?? "");
+  const c = await db.candidate.findUniqueOrThrow({ where: { id } });
+  await db.candidate.update({
+    where: { id },
+    data: {
+      notes: String(form.get("notes") ?? "").trim() || null,
+      ...(c.status !== "CONTRATADO" && ["NUEVO", "CONTACTADO", "DESCARTADO"].includes(status) && { status }),
+    },
+  });
+  revalidatePath("/admin/candidatos", "layout");
+}
+
+export async function hireCandidateAction(id: string, form: FormData) {
+  await requireAdmin();
+  const role = String(form.get("role") ?? "");
+  if (!isRole(role)) return;
+  const worker = await hireCandidate(id, role);
+  revalidatePath("/admin", "layout");
+  redirect(`/admin/personal/${worker.id}`);
+}
+
+export async function deleteCandidate(id: string) {
+  await requireAdmin();
+  const c = await db.candidate.delete({ where: { id } });
+  if (c.fileId) await db.storedFile.delete({ where: { id: c.fileId } }).catch(() => {});
+  revalidatePath("/admin/candidatos");
+  redirect("/admin/candidatos");
 }
 
 // ---------- Incidencias ----------

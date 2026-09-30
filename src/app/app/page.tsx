@@ -46,11 +46,16 @@ export default async function WorkerHome() {
     [...clockable, ...upcoming].map((a) => a.eventId),
   );
 
-  const [uniform, swapsForMe] = await Promise.all([
+  const [uniform, swapsForMe, toSign] = await Promise.all([
     getUniform(),
     db.swapRequest.findMany({
       where: { toWorkerId: me.id, status: "PROPUESTO", event: { date: { gte: t } } },
       include: { event: true, fromWorker: { select: { name: true } }, assignment: { select: { role: true } } },
+    }),
+    db.contract.findMany({
+      where: { workerId: me.id, signedAt: null, assignment: { status: "CONFIRMADO" } },
+      select: { id: true, title: true },
+      orderBy: { createdAt: "asc" },
     }),
   ]);
   const toReview = worker.assignments.some((a) => isLeadRole(a.role)) ? await pendingReviews(me.id) : [];
@@ -77,6 +82,18 @@ export default async function WorkerHome() {
         <p className="text-sm text-stone-500">Artigot · {ROLE_LABEL[worker.role as Role]}</p>
         <h1>Hola, {worker.name.split(" ")[0]}</h1>
       </header>
+
+      {toSign.length > 0 && (
+        <section className="card space-y-2 border-violet-300 bg-violet-50">
+          <h2>✍️ Documentos para firmar</h2>
+          {toSign.map((c) => (
+            <Link key={c.id} href={`/app/firmar/${c.id}`} className="btn w-full justify-between">
+              <span className="truncate">{c.title}</span>
+              <span className="text-xs">Firmar ›</span>
+            </Link>
+          ))}
+        </section>
+      )}
 
       {toReview.length > 0 && (
         <section className={`card space-y-2 ${blocked ? "border-red-300 bg-red-50" : "border-amber-300 bg-amber-50"}`}>

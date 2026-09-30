@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DocumentUploadForm, MyDataForm } from "@/components/StaffForms";
 import { requireWorker } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -20,6 +21,7 @@ export default async function MyProfile() {
     include: {
       documents: { orderBy: { createdAt: "desc" } },
       loans: { where: { returnedAt: null }, orderBy: { deliveredAt: "desc" } },
+      contracts: { orderBy: { createdAt: "desc" }, take: 20, select: { id: true, title: true, signedAt: true } },
     },
   });
   return (
@@ -30,6 +32,24 @@ export default async function MyProfile() {
       </header>
 
       <MyDataForm action={saveMyData} data={worker} />
+
+      {worker.contracts.length > 0 && (
+        <section className="space-y-2">
+          <h2>Condiciones de servicio</h2>
+          <ul className="card divide-y p-0">
+            {worker.contracts.map((c) => (
+              <li key={c.id} className="flex items-center justify-between gap-2 p-3 text-sm">
+                <span className="min-w-0 truncate">{c.title}</span>
+                {c.signedAt ? (
+                  <a href={`/api/contracts/${c.id}/pdf`} target="_blank" className="link shrink-0">✓ PDF</a>
+                ) : (
+                  <Link href={`/app/firmar/${c.id}`} className="shrink-0 font-medium text-violet-700">Firmar ›</Link>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="space-y-2">
         <h2>Mis documentos</h2>

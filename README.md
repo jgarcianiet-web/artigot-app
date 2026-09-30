@@ -31,6 +31,12 @@ Aplicación para que RRHH gestione de forma rápida el personal de **bodas y eve
 - **Nómina en la app**: servicios, horas e importe bruto estimado de cada mes, con el detalle por evento.
 - **Uniforme y material**: el uniforme de cada puesto (Ajustes → Uniforme) más «Qué llevar» de cada evento forman una lista con casillas en la app. RRHH registra el **material prestado** (chaquetas, sacacorchos…) y su devolución, y el trabajador ve lo que tiene.
 
+**Selección, contratos y nóminas**
+- **Trabaja con nosotros**: formulario público (`/trabaja-con-nosotros`, enlazado desde la pantalla de acceso) con puestos, experiencia, disponibilidad y CV, y consentimiento RGPD. Tiene protección contra bots y un límite de envíos por IP. RRHH recibe un aviso y gestiona las candidaturas en «Candidatos» (nuevo, contactado, entrevista, descartado) con notas. **Dar de alta** crea al trabajador con su código de acceso, o lo enlaza si ese teléfono ya existía.
+- **Documento de condiciones del servicio**: en cada evento, «Enviar a firmar» genera un documento por confirmado con sus datos (DNI, NSS, puesto, horario, tarifa) y le avisa. El trabajador lo lee y **firma con el dedo** en la app. Se guarda la firma, la fecha, la hora y la IP, y se genera un **PDF** que pueden descargar él y RRHH. El texto se edita en Ajustes → Empresa y contratos. ⚠️ El texto por defecto es orientativo: debe revisarlo vuestra asesoría laboral.
+- **Datos para el alta en la Seguridad Social**: Excel por evento con DNI, NSS, nacimiento, dirección, puesto y horario de cada confirmado, marcando lo que falta.
+- **Exportación a A3**: en Liquidación, «Exportar a A3» (Excel o CSV con `;`). Genera una línea por trabajador y puesto con código de empresa, código de trabajador, NIF, concepto, unidades (horas), precio, importe y periodo. Los códigos se configuran en Ajustes → Nóminas A3, que además lista al personal sin código de A3.
+
 **Personal (app)**
 - Entra una sola vez con su **teléfono y el código de 6 cifras** que le da RRHH.
 - Acepta o rechaza convocatorias, ficha entrada y salida y marca los días que no puede trabajar.

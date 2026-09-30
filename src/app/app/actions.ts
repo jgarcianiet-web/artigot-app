@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { destroySession, requireWorker, workerLogin } from "@/lib/auth";
@@ -9,6 +10,7 @@ import { forgetDevice } from "@/lib/devices";
 import { checkClock, clockWindow } from "@/lib/clockRules";
 import { createIncident, type IncidentResult } from "@/lib/incidents";
 import { addDocument } from "@/lib/documents";
+import { storeSignature } from "@/lib/files";
 import { DOC_LABEL, validDniNie, validIban } from "@/lib/staff";
 import { answerSwap, OPEN_SWAP, proposeSwap } from "@/lib/swaps";
 import { formatDate, isLeadRole, isRole, nowTime, type Role, today } from "@/lib/domain";
@@ -266,4 +268,25 @@ export async function cancelMySwap(swapId: string) {
   const me = await requireWorker();
   await db.swapRequest.updateMany({ where: { id: swapId, fromWorkerId: me.id, status: { in: OPEN_SWAP } }, data: { status: "CANCELADO" } });
   revalidatePath("/app", "layout");
+}
+
+// ---------- Firma de documentos ----------
+
+export async function signContract(contractId: string, _prev: FormResult, form: FormData): Promise<FormResult> {
+  const me = await requireWorker();
+  const c = await db.contract.findUnique({ where: { id: contractId } });
+  if (!c || c.workerId !== me.id) return { ok: false, message: "No autorizado" };
+  if (c.signedAt) return { ok: true, message: "Ya estaba firmado." };
+  if (form.get("accept") !== "1") return { ok: false, message: "Marca la casilla de conformidad." };
+  const dataUrl = String(form.get("signature") ?? "");
+  const m = dataUrl.match(/^data:image\/png;base64,([A-Za-z0-9+/=]+)$/);
+  if (!m) return { ok: false, message: "Firma en el recuadro antes de continuar." };
+  const png = Buffer.from(m[1], "base64");
+  if (png.length < 500) return { ok: false, message: "La firma es demasiado corta. Firma de nuevo." };
+  const sig = await storeSignature(png, me.id);
+  const ip = (await headers()).get("x-forwarded-for")?.split(",")[0].trim() ?? null;
+  await db.contract.update({ where: { id: c.id }, data: { signedAt: new Date(), signerName: me.name, signerIp: ip, signatureFileId: sig.id } });
+  revalidatePath("/app", "layout");
+  revalidatePath(`/admin/eventos/${c.eventId}`);
+  return { ok: true, message: "¡Firmado! Puedes descargar tu copia en PDF." };
 }

@@ -36,6 +36,7 @@ export default function WorkerLogin() {
           {pending ? "Entrando…" : "Entrar"}
         </button>
         <p className="text-center text-xs text-stone-400">
+          <Link href="/trabaja-con-nosotros" className="hover:underline">¿Quieres trabajar con nosotros?</Link> ·{" "}
           <Link href="/login" className="hover:underline">Acceso RRHH</Link>
         </p>
       </ActionForm>
