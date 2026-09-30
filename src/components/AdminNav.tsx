@@ -9,9 +9,9 @@ type Item = { href: string; label: string };
 const GROUPS: { title?: string; items: Item[] }[] = [
   { items: [{ href: "/admin", label: "Panel" }, { href: "/admin/calendario", label: "Calendario" }] },
   { title: "Eventos", items: [{ href: "/admin/eventos", label: "Eventos" }, { href: "/admin/chats", label: "Chats" }, { href: "/admin/incidencias", label: "Incidencias" }] },
-  { title: "Personal", items: [{ href: "/admin/personal", label: "Personal" }, { href: "/admin/candidatos", label: "Candidatos" }, { href: "/admin/altas", label: "Altas y bajas" }] },
-  { title: "Nóminas", items: [{ href: "/admin/liquidacion", label: "Liquidación" }, { href: "/admin/pagos", label: "Pagos" }, { href: "/admin/informes", label: "Informes" }] },
-  { items: [{ href: "/admin/ajustes", label: "Ajustes" }] },
+  { title: "Personal", items: [{ href: "/admin/personal", label: "Personal" }, { href: "/admin/sondeos", label: "Sondeos" }, { href: "/admin/candidatos", label: "Candidatos" }, { href: "/admin/altas", label: "Altas y bajas" }] },
+  { title: "Nóminas", items: [{ href: "/admin/liquidacion", label: "Liquidación" }, { href: "/admin/pagos", label: "Pagos" }, { href: "/admin/jornada", label: "Registro de jornada" }, { href: "/admin/informes", label: "Informes" }] },
+  { items: [{ href: "/admin/registro", label: "Registro de cambios" }, { href: "/admin/ajustes", label: "Ajustes" }] },
 ];
 
 // Rutas que viven bajo Ajustes aunque no empiecen por /admin/ajustes

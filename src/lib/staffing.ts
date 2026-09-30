@@ -3,6 +3,7 @@ import { db } from "./db";
 import { addDays, callTime, formatDate, needFor, type Needs, ROLE_LABEL, ROLES, type Role, today, workerRoles } from "./domain";
 import { notify } from "./push";
 import { computeScores, type Score } from "./scoring";
+import { availableOn } from "./polls";
 
 export const ACTIVE_STATUSES = ["CONVOCADO", "CONFIRMADO"];
 
@@ -16,6 +17,8 @@ export type Candidate = {
   zone: string | null;
   recentEvents: number;
   score: Score;
+  /** Ha dicho en un sondeo que puede trabajar ese día */
+  available: boolean;
 };
 
 /**
@@ -49,6 +52,7 @@ export async function candidatesFor(event: { id: string; date: string }) {
     }),
   ]);
   const recentByWorker = new Map(recent.map((r) => [r.workerId, r._count]));
+  const said = await availableOn(event.date);
   const scores = await computeScores(workers.map((w) => w.id), event.date);
 
   const byRole = Object.fromEntries(ROLES.map((r) => [r, [] as Candidate[]])) as Record<Role, Candidate[]>;
@@ -64,12 +68,13 @@ export async function candidatesFor(event: { id: string; date: string }) {
         zone: w.zone,
         recentEvents: recentByWorker.get(w.id) ?? 0,
         score: scores.get(w.id)!,
+        available: said.has(w.id),
       });
     }
   }
   for (const role of ROLES) {
     byRole[role].sort(
-      (a, b) => b.score.score - a.score.score || a.recentEvents - b.recentEvents || a.name.localeCompare(b.name),
+      (a, b) => Number(b.available) - Number(a.available) || b.score.score - a.score.score || a.recentEvents - b.recentEvents || a.name.localeCompare(b.name),
     );
   }
   return byRole;

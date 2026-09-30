@@ -11,6 +11,7 @@ import { closePeriod, getPaySettings, halfFromKey, halfLabel, payPeriod, type Ha
 import { notify } from "@/lib/push";
 import { buildPain001, checkDebtor } from "@/lib/sepa";
 import { validIban } from "@/lib/staff";
+import { auditAdmin, diff } from "@/lib/audit";
 
 export type PayResult = { ok: boolean; message: string; remittanceId?: string } | null;
 
@@ -47,6 +48,7 @@ export async function setPayDate(key: string, _prev: PayResult, form: FormData):
   const period = await ensurePeriod(h, by);
   if (period.status === "PAGADA") return { ok: false, message: "Esta quincena ya está pagada." };
   await db.payPeriod.update({ where: { id: period.id }, data: { payDate: date, updatedBy: by } });
+  await auditAdmin(by, "Pago", "Fecha de pago", `Quincena ${halfLabel(h)}: fecha de pago ${period.payDate} → ${date}`, { entityId: h.key });
   const { rows } = await payPeriod(h);
   if (form.get("notify") === "1" && rows.length) {
     after(() =>
@@ -72,9 +74,13 @@ const parseAmount = (v: string) => {
   return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null;
 };
 
-async function writeOverrides(h: Half, by: string, values: Map<string, number | null>) {
+async function writeOverrides(h: Half, by: string, values: Map<string, number | null>, how: string) {
   const period = await ensurePeriod(h, by);
   if (period.status !== "ABIERTA") throw new Error("La quincena está cerrada. Reábrela para cambiar los netos.");
+  const old = new Map((await db.payLine.findMany({ where: { periodId: period.id }, include: { worker: { select: { name: true } } } })).map((l) => [l.workerId, l]));
+  const names = new Map((await db.worker.findMany({ where: { id: { in: [...values.keys()] } }, select: { id: true, name: true } })).map((w) => [w.id, w.name]));
+  const changes = [...values].filter(([w, v]) => (old.get(w)?.netOverride ?? null) !== v).map(([w, v]) => `${names.get(w) ?? w}: ${old.get(w)?.netOverride ?? "estimado"} → ${v ?? "estimado"}`);
+  if (changes.length) await auditAdmin(by, "Pago", how, `Quincena ${halfLabel(h)} · netos: ${changes.join("; ")}`, { entityId: h.key });
   await db.$transaction(
     [...values].map(([workerId, v]) =>
       db.payLine.upsert({
@@ -99,7 +105,7 @@ export async function saveNets(key: string, _prev: PayResult, form: FormData): P
     values.set(r.workerId, v);
   }
   try {
-    await writeOverrides(h, by, values);
+    await writeOverrides(h, by, values, "Netos a mano");
   } catch (e) {
     return { ok: false, message: (e as Error).message };
   }
@@ -141,7 +147,7 @@ export async function importNets(key: string, _prev: PayResult, form: FormData):
   }
   if (!values.size) return { ok: false, message: "No coincide ninguna fila con el personal de esta quincena." };
   try {
-    await writeOverrides(h, by, values);
+    await writeOverrides(h, by, values, "Netos importados");
   } catch (e) {
     return { ok: false, message: (e as Error).message };
   }
@@ -184,6 +190,7 @@ export async function generateRemittance(key: string, _prev: PayResult, form: Fo
   const rem = await db.remittance.create({
     data: { periodId: current.period?.id ?? (await ensurePeriod(h, by)).id, msgId, count: payable.length, total, execDate, xml, createdBy: by },
   });
+  await auditAdmin(by, "Remesa", "Generada", `Remesa de la quincena ${halfLabel(h)}: ${payable.length} transferencias, ${euro(total)}, ejecución ${execDate}${skipped.length ? `; sin IBAN: ${skipped.join(", ")}` : ""}`, { entityId: h.key, data: { msgId, lines: payable.map((r) => ({ name: r.name, net: r.net })) } });
   done(h);
   return {
     ok: true,
@@ -195,7 +202,8 @@ export async function generateRemittance(key: string, _prev: PayResult, form: Fo
 export async function reopenPeriod(key: string) {
   const by = await requireAdmin();
   const h = half(key);
-  await db.payPeriod.updateMany({ where: { from: h.from, to: h.to, status: "CERRADA" }, data: { status: "ABIERTA", closedAt: null, updatedBy: by } });
+  const r = await db.payPeriod.updateMany({ where: { from: h.from, to: h.to, status: "CERRADA" }, data: { status: "ABIERTA", closedAt: null, updatedBy: by } });
+  if (r.count) await auditAdmin(by, "Pago", "Reabierta", `Quincena ${halfLabel(h)} reabierta`, { entityId: h.key });
   done(h);
 }
 
@@ -206,6 +214,7 @@ export async function markPaid(key: string) {
   const res = await db.payPeriod.updateMany({ where: { from: h.from, to: h.to, status: "CERRADA" }, data: { status: "PAGADA", paidAt: new Date(), updatedBy: by } });
   if (!res.count) return;
   const { rows } = await payPeriod(h);
+  await auditAdmin(by, "Pago", "Pagada", `Quincena ${halfLabel(h)} marcada como pagada (${rows.filter((x) => x.net > 0).length} personas, ${euro(rows.reduce((t, x) => t + x.net, 0))})`, { entityId: h.key });
   after(async () => {
     for (const r of rows.filter((x) => x.net > 0)) {
       await notify({
@@ -223,7 +232,7 @@ export async function markPaid(key: string) {
 // ---------- Ajustes ----------
 
 export async function savePaySettings(_prev: string | null, form: FormData) {
-  await requireAdmin();
+  const by = await requireAdmin();
   const get = (k: string) => String(form.get(k) ?? "").trim();
   const pct = (k: string) => Number(get(k).replace(",", "."));
   const value = {
@@ -240,7 +249,10 @@ export async function savePaySettings(_prev: string | null, form: FormData) {
   if (value.debtorIban && !validIban(value.debtorIban)) return "El IBAN de la empresa no es correcto.";
   if (value.debtorBic && !/^[A-Z]{6}[A-Z2-9][A-NP-Z0-9]([A-Z0-9]{3})?$/.test(value.debtorBic)) return "El BIC no es correcto (8 u 11 caracteres).";
   if (!/^[A-Z0-9]{3}$/.test(value.sepaSuffix)) return "El sufijo tiene que tener 3 caracteres (normalmente 000).";
+  const before = await getPaySettings();
   await db.setting.upsert({ where: { key: "pagos" }, create: { key: "pagos", value }, update: { value } });
+  const d = diff(before, value, { ssPct: "% Seg. Social", irpfPct: "% IRPF", firstHalfDay: "Día de pago 1ª quincena", secondHalfDay: "Día de pago 2ª quincena", debtorIban: "IBAN empresa", debtorBic: "BIC", sepaSuffix: "Sufijo" });
+  if (d.changed) await auditAdmin(by, "Ajustes", "Pagos", d.text, { data: d.data });
   revalidatePath("/admin/ajustes/pagos");
   revalidatePath("/app/nomina");
   return "Guardado.";

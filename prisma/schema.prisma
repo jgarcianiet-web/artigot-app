@@ -30,6 +30,8 @@ model Worker {
   a3Code          String?
   // % de retención de IRPF propio (si es null se usa el general de Ajustes → Pagos)
   irpf            Float?
+  // Plazas libres en su coche (null o 0 = no suele llevar coche)
+  carSeats        Int?
   active          Boolean          @default(true)
   // Acceso a la app: teléfono normalizado + código de 6 cifras que RRHH entrega al trabajador
   phoneKey        String           @unique
@@ -55,6 +57,7 @@ model Worker {
   candidate       Candidate?
   payLines        PayLine[]
   employments     Employment[]
+  pollAnswers     PollAnswer[]
 }
 
 // Días en los que el trabajador no está disponible (fecha YYYY-MM-DD)
@@ -86,6 +89,9 @@ model Event {
   notes         String?
   // Qué debe llevar el personal a este evento (una cosa por línea), además del uniforme de su puesto
   checklist     String?
+  // Punto y hora de encuentro para ir juntos al evento
+  meetingPoint  String?
+  meetingTime   String?
   // Finca y cliente guardados (opcionales; venue/client guardan el texto que se muestra)
   venueId       String?
   clientId      String?
@@ -132,7 +138,16 @@ model Assignment {
   checkOutDistance Int?
   checkOutAccuracy Int?
   checkOutManual   Boolean @default(false)
+  // Fichado sin cobertura: se guardó en el móvil y se envió al recuperar la señal
+  checkInOffline  Boolean @default(false)
+  checkOutOffline Boolean @default(false)
   hoursOverride Float?
+  // Transporte: PROPIO (va por su cuenta), CONDUZCO (lleva coche) o NECESITO (necesita que le lleven)
+  transport     String?
+  seats         Int?
+  rideWithId    String?
+  rideWith      Assignment?  @relation("rides", fields: [rideWithId], references: [id], onDelete: SetNull)
+  passengers    Assignment[] @relation("rides")
   // El trabajador se retiró después de haber confirmado
   withdrew      Boolean   @default(false)
   notes         String?
@@ -429,6 +444,9 @@ model Contract {
   signerName      String?
   signerIp        String?
   signatureFileId String?     @unique
+  // Datos estructurados (registro de jornada: días y horas) y observaciones del trabajador al firmar
+  data            Json?
+  signerNote      String?
   assignment      Assignment? @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   worker          Worker      @relation(fields: [workerId], references: [id], onDelete: Cascade)
   signature       StoredFile? @relation(fields: [signatureFileId], references: [id], onDelete: SetNull)
@@ -509,4 +527,47 @@ model Employment {
   worker          Worker    @relation(fields: [workerId], references: [id], onDelete: Cascade)
 
   @@index([workerId, startDate])
+}
+
+// Sondeo de disponibilidad: «¿qué días puedes trabajar?» antes de convocar
+model AvailabilityPoll {
+  id        String       @id @default(cuid())
+  title     String
+  message   String?
+  dates     String[]
+  roles     String[]
+  createdBy String
+  createdAt DateTime     @default(now())
+  closedAt  DateTime?
+  answers   PollAnswer[]
+}
+
+model PollAnswer {
+  id         String           @id @default(cuid())
+  pollId     String
+  workerId   String
+  date       String
+  available  Boolean
+  answeredAt DateTime         @default(now())
+  poll       AvailabilityPoll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  worker     Worker           @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, workerId, date])
+  @@index([workerId, date])
+}
+
+// Registro de cambios: quién cambió qué y cuándo
+model AuditLog {
+  id        String   @id @default(cuid())
+  at        DateTime @default(now())
+  actor     String
+  actorKind String
+  action    String
+  entity    String
+  entityId  String?
+  summary   String
+  data      Json?
+
+  @@index([at])
+  @@index([entity, entityId])
 }

@@ -11,6 +11,7 @@ import { reviewWindowOpen } from "@/lib/reviews";
 import { Checklist } from "@/components/StaffForms";
 import { checklistFor, getUniform } from "@/lib/staff";
 import { respond } from "../../actions";
+import { Transport } from "./Transport";
 
 export default async function WorkerEvent({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -56,6 +57,10 @@ export default async function WorkerEvent({ params }: { params: Promise<{ id: st
       </details>
 
       {confirmed && <Checklist id={a.id} {...checklist} extra={checklist.event} />}
+
+      {confirmed && (
+        <Transport assignmentId={a.id} eventId={a.eventId} meetingPoint={a.event.meetingPoint} meetingTime={a.event.meetingTime} editable={a.event.date >= today() && !a.checkIn} />
+      )}
 
       {confirmed && isLeadRole(a.role) && a.event.date <= today() && (
         <Link href={`/app/eventos/${a.eventId}/equipo`} className="btn w-full">👥 Panel del equipo e incidencias</Link>

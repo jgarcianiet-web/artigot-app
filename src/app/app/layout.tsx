@@ -4,6 +4,7 @@ import { requireWorker } from "@/lib/auth";
 import { pushConfig } from "@/lib/push";
 import { Logo } from "@/components/Logo";
 import { WorkerNav } from "@/components/WorkerNav";
+import { OfflineClockSync } from "@/components/OfflineClockSync";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,7 @@ export default async function WorkerLayout({ children }: { children: React.React
       </header>
       <main className="mx-auto w-full max-w-lg flex-1 space-y-4 p-4 pb-24">
         <PushSetup config={pushConfig()} />
+        <OfflineClockSync />
         {children}
       </main>
       <WorkerNav />

@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { euro, formatDate, num, ROLE_LABEL, today, type Role } from "@/lib/domain";
 import { getPaySettings, halfFromKey, halfLabel, netOf, payPeriod } from "@/lib/pay";
 import { workerMonth } from "@/lib/staff";
+import { monthRecordDocs } from "@/lib/timeRecord";
 
 const MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 const shift = (month: string, d: number) => {
@@ -22,6 +23,7 @@ export default async function MyPay({ searchParams }: { searchParams: Promise<{ 
     getPaySettings(),
     db.worker.findUniqueOrThrow({ where: { id: me.id }, select: { irpf: true, iban: true } }),
   ]);
+  const record = (await monthRecordDocs(month, me.id))[0];
   const halves = await Promise.all([1, 2].map((n) => payPeriod(halfFromKey(`${month}-${n}`)!, { workerId: me.id })));
   const [y, mm] = month.split("-").map(Number);
   const irpfPct = worker.irpf ?? s.irpfPct;
@@ -106,6 +108,13 @@ export default async function MyPay({ searchParams }: { searchParams: Promise<{ 
           </section>
         );
       })}
+
+      {record && (
+        <Link href={`/app/firmar/${record.id}`} className="card flex items-center justify-between text-sm">
+          <span>🕒 Registro de jornada de {MONTHS[mm - 1]}</span>
+          <span className={record.signedAt ? "text-emerald-700" : "font-medium text-violet-700"}>{record.signedAt ? "✓ Firmado" : "Firmar ›"}</span>
+        </Link>
+      )}
 
       {!worker.iban && m.services > 0 && (
         <p className="rounded-lg bg-red-50 p-2 text-sm text-red-800">

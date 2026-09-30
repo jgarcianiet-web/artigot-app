@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { ClockButtons } from "@/components/ClockButtons";
+import { PollCard } from "@/components/PollCard";
+import { openPollsFor } from "@/lib/polls";
 import { EventInfo } from "@/components/EventInfo";
 import { requireWorker } from "@/lib/auth";
 import { unreadCounts } from "@/lib/chat";
@@ -46,17 +48,18 @@ export default async function WorkerHome() {
     [...clockable, ...upcoming].map((a) => a.eventId),
   );
 
-  const [uniform, swapsForMe, toSign] = await Promise.all([
+  const [uniform, swapsForMe, toSign, polls] = await Promise.all([
     getUniform(),
     db.swapRequest.findMany({
       where: { toWorkerId: me.id, status: "PROPUESTO", event: { date: { gte: t } } },
       include: { event: true, fromWorker: { select: { name: true } }, assignment: { select: { role: true } } },
     }),
     db.contract.findMany({
-      where: { workerId: me.id, signedAt: null, OR: [{ assignment: { status: "CONFIRMADO" } }, { kind: "RGPD" }] },
+      where: { workerId: me.id, signedAt: null, OR: [{ assignment: { status: "CONFIRMADO" } }, { kind: { in: ["RGPD", "JORNADA"] } }] },
       select: { id: true, title: true },
       orderBy: { createdAt: "asc" },
     }),
+    openPollsFor(worker),
   ]);
   const toReview = worker.assignments.some((a) => isLeadRole(a.role)) ? await pendingReviews(me.id) : [];
   const blocked = toReview.some((p) => p.overdue);
@@ -82,6 +85,8 @@ export default async function WorkerHome() {
         <p className="text-sm text-stone-500">{ROLE_LABEL[worker.role as Role]}</p>
         <h1>Hola, {worker.name.split(" ")[0]}</h1>
       </header>
+
+      {polls.map((p) => <PollCard key={p.id} poll={p} busy={busy} />)}
 
       {toSign.length > 0 && (
         <section className="card space-y-2 border-violet-300 bg-violet-50">
@@ -140,6 +145,10 @@ export default async function WorkerHome() {
             windowText={(() => {
               const w = clockWindow(a.event, a.role);
               return `Fichaje con ubicación: de ${hhmm(w.opensAt)} a ${hhmm(w.closesAt)}, a menos de ${CLOCK_RADIUS_M} m del evento.`;
+            })()}
+            rules={(() => {
+              const w = clockWindow(a.event, a.role);
+              return { opensAt: w.opensAt.toISOString(), closesAt: w.closesAt.toISOString(), lat: a.event.lat, lng: a.event.lng, radius: CLOCK_RADIUS_M };
             })()}
           />
           <ChatLink eventId={a.eventId} />

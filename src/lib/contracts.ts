@@ -5,6 +5,7 @@ import { after } from "next/server";
 import { db } from "./db";
 import { callTime, euro, formatDate, ROLE_LABEL, type Role } from "./domain";
 import { notify } from "./push";
+import type { RecordData } from "./timeRecord";
 
 /**
  * Documento de condiciones del servicio que firma cada trabajador confirmado.
@@ -176,6 +177,46 @@ export async function contractPdf(contractId: string) {
     page.drawText(l, { x: M, y, size: 10.5, font: heading ? bold : font });
     y -= l ? 15 : 9;
   }
+  // Registro de jornada: empresa y tabla con la entrada y salida de cada día
+  const record = c.kind === "JORNADA" ? (c.data as RecordData | null) : null;
+  if (record) {
+    y -= 6;
+    page.drawText(pdfSafe(`Empresa: ${company.name || "[razón social]"} · CIF ${company.cif || "[CIF]"}`), { x: M, y, size: 9, font, color: rgb(0.3, 0.3, 0.3) });
+    y -= 18;
+    const cols = [
+      { t: "Fecha", w: 62 },
+      { t: "Evento / lugar", w: 195 },
+      { t: "Entrada", w: 45 },
+      { t: "Salida", w: 42 },
+      { t: "Horas", w: 38 },
+      { t: "Origen", w: 101 },
+    ];
+    const drawRow = (cells: string[], f = font, shade = false) => {
+      newPageIfNeeded(16);
+      if (shade) page.drawRectangle({ x: M - 2, y: y - 4, width: W - 2 * M + 4, height: 14, color: rgb(0.94, 0.94, 0.94) });
+      let x = M;
+      cells.forEach((txt, i) => {
+        let v = pdfSafe(txt);
+        while (v.length > 1 && f.widthOfTextAtSize(v, 8.5) > cols[i].w - 4) v = v.slice(0, -2) + "…";
+        page.drawText(v, { x, y, size: 8.5, font: f });
+        x += cols[i].w;
+      });
+      y -= 14;
+    };
+    drawRow(cols.map((c2) => c2.t), bold, true);
+    for (const r of record.rows) {
+      const d = new Date(`${r.date}T12:00:00Z`);
+      drawRow([
+        new Intl.DateTimeFormat("es-ES", { timeZone: "UTC", weekday: "short", day: "2-digit", month: "2-digit" }).format(d),
+        `${r.event} · ${r.venue}`,
+        r.checkIn ?? "—",
+        r.checkOut ?? "—",
+        r.hours != null ? String(r.hours).replace(".", ",") : "—",
+        r.origin,
+      ]);
+    }
+    drawRow(["Total", `${record.days} días`, "", "", String(record.totalHours).replace(".", ","), ""], bold, true);
+  }
   newPageIfNeeded(150);
   y -= 24;
   page.drawText("Firma de la persona trabajadora:", { x: M, y, size: 10, font: bold });
@@ -198,6 +239,17 @@ export async function contractPdf(contractId: string) {
   } else {
     y -= 60;
     page.drawText("Pendiente de firma", { x: M, y, size: 10, font, color: rgb(0.7, 0.4, 0) });
+  }
+  if (c.signerNote) {
+    y -= 10;
+    newPageIfNeeded(40);
+    page.drawText("Observaciones de la persona trabajadora:", { x: M, y, size: 9.5, font: bold });
+    y -= 13;
+    for (const l of wrap(pdfSafe(c.signerNote), font, 9.5, W - 2 * M)) {
+      newPageIfNeeded(14);
+      page.drawText(l, { x: M, y, size: 9.5, font });
+      y -= 13;
+    }
   }
   return pdf.save();
 }

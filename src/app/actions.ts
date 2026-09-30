@@ -16,6 +16,7 @@ import {
   phoneKey,
   requireAdmin,
 } from "@/lib/auth";
+import { auditAdmin, diff } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { forgetDevice } from "@/lib/devices";
 import { hireCandidate } from "@/lib/candidates";
@@ -25,7 +26,7 @@ import { addDocument } from "@/lib/documents";
 import { createIncident, type IncidentResult } from "@/lib/incidents";
 import { lines, validDniNie, validIban } from "@/lib/staff";
 import { approveSwap, rejectSwap } from "@/lib/swaps";
-import { EVENT_TYPES, formatDate, isRole, LEAD_ROLES, ROLES, type Role } from "@/lib/domain";
+import { EVENT_TYPES, formatDate, isRole, LEAD_ROLES, ROLE_LABEL, ROLES, type Role } from "@/lib/domain";
 import { notify } from "@/lib/push";
 import { autoReplace, candidatesFor, fillGaps, notifyInvited } from "@/lib/staffing";
 const time = z.string().regex(/^\d{2}:\d{2}$/);
@@ -49,7 +50,9 @@ const optCoord = (max: number) =>
 // ---------- Sesión ----------
 
 export async function login(_prev: string | null, form: FormData) {
-  const error = await adminLogin(String(form.get("email") ?? ""), String(form.get("password") ?? ""));
+  const email = String(form.get("email") ?? "").trim().toLowerCase();
+  const error = await adminLogin(email, String(form.get("password") ?? ""));
+  await auditAdmin(email || "(sin email)", "Acceso", error ? "Acceso fallido" : "Acceso", error ? `Intento de acceso fallido: ${error}` : "Ha entrado en la gestión");
   if (error) {
     await new Promise((r) => setTimeout(r, 800)); // frena intentos por fuerza bruta
     return error;
@@ -88,6 +91,7 @@ export async function createAdminUser(_prev: string | null, form: FormData) {
   const email = normalizeEmail(parsed.data.email);
   if (await db.adminUser.findUnique({ where: { email } })) return "Ya existe un usuario con ese email";
   await db.adminUser.create({ data: { name: parsed.data.name, email, passwordHash: hashPassword(parsed.data.password) } });
+  await auditAdmin(await requireAdmin(), "Usuario de RRHH", "Alta", `Nuevo usuario de RRHH: ${parsed.data.name} (${email})`);
   revalidatePath("/admin/usuarios");
   return null;
 }
@@ -98,18 +102,21 @@ export async function toggleAdminUser(id: string) {
   if (id === me.id) return; // nadie se desactiva a sí mismo
   const u = await db.adminUser.findUniqueOrThrow({ where: { id } });
   await db.adminUser.update({ where: { id }, data: { active: !u.active, sessionVersion: { increment: 1 } } });
+  await auditAdmin(me.name, "Usuario de RRHH", u.active ? "Desactivado" : "Activado", `${u.active ? "Desactivado" : "Activado"} el usuario de RRHH ${u.name}`, { entityId: id });
   if (u.active) await db.device.deleteMany({ where: { workerId: null, adminName: u.name } });
   revalidatePath("/admin/usuarios");
 }
 
 export async function resetAdminPassword(id: string, _prev: string | null, form: FormData) {
-  await requireAdmin();
+  const by = await requireAdmin();
   const password = String(form.get("password") ?? "");
   if (password.length < 8) return "Mínimo 8 caracteres";
   await db.adminUser.update({
     where: { id },
     data: { passwordHash: hashPassword(password), sessionVersion: { increment: 1 }, failedLogins: 0, lockedUntil: null },
   });
+  const target = await db.adminUser.findUnique({ where: { id }, select: { name: true } });
+  await auditAdmin(by, "Usuario de RRHH", "Contraseña", `Cambiada la contraseña de ${target?.name ?? id}`, { entityId: id });
   revalidatePath("/admin/usuarios");
   return "Contraseña cambiada. Sus sesiones abiertas se han cerrado.";
 }
@@ -158,8 +165,13 @@ const workerSchema = z.object({
     .refine((v) => v === null || (Number.isFinite(v) && v >= 0 && v <= 50), "El IRPF tiene que estar entre 0 y 50 %"),
 });
 
+const WORKER_LABELS = {
+  name: "Nombre", phone: "Teléfono", email: "Email", role: "Puesto", roles: "Puestos", rating: "Valoración", zone: "Zona",
+  dni: "DNI", nss: "NSS", iban: "IBAN", birthDate: "Nacimiento", address: "Dirección", a3Code: "Código A3", irpf: "IRPF", carSeats: "Plazas en coche",
+};
+
 export async function saveWorker(_prev: string | null, form: FormData) {
-  await requireAdmin();
+  const by = await requireAdmin();
   const parsed = workerSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return parsed.error.issues[0].message;
   const id = form.get("id") ? String(form.get("id")) : null;
@@ -175,35 +187,42 @@ export async function saveWorker(_prev: string | null, form: FormData) {
   // Puestos que puede desempeñar: los marcados más el principal
   const roles = [...new Set([parsed.data.role, ...form.getAll("roles").map(String).filter(isRole)])];
   const data = { ...parsed.data, roles, phoneKey: key };
+  const before = id ? await db.worker.findUnique({ where: { id } }) : null;
   const worker = id
     ? await db.worker.update({ where: { id }, data })
     : await db.worker.create({ data: { ...data, accessCode: newAccessCode() } });
+  const d = diff(before, worker, WORKER_LABELS);
+  if (!before) await auditAdmin(by, "Trabajador", "Alta", `Nueva ficha: ${worker.name}`, { entityId: worker.id });
+  else if (d.changed) await auditAdmin(by, "Trabajador", "Datos", `${worker.name}: ${d.text}`, { entityId: worker.id, data: d.data });
   revalidatePath("/admin", "layout");
   redirect(`/admin/personal/${worker.id}`);
 }
 
 export async function toggleWorkerActive(id: string) {
-  await requireAdmin();
+  const by = await requireAdmin();
   const w = await db.worker.findUniqueOrThrow({ where: { id } });
   await db.worker.update({ where: { id }, data: { active: !w.active } });
+  await auditAdmin(by, "Trabajador", w.active ? "Desactivado" : "Activado", `${w.active ? "Desactivado" : "Reactivado"}: ${w.name}`, { entityId: id });
   if (w.active) await db.device.deleteMany({ where: { workerId: id } });
   revalidatePath("/admin", "layout");
 }
 
 /** Nuevo código de acceso: cierra la sesión en todos sus dispositivos. */
 export async function regenerateAccessCode(id: string) {
-  await requireAdmin();
-  await db.worker.update({
+  const by = await requireAdmin();
+  const w = await db.worker.update({
     where: { id },
     data: { accessCode: newAccessCode(), sessionVersion: { increment: 1 }, failedLogins: 0, lockedUntil: null },
   });
   await db.device.deleteMany({ where: { workerId: id } });
+  await auditAdmin(by, "Trabajador", "Código de acceso", `Nuevo código de acceso para ${w.name} (se cierran sus sesiones)`, { entityId: id });
   revalidatePath(`/admin/personal/${id}`);
 }
 
 export async function deleteWorker(id: string) {
-  await requireAdmin();
-  await db.worker.delete({ where: { id } });
+  const by = await requireAdmin();
+  const w = await db.worker.delete({ where: { id } });
+  await auditAdmin(by, "Trabajador", "Borrado", `Borrada la ficha de ${w.name}${w.dni ? ` (${w.dni})` : ""}`, { entityId: id });
   revalidatePath("/admin", "layout");
   redirect("/admin/personal");
 }
@@ -287,13 +306,16 @@ async function linkVenueAndClient(form: FormData, ev: { venue: string; client: s
 }
 
 export async function saveEvent(_prev: string | null, form: FormData) {
-  await requireAdmin();
+  const by = await requireAdmin();
   const parsed = eventSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return parsed.error.issues[0].message;
   const id = form.get("id") ? String(form.get("id")) : null;
   const before = id ? await db.event.findUniqueOrThrow({ where: { id } }) : null;
   const data = { ...parsed.data, ...(await linkVenueAndClient(form, parsed.data)) };
   const event = id ? await db.event.update({ where: { id }, data }) : await db.event.create({ data });
+  const ed = diff(before, event, { name: "Nombre", date: "Fecha", startTime: "Inicio", endTime: "Fin", unloadTime: "Descarga", venue: "Lugar", client: "Cliente", needCamareros: "Camareros", needMaitres: "Maîtres", needResponsables: "Responsables", needMozos: "Mozos" });
+  if (!before) await auditAdmin(by, "Evento", "Alta", `Nuevo evento: ${event.name} (${formatDate(event.date)})`, { entityId: event.id });
+  else if (ed.changed) await auditAdmin(by, "Evento", "Cambios", `${event.name}: ${ed.text}`, { entityId: event.id, data: ed.data });
 
   if (before) {
     const changes = [
@@ -428,18 +450,20 @@ export async function duplicateEvent(id: string) {
 }
 
 export async function setEventStatus(id: string, status: "ABIERTO" | "CERRADO") {
-  await requireAdmin();
-  await db.event.update({ where: { id }, data: { status } });
+  const by = await requireAdmin();
+  const e = await db.event.update({ where: { id }, data: { status } });
+  await auditAdmin(by, "Evento", status === "CERRADO" ? "Cerrado" : "Reabierto", `${e.name}: ${status === "CERRADO" ? "cerrado" : "reabierto"}`, { entityId: id });
   revalidatePath("/admin", "layout");
 }
 
 export async function deleteEvent(id: string) {
-  await requireAdmin();
+  const by = await requireAdmin();
   const event = await db.event.findUniqueOrThrow({
     where: { id },
     include: { assignments: { where: { status: { in: ["CONVOCADO", "CONFIRMADO"] } }, select: { workerId: true } } },
   });
   await db.event.delete({ where: { id } });
+  await auditAdmin(by, "Evento", "Borrado", `Borrado el evento ${event.name} (${formatDate(event.date)}) con ${event.assignments.length} personas convocadas o confirmadas`, { entityId: id });
   const workerIds = event.assignments.map((a) => a.workerId);
   after(() =>
     notify({
@@ -485,13 +509,14 @@ export async function autoFill(eventId: string) {
 }
 
 export async function setAssignmentStatus(id: string, status: string) {
-  await requireAdmin();
+  const by = await requireAdmin();
   if (!["CONVOCADO", "CONFIRMADO", "RECHAZADO", "CANCELADO"].includes(status)) return;
   const a = await db.assignment.update({
     where: { id },
     data: { status, respondedAt: status === "CONVOCADO" ? null : new Date() },
     include: { event: true, worker: { select: { name: true } } },
   });
+  await auditAdmin(by, "Convocatoria", "Estado", `${a.worker.name} en ${a.event.name} (${formatDate(a.event.date)}): ${status.toLowerCase()}`, { entityId: a.eventId });
   if (status === "CONVOCADO") notifyInvited(a.event, [a]);
   // Si RRHH anota que alguien no puede ir (p. ej. avisó por teléfono), también se busca sustituto
   if (status === "RECHAZADO" && isRole(a.role)) after(() => autoReplace(a.eventId, a.role as Role, a.worker.name));
@@ -510,8 +535,9 @@ export async function setAssignmentStatus(id: string, status: string) {
 }
 
 export async function removeAssignment(id: string) {
-  await requireAdmin();
-  const a = await db.assignment.delete({ where: { id } });
+  const by = await requireAdmin();
+  const a = await db.assignment.delete({ where: { id }, include: { worker: { select: { name: true } }, event: { select: { name: true } } } });
+  await auditAdmin(by, "Convocatoria", "Quitada", `Quitado ${a.worker.name} de ${a.event.name}`, { entityId: a.eventId });
   revalidatePath(`/admin/eventos/${a.eventId}`);
 }
 
@@ -541,14 +567,16 @@ export async function adminUploadDocument(workerId: string, _prev: { ok: boolean
 }
 
 export async function verifyDocument(id: string) {
-  await requireAdmin();
-  const d = await db.workerDocument.update({ where: { id }, data: { verified: true } });
+  const by = await requireAdmin();
+  const d = await db.workerDocument.update({ where: { id }, data: { verified: true }, include: { worker: { select: { name: true } } } });
+  await auditAdmin(by, "Documento", "Revisado", `${d.worker.name}: documento ${d.type} revisado`, { entityId: d.workerId });
   revalidatePath(`/admin/personal/${d.workerId}`);
 }
 
 export async function deleteDocument(id: string) {
-  await requireAdmin();
-  const d = await db.workerDocument.delete({ where: { id } });
+  const by = await requireAdmin();
+  const d = await db.workerDocument.delete({ where: { id }, include: { worker: { select: { name: true } } } });
+  await auditAdmin(by, "Documento", "Borrado", `${d.worker.name}: borrado documento ${d.type}`, { entityId: d.workerId });
   if (d.fileId) await db.storedFile.delete({ where: { id: d.fileId } }).catch(() => {});
   revalidatePath(`/admin/personal/${d.workerId}`);
 }
@@ -578,13 +606,15 @@ export async function deleteLoan(id: string) {
 
 export async function approveSwapAction(id: string) {
   const name = await requireAdmin();
-  await approveSwap(id, name);
+  const r = await approveSwap(id, name);
+  await auditAdmin(name, "Cambio de turno", "Aprobado", r.message, { entityId: id });
   revalidatePath("/admin", "layout");
 }
 
 export async function rejectSwapAction(id: string) {
   const name = await requireAdmin();
   await rejectSwap(id, name);
+  await auditAdmin(name, "Cambio de turno", "Rechazado", "Cambio de turno no aprobado", { entityId: id });
   revalidatePath("/admin", "layout");
 }
 
@@ -606,14 +636,15 @@ export async function generateContractsAction(eventId: string, _prev: string | n
 }
 
 export async function deleteContract(id: string) {
-  await requireAdmin();
-  const c = await db.contract.delete({ where: { id } });
+  const by = await requireAdmin();
+  const c = await db.contract.delete({ where: { id }, include: { worker: { select: { name: true } } } });
+  await auditAdmin(by, "Documento", "Anulado", `Anulado «${c.title}» de ${c.worker.name}`, { entityId: c.workerId });
   if (c.signatureFileId) await db.storedFile.delete({ where: { id: c.signatureFileId } }).catch(() => {});
   revalidatePath(`/admin/eventos/${c.eventId}`);
 }
 
 export async function saveCompany(_prev: string | null, form: FormData) {
-  await requireAdmin();
+  const by = await requireAdmin();
   const get = (k: string) => String(form.get(k) ?? "").trim();
   const template = get("template").replace(/\r\n/g, "\n");
   const value = {
@@ -625,12 +656,13 @@ export async function saveCompany(_prev: string | null, form: FormData) {
     template: template === DEFAULT_TEMPLATE.trim() ? "" : template,
   };
   await db.setting.upsert({ where: { key: "empresa" }, create: { key: "empresa", value }, update: { value } });
+  await auditAdmin(by, "Ajustes", "Empresa", `Datos de empresa y texto de condiciones guardados (${value.name || "sin razón social"}, ${value.cif || "sin CIF"})`);
   revalidatePath("/admin/ajustes/empresa");
   return "Guardado. Los documentos nuevos usarán estos datos; los ya generados no cambian.";
 }
 
 export async function savePrivacy(_prev: string | null, form: FormData) {
-  await requireAdmin();
+  const by = await requireAdmin();
   const current = await getPrivacy();
   const email = String(form.get("email") ?? "").trim();
   const text = String(form.get("template") ?? "").replace(/\r\n/g, "\n").trim();
@@ -638,6 +670,7 @@ export async function savePrivacy(_prev: string | null, form: FormData) {
   const bump = form.get("newVersion") === "1";
   const value = { email, template: text === DEFAULT_PRIVACY_TEMPLATE.trim() ? "" : text, version: current.version + (bump ? 1 : 0) };
   await db.setting.upsert({ where: { key: "privacidad" }, create: { key: "privacidad", value }, update: { value } });
+  await auditAdmin(by, "Ajustes", "Protección de datos", bump ? `Publicada la versión ${value.version} de la cláusula de protección de datos` : "Guardada la cláusula de protección de datos");
   // Los documentos sin firmar de versiones anteriores ya no sirven
   await db.contract.deleteMany({ where: { kind: "RGPD", signedAt: null, version: { not: value.version } } });
   let asked = 0;
@@ -663,12 +696,13 @@ export async function savePrivacy(_prev: string | null, form: FormData) {
 }
 
 export async function saveA3(_prev: string | null, form: FormData) {
-  await requireAdmin();
+  const by = await requireAdmin();
   const get = (k: string) => String(form.get(k) ?? "").trim();
   const roleConcepts = Object.fromEntries(ROLES.map((r) => [r, get(`concept_${r}`)]).filter(([, v]) => v));
   const value = { companyCode: get("companyCode"), hoursConcept: get("hoursConcept"), hoursConceptName: get("hoursConceptName") || "Horas eventos", roleConcepts };
   if (!value.companyCode || !value.hoursConcept) return "Indica el código de empresa y el código de concepto de A3.";
   await db.setting.upsert({ where: { key: "a3" }, create: { key: "a3", value }, update: { value } });
+  await auditAdmin(by, "Ajustes", "A3", `Configuración de A3: empresa ${value.companyCode}, concepto ${value.hoursConcept}`);
   revalidatePath("/admin/ajustes/a3");
   return "Configuración de A3 guardada.";
 }
@@ -699,10 +733,11 @@ export async function updateCandidate(id: string, form: FormData) {
 }
 
 export async function hireCandidateAction(id: string, form: FormData) {
-  await requireAdmin();
+  const by = await requireAdmin();
   const role = String(form.get("role") ?? "");
   if (!isRole(role)) return;
   const worker = await hireCandidate(id, role);
+  await auditAdmin(by, "Trabajador", "Alta desde candidatos", `${worker.name} dado de alta desde Candidatos`, { entityId: worker.id });
   revalidatePath("/admin", "layout");
   redirect(`/admin/personal/${worker.id}`);
 }
@@ -745,8 +780,9 @@ export async function reopenIncident(id: string) {
 // ---------- Fichaje ----------
 
 export async function saveTimesheet(eventId: string, form: FormData) {
-  await requireAdmin();
-  const assignments = await db.assignment.findMany({ where: { eventId, status: "CONFIRMADO" } });
+  const by = await requireAdmin();
+  const assignments = await db.assignment.findMany({ where: { eventId, status: "CONFIRMADO" }, include: { worker: { select: { name: true } }, event: { select: { name: true, date: true } } } });
+  const changes: string[] = [];
   for (const a of assignments) {
     const checkIn = optTime.safeParse(form.get(`in_${a.id}`) ?? "");
     const checkOut = optTime.safeParse(form.get(`out_${a.id}`) ?? "");
@@ -757,16 +793,26 @@ export async function saveTimesheet(eventId: string, form: FormData) {
     // Si RRHH cambia una hora, deja de ser un fichaje por GPS: se marca como manual
     const inChanged = newIn !== a.checkIn;
     const outChanged = newOut !== a.checkOut;
+    const newHours = hours != null && Number.isFinite(hours) && hours >= 0 ? hours : null;
+    const parts = [
+      inChanged && `entrada ${a.checkIn ?? "—"} → ${newIn ?? "—"}`,
+      outChanged && `salida ${a.checkOut ?? "—"} → ${newOut ?? "—"}`,
+      newHours !== a.hoursOverride && `horas manuales ${a.hoursOverride ?? "—"} → ${newHours ?? "—"}`,
+    ].filter(Boolean);
+    if (parts.length) changes.push(`${a.worker.name}: ${parts.join(", ")}`);
     await db.assignment.update({
       where: { id: a.id },
       data: {
         checkIn: newIn,
         checkOut: newOut,
-        hoursOverride: hours != null && Number.isFinite(hours) && hours >= 0 ? hours : null,
-        ...(inChanged && { checkInManual: newIn !== null, checkInLat: null, checkInLng: null, checkInDistance: null, checkInAccuracy: null }),
-        ...(outChanged && { checkOutManual: newOut !== null, checkOutLat: null, checkOutLng: null, checkOutDistance: null, checkOutAccuracy: null }),
+        hoursOverride: newHours,
+        ...(inChanged && { checkInManual: newIn !== null, checkInOffline: false, checkInLat: null, checkInLng: null, checkInDistance: null, checkInAccuracy: null }),
+        ...(outChanged && { checkOutManual: newOut !== null, checkOutOffline: false, checkOutLat: null, checkOutLng: null, checkOutDistance: null, checkOutAccuracy: null }),
       },
     });
+  }
+  if (changes.length && assignments[0]) {
+    await auditAdmin(by, "Horas", "Corrección", `${assignments[0].event.name} (${formatDate(assignments[0].event.date)}) · ${changes.join(" | ")}`, { entityId: eventId });
   }
   revalidatePath(`/admin/eventos/${eventId}`);
 }
@@ -774,16 +820,21 @@ export async function saveTimesheet(eventId: string, form: FormData) {
 // ---------- Tarifas ----------
 
 export async function saveRates(form: FormData) {
-  await requireAdmin();
+  const by = await requireAdmin();
+  const old = new Map((await db.rate.findMany()).map((r) => [r.role, r]));
+  const rateChanges: string[] = [];
   for (const role of ROLES) {
     const hourlyRate = Number(String(form.get(`rate_${role}`) ?? "0").replace(",", "."));
     const minHours = Number(String(form.get(`min_${role}`) ?? "0").replace(",", "."));
     if (!Number.isFinite(hourlyRate) || !Number.isFinite(minHours)) continue;
+    const o = old.get(role);
+    if (!o || o.hourlyRate !== hourlyRate || o.minHours !== minHours) rateChanges.push(`${ROLE_LABEL[role]}: ${o?.hourlyRate ?? "—"} €/h, mín. ${o?.minHours ?? "—"} h → ${hourlyRate} €/h, mín. ${minHours} h`);
     await db.rate.upsert({
       where: { role },
       create: { role, hourlyRate, minHours },
       update: { hourlyRate, minHours },
     });
   }
+  if (rateChanges.length) await auditAdmin(by, "Ajustes", "Tarifas", rateChanges.join("; "));
   revalidatePath("/admin", "layout");
 }

@@ -216,6 +216,7 @@ export default async function WorkerDetail({ params }: { params: Promise<{ id: s
             <dt className="text-stone-500">Código A3</dt><dd>{worker.a3Code ?? <Missing />}</dd>
             <dt className="text-stone-500">IRPF</dt><dd>{worker.irpf != null ? `${String(worker.irpf).replace(".", ",")} %` : "General"}</dd>
           </dl>
+          <p className="pt-1 text-xs"><Link href={`/admin/registro?id=${worker.id}`} className="link">Historial de cambios de esta ficha</Link></p>
           <h3 className="pt-2 font-semibold">Altas y bajas</h3>
           {worker.employments.length === 0 ? (
             <p className="text-sm text-stone-500">Sin altas registradas. <Link href="/admin/altas" className="link">Registrar</Link></p>
