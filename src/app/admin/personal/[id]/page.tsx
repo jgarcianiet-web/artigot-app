@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
+  addLoan,
+  adminUploadDocument,
+  deleteDocument,
+  deleteLoan,
+  returnLoan,
+  verifyDocument,
   addUnavailability,
   deleteWorker,
   regenerateAccessCode,
@@ -10,10 +16,14 @@ import {
 import { ConfirmButton, CopyButton, SubmitButton } from "@/components/client";
 import { Empty, RoleBadge, ScoreBadge, Stars, StatusBadge } from "@/components/ui";
 import { computeScores, CRITERIA, reviewAverage, SCORING } from "@/lib/scoring";
+import { DocumentUploadForm } from "@/components/StaffForms";
+import { DOC_LABEL, docState, formatIban } from "@/lib/staff";
 import { db } from "@/lib/db";
 import { appUrl, formatDate, num, today, workedHours } from "@/lib/domain";
 
 const DEVICE_LABEL: Record<string, string> = { web: "Navegador / web app", fcm: "App Android", apns: "App iPhone" };
+
+const Missing = () => <span className="text-amber-700">Falta</span>;
 
 export default async function WorkerDetail({ params }: { params: Promise<{ id: string }> }) {
   const t = today();
@@ -23,6 +33,8 @@ export default async function WorkerDetail({ params }: { params: Promise<{ id: s
       unavailabilities: { where: { date: { gte: t } }, orderBy: { date: "asc" } },
       assignments: { include: { event: true }, orderBy: { event: { date: "desc" } }, take: 50 },
       devices: { select: { kind: true } },
+      documents: { orderBy: { createdAt: "desc" } },
+      loans: { orderBy: [{ returnedAt: "asc" }, { deliveredAt: "desc" }] },
       reviews: {
         include: { event: { select: { id: true, name: true, date: true } }, reviewer: { select: { name: true } } },
         orderBy: { event: { date: "desc" } },
@@ -180,6 +192,83 @@ export default async function WorkerDetail({ params }: { params: Promise<{ id: s
           </form>
         </div>
       </section>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section className="card space-y-3">
+          <h2>Datos laborales</h2>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+            <dt className="text-stone-500">DNI / NIE</dt><dd>{worker.dni ?? <Missing />}</dd>
+            <dt className="text-stone-500">Seguridad Social</dt><dd>{worker.nss ?? <Missing />}</dd>
+            <dt className="text-stone-500">IBAN</dt><dd className="font-mono text-xs">{worker.iban ? formatIban(worker.iban) : <Missing />}</dd>
+            <dt className="text-stone-500">Nacimiento</dt><dd>{worker.birthDate ? formatDate(worker.birthDate, { long: true }) : <Missing />}</dd>
+            <dt className="text-stone-500">Dirección</dt><dd>{worker.address ?? <Missing />}</dd>
+          </dl>
+          <h3 className="pt-2 font-semibold">Documentos</h3>
+          {worker.documents.length === 0 && <p className="text-sm text-stone-500">Sin documentos.</p>}
+          <ul className="divide-y divide-stone-100 text-sm">
+            {worker.documents.map((d) => {
+              const st = docState(d.expiresAt, t);
+              return (
+                <li key={d.id} className="flex flex-wrap items-center gap-2 py-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium">{DOC_LABEL[d.type] ?? d.type}{d.label && ` · ${d.label}`}</div>
+                    <div className="text-xs text-stone-500">
+                      {d.expiresAt && (
+                        <span className={st === "caducado" ? "font-medium text-red-700" : st === "caduca-pronto" ? "font-medium text-amber-700" : ""}>
+                          {st === "caducado" ? "Caducado" : "Caduca"} el {formatDate(d.expiresAt)} ·{" "}
+                        </span>
+                      )}
+                      subido por {d.uploadedBy}
+                    </div>
+                  </div>
+                  {d.fileId && <a href={`/api/files/${d.fileId}`} target="_blank" className="btn btn-sm">Ver</a>}
+                  {d.verified ? (
+                    <span className="text-xs text-emerald-700">✓ Revisado</span>
+                  ) : (
+                    <form action={verifyDocument.bind(null, d.id)}><button className="btn btn-sm btn-success">Marcar revisado</button></form>
+                  )}
+                  <form action={deleteDocument.bind(null, d.id)}>
+                    <ConfirmButton className="btn btn-sm btn-danger" message="¿Eliminar este documento?">✕</ConfirmButton>
+                  </form>
+                </li>
+              );
+            })}
+          </ul>
+          <DocumentUploadForm action={adminUploadDocument.bind(null, worker.id)} title="Añadir documento" />
+        </section>
+
+        <section className="card space-y-3">
+          <h2>Material prestado</h2>
+          {worker.loans.length === 0 && <p className="text-sm text-stone-500">No tiene material de la empresa.</p>}
+          <ul className="divide-y divide-stone-100 text-sm">
+            {worker.loans.map((l) => (
+              <li key={l.id} className={`flex flex-wrap items-center gap-2 py-2 ${l.returnedAt ? "opacity-60" : ""}`}>
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium">{l.quantity > 1 && `${l.quantity} × `}{l.item}</div>
+                  <div className="text-xs text-stone-500">
+                    Entregado el {formatDate(l.deliveredAt)}
+                    {l.returnedAt && ` · devuelto el ${formatDate(l.returnedAt)}`}
+                    {l.notes && ` · ${l.notes}`}
+                  </div>
+                </div>
+                {!l.returnedAt && (
+                  <form action={returnLoan.bind(null, l.id)}><button className="btn btn-sm">Devuelto</button></form>
+                )}
+                <form action={deleteLoan.bind(null, l.id)}>
+                  <ConfirmButton className="btn btn-sm btn-danger" message="¿Borrar este registro?">✕</ConfirmButton>
+                </form>
+              </li>
+            ))}
+          </ul>
+          <form action={addLoan.bind(null, worker.id)} className="grid grid-cols-[1fr_4rem] gap-2">
+            <input name="item" className="input" placeholder="Material (p. ej. chaqueta negra)" required />
+            <input name="quantity" type="number" min={1} defaultValue={1} className="input" aria-label="Cantidad" />
+            <input name="deliveredAt" type="date" defaultValue={t} className="input" required aria-label="Fecha de entrega" />
+            <SubmitButton className="btn">Registrar</SubmitButton>
+            <input name="notes" className="input col-span-2" placeholder="Notas (talla, fianza…)" />
+          </form>
+        </section>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_2fr]">
         <section className="card space-y-3">

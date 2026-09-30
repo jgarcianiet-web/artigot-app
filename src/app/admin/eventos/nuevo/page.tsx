@@ -22,6 +22,7 @@ export default async function NewEvent({ searchParams }: { searchParams: Promise
         needMaitres: t.needMaitres,
         needMozos: t.needMozos,
         notes: t.notes,
+        checklist: t.checklist,
         venueId: t.venueId,
         venue: t.venue?.name ?? "",
         lat: t.venue?.lat ?? null,

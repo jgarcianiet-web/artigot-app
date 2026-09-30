@@ -24,6 +24,13 @@ Aplicación para que RRHH gestione de forma rápida el personal de **bodas y eve
 - **Plantillas de evento**: «Guardar como plantilla» en cualquier evento, y «Empezar desde una plantilla» al crear otro. Copian el personal, el horario, la finca y las notas.
 - **Informes** por periodo: eventos, servicios, horas, coste, % de aceptación, tiempo medio de respuesta, coste por mes, desglose por evento y por trabajador (valoración media, rechazos, retiradas, retrasos, ausencias) e incidencias por tipo. Se exportan a Excel.
 
+**Personal: documentación, turnos, nómina y material**
+- **Mis datos**: DNI/NIE, Seguridad Social, IBAN, nacimiento, dirección y email. Los completa el trabajador desde su app o RRHH desde la ficha. El DNI/NIE y el IBAN se validan con su dígito de control.
+- **Documentos**: DNI, tarjeta de la Seguridad Social, carnet de manipulador, cuenta bancaria, contrato… en foto o PDF y con fecha de caducidad. RRHH los revisa. **Aviso 30 días antes de caducar y el día que caducan**, al trabajador y a RRHH, y resumen en el panel. Solo los ven RRHH y el propio trabajador.
+- **Cambio de turno**: quien no puede ir propone a un compañero libre y capacitado para ese puesto, el compañero acepta desde su app y **RRHH lo aprueba con un clic**. El compañero queda confirmado y quien cedió el turno no recibe penalización.
+- **Nómina en la app**: servicios, horas e importe bruto estimado de cada mes, con el detalle por evento.
+- **Uniforme y material**: el uniforme de cada puesto (Ajustes → Uniforme) más «Qué llevar» de cada evento forman una lista con casillas en la app. RRHH registra el **material prestado** (chaquetas, sacacorchos…) y su devolución, y el trabajador ve lo que tiene.
+
 **Personal (app)**
 - Entra una sola vez con su **teléfono y el código de 6 cifras** que le da RRHH.
 - Acepta o rechaza convocatorias, ficha entrada y salida y marca los días que no puede trabajar.
@@ -60,6 +67,7 @@ Aplicación para que RRHH gestione de forma rápida el personal de **bodas y eve
 | El día anterior, desde las 17:00 | Al equipo confirmado: «Mañana: evento, citación y lugar» |
 | 10 min después de la citación sin haber fichado | Al trabajador, al maître o responsable y a RRHH |
 | La mañana siguiente (10:00), si faltan valoraciones | Al maître o responsable |
+| 30 días antes de que caduque un documento y el día que caduca | Al trabajador y a RRHH |
 
   Los tiempos están en `REMINDERS` (`src/lib/reminders.ts`). Con `REMINDERS=off` se desactivan.
 - **Panel en directo** para el maître o camarero responsable (en la app) y para RRHH (botón «🔴 En directo» del evento). Muestra quién trabaja, quién no ha fichado (en rojo, con botón para llamar) y quién ha salido, y se actualiza cada 30 s. El responsable puede **marcar la llegada** de alguien que no puede fichar, por ejemplo si se ha quedado sin batería; queda como fichaje manual con su nombre.
