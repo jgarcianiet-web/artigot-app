@@ -14,7 +14,7 @@ const MAX_ROWS = 3000;
 
 type Field = "name" | "surname" | "phone" | "role" | "email" | "zone" | "rating" | "notes";
 
-const norm = (s: string) =>
+export const norm = (s: string) =>
   s
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
@@ -132,6 +132,22 @@ function readCsv(buffer: ArrayBuffer): string[][] {
     rows.push(row);
   }
   return rows;
+}
+
+/** Lee un .xlsx o .csv como tabla de texto (o devuelve el error para mostrar). */
+export async function readTable(file: File): Promise<string[][] | { error: string }> {
+  if (!file || file.size === 0) return { error: "Selecciona un archivo." };
+  if (file.size > MAX_FILE_BYTES) return { error: "El archivo es demasiado grande (máximo 5 MB)." };
+  const name = file.name.toLowerCase();
+  const buffer = await file.arrayBuffer();
+  try {
+    if (name.endsWith(".xlsx") || name.endsWith(".xlsm")) return await readXlsx(buffer);
+    if (name.endsWith(".csv") || name.endsWith(".txt")) return readCsv(buffer);
+  } catch {
+    return { error: "No se ha podido leer el archivo. Comprueba que es un Excel (.xlsx) o CSV válido." };
+  }
+  if (/\.(xls|ods|numbers)$/.test(name)) return { error: "Ese formato no se puede leer. Ábrelo en Excel y guárdalo como «Libro de Excel (.xlsx)» o CSV." };
+  return { error: "Sube un archivo .xlsx o .csv." };
 }
 
 // ---------- Análisis ----------

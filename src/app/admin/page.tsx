@@ -5,6 +5,7 @@ import { addDays, EVENT_TYPE_LABEL, formatDate, ROLE_PLURAL, today } from "@/lib
 import { coverage } from "@/lib/staffing";
 import { SwapApprovals } from "@/components/SwapApprovals";
 import { DOC_LABEL, DOC_WARN_DAYS } from "@/lib/staff";
+import { missingAltas, unreported } from "@/lib/employment";
 
 export default async function Dashboard() {
   const t = today();
@@ -30,6 +31,7 @@ export default async function Dashboard() {
     }),
   ]);
 
+  const [noAlta, notReported] = await Promise.all([missingAltas(t, 7), unreported()]);
   const rows = events.map((e) => {
     const cov = coverage(e, e.assignments);
     const need = cov.reduce((s, c) => s + c.need, 0);
@@ -77,6 +79,24 @@ export default async function Dashboard() {
         <section className="space-y-2">
           <h2>🔁 Cambios de turno</h2>
           <SwapApprovals swaps={swaps} />
+        </section>
+      )}
+
+      {(noAlta.length > 0 || notReported.altas + notReported.bajas > 0) && (
+        <section className="space-y-2">
+          <h2>🪪 Altas y bajas</h2>
+          <div className={`card space-y-1 text-sm ${noAlta.length ? "border-red-300 bg-red-50" : ""}`}>
+            {noAlta.length > 0 && (
+              <p>
+                <Link href="/admin/altas" className="link font-medium text-red-700">{noAlta.length} {noAlta.length === 1 ? "persona convocada" : "personas convocadas"} sin alta</Link> en los próximos 7 días.
+              </p>
+            )}
+            {notReported.altas + notReported.bajas > 0 && (
+              <p>
+                <Link href="/admin/altas?ver=sin-comunicar" className="link">{notReported.altas} altas y {notReported.bajas} bajas</Link> sin comunicar a la Seguridad Social.
+              </p>
+            )}
+          </div>
         </section>
       )}
 

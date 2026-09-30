@@ -21,6 +21,7 @@ type Worker = {
   birthDate: string | null;
   address: string | null;
   a3Code: string | null;
+  irpf: number | null;
 };
 
 export function WorkerForm({ worker }: { worker?: Worker }) {
@@ -100,6 +101,10 @@ export function WorkerForm({ worker }: { worker?: Worker }) {
           <div>
             <label className="label">Código de trabajador en A3</label>
             <input name="a3Code" className="input" defaultValue={worker?.a3Code ?? ""} />
+          </div>
+          <div>
+            <label className="label">IRPF (%)</label>
+            <input name="irpf" inputMode="decimal" className="input" defaultValue={worker?.irpf != null ? String(worker.irpf).replace(".", ",") : ""} placeholder="El general de Ajustes" />
           </div>
         </fieldset>
         <div className="sm:col-span-2">
