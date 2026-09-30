@@ -3,10 +3,12 @@ import { CoverageBar, Empty } from "@/components/ui";
 import { db } from "@/lib/db";
 import { addDays, EVENT_TYPE_LABEL, formatDate, ROLE_PLURAL, today } from "@/lib/domain";
 import { coverage } from "@/lib/staffing";
+import { SwapApprovals } from "@/components/SwapApprovals";
+import { DOC_LABEL, DOC_WARN_DAYS } from "@/lib/staff";
 
 export default async function Dashboard() {
   const t = today();
-  const [events, activeWorkers, pendingCount, openIncidents] = await Promise.all([
+  const [events, activeWorkers, pendingCount, openIncidents, swaps, docsToReview, docsExpiring] = await Promise.all([
     db.event.findMany({
       where: { date: { gte: t, lte: addDays(t, 30) }, status: "ABIERTO" },
       include: { assignments: { select: { role: true, status: true } } },
@@ -15,6 +17,17 @@ export default async function Dashboard() {
     db.worker.count({ where: { active: true } }),
     db.assignment.count({ where: { status: "CONVOCADO", event: { date: { gte: t } } } }),
     db.incident.count({ where: { resolved: false } }),
+    db.swapRequest.findMany({
+      where: { status: { in: ["PROPUESTO", "ACEPTADO"] }, event: { date: { gte: t } } },
+      include: { event: { select: { id: true, name: true, date: true } }, fromWorker: { select: { name: true } }, toWorker: { select: { name: true } }, assignment: { select: { role: true } } },
+      orderBy: [{ status: "asc" }, { createdAt: "asc" }],
+    }),
+    db.workerDocument.findMany({ where: { verified: false, worker: { active: true } }, include: { worker: { select: { id: true, name: true } } } }),
+    db.workerDocument.findMany({
+      where: { expiresAt: { not: null, lte: addDays(t, DOC_WARN_DAYS) }, worker: { active: true } },
+      include: { worker: { select: { id: true, name: true } } },
+      orderBy: { expiresAt: "asc" },
+    }),
   ]);
 
   const rows = events.map((e) => {
@@ -59,6 +72,35 @@ export default async function Dashboard() {
           );
         })}
       </div>
+
+      {swaps.length > 0 && (
+        <section className="space-y-2">
+          <h2>🔁 Cambios de turno</h2>
+          <SwapApprovals swaps={swaps} />
+        </section>
+      )}
+
+      {(docsToReview.length > 0 || docsExpiring.length > 0) && (
+        <section className="space-y-2">
+          <h2>📄 Documentación</h2>
+          <ul className="card divide-y divide-stone-100 p-0 text-sm">
+            {docsExpiring.map((d) => (
+              <li key={d.id} className="flex justify-between gap-2 px-3 py-2">
+                <Link href={`/admin/personal/${d.worker.id}`} className="link">{d.worker.name}</Link>
+                <span className={d.expiresAt! < t ? "font-medium text-red-700" : "text-amber-700"}>
+                  {DOC_LABEL[d.type]} {d.expiresAt! < t ? "caducado" : "caduca"} el {formatDate(d.expiresAt!)}
+                </span>
+              </li>
+            ))}
+            {docsToReview.map((d) => (
+              <li key={d.id} className="flex justify-between gap-2 px-3 py-2">
+                <Link href={`/admin/personal/${d.worker.id}`} className="link">{d.worker.name}</Link>
+                <span className="text-stone-500">{DOC_LABEL[d.type]} pendiente de revisar</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="space-y-3">
         <h2>Próximos eventos</h2>

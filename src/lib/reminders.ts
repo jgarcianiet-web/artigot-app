@@ -4,6 +4,7 @@ import { db } from "./db";
 import { addDays, callTime, formatDate, isLeadRole, LEAD_ROLES, ROLE_LABEL, type Role } from "./domain";
 import { notify } from "./push";
 import { REVIEW_DAYS } from "./reviews";
+import { DOC_LABEL, DOC_WARN_DAYS } from "./staff";
 
 /**
  * Avisos automáticos. Se comprueban cada pocos minutos; cada aviso se registra en ReminderLog
@@ -154,6 +155,33 @@ export async function runReminders(now = new Date()) {
       });
       sent.push(`valorar:${l.id}`);
     }
+  }
+
+  // 5. Documentos que caducan: aviso 30 días antes y el día que caducan (al trabajador y a RRHH)
+  const docs = await db.workerDocument.findMany({
+    where: { expiresAt: { not: null, lte: addDays(today, DOC_WARN_DAYS) }, worker: { active: true } },
+    include: { worker: { select: { id: true, name: true } } },
+  });
+  for (const d of docs) {
+    const expired = d.expiresAt! <= today;
+    const key = `${expired ? "doc-caducado" : "doc-caduca"}:${d.id}`;
+    if (!(await claim(key))) continue;
+    const what = DOC_LABEL[d.type] ?? "Un documento";
+    await notify({
+      workerIds: [d.workerId],
+      workerUrl: "/app/perfil",
+      title: expired ? "Documento caducado" : "Documento a punto de caducar",
+      body: `${what} ${expired ? "ha caducado" : `caduca el ${formatDate(d.expiresAt!)}`}. Sube el nuevo desde tu perfil.`,
+      tag: `doc-${d.id}`,
+    });
+    await notify({
+      admins: true,
+      adminUrl: `/admin/personal/${d.workerId}`,
+      title: expired ? "Documento caducado" : "Documento a punto de caducar",
+      body: `${d.worker.name}: ${what} ${expired ? "ha caducado" : `caduca el ${formatDate(d.expiresAt!)}`}.`,
+      tag: `doc-${d.id}`,
+    });
+    sent.push(key);
   }
 
   return sent;

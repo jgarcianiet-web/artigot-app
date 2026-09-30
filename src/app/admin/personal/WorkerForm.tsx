@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { saveWorker } from "@/app/actions";
-import { SubmitButton } from "@/components/client";
+import { ActionForm, SubmitButton } from "@/components/client";
 import { ROLE_LABEL, ROLES } from "@/lib/domain";
 
 type Worker = {
@@ -15,12 +15,17 @@ type Worker = {
   rating: number;
   zone: string | null;
   notes: string | null;
+  dni: string | null;
+  nss: string | null;
+  iban: string | null;
+  birthDate: string | null;
+  address: string | null;
 };
 
 export function WorkerForm({ worker }: { worker?: Worker }) {
   const [error, action] = useActionState(saveWorker, null);
   return (
-    <form action={action} className="card max-w-2xl space-y-4">
+    <ActionForm action={action} className="card max-w-2xl space-y-4">
       {worker && <input type="hidden" name="id" value={worker.id} />}
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
@@ -69,6 +74,29 @@ export function WorkerForm({ worker }: { worker?: Worker }) {
           <label className="label">Zona / localidad (opcional)</label>
           <input name="zone" className="input" defaultValue={worker?.zone ?? ""} placeholder="p. ej. Valencia centro, tiene coche" />
         </div>
+        <fieldset className="grid gap-4 rounded-lg border border-stone-200 p-4 sm:col-span-2 sm:grid-cols-2">
+          <legend className="px-1 text-sm font-semibold">Datos laborales (también los puede completar el trabajador en su app)</legend>
+          <div>
+            <label className="label">DNI / NIE</label>
+            <input name="dni" className="input" defaultValue={worker?.dni ?? ""} />
+          </div>
+          <div>
+            <label className="label">Nº Seguridad Social</label>
+            <input name="nss" inputMode="numeric" className="input" defaultValue={worker?.nss ?? ""} />
+          </div>
+          <div>
+            <label className="label">IBAN</label>
+            <input name="iban" className="input" defaultValue={worker?.iban ?? ""} />
+          </div>
+          <div>
+            <label className="label">Fecha de nacimiento</label>
+            <input name="birthDate" type="date" className="input" defaultValue={worker?.birthDate ?? ""} />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="label">Dirección</label>
+            <input name="address" className="input" defaultValue={worker?.address ?? ""} />
+          </div>
+        </fieldset>
         <div className="sm:col-span-2">
           <label className="label">Notas (opcional)</label>
           <textarea name="notes" className="input" rows={3} defaultValue={worker?.notes ?? ""} />
@@ -76,6 +104,6 @@ export function WorkerForm({ worker }: { worker?: Worker }) {
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <SubmitButton>{worker ? "Guardar cambios" : "Crear trabajador"}</SubmitButton>
-    </form>
+    </ActionForm>
   );
 }

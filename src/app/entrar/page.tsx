@@ -1,5 +1,6 @@
 "use client";
 
+import { ActionForm } from "@/components/client";
 import Link from "next/link";
 import { useActionState } from "react";
 import { login } from "../app/actions";
@@ -8,7 +9,7 @@ export default function WorkerLogin() {
   const [error, action, pending] = useActionState(login, null);
   return (
     <main className="flex min-h-dvh items-center justify-center p-4">
-      <form action={action} className="card w-full max-w-sm space-y-4">
+      <ActionForm action={action} className="card w-full max-w-sm space-y-4">
         <div>
           <h1>Artigot Personal</h1>
           <p className="text-sm text-stone-500">Entra con tu teléfono y el código de 6 cifras que te ha dado RRHH.</p>
@@ -37,7 +38,7 @@ export default function WorkerLogin() {
         <p className="text-center text-xs text-stone-400">
           <Link href="/login" className="hover:underline">Acceso RRHH</Link>
         </p>
-      </form>
+      </ActionForm>
     </main>
   );
 }

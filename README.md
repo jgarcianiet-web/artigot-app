@@ -18,6 +18,19 @@ Aplicación para que RRHH gestione de forma rápida el personal de **bodas y eve
 - **Importar desde Excel**: sube vuestra lista (.xlsx o CSV). Reconoce las columnas aunque se llamen distinto («Móvil», «Categoría», «Apellidos»…) y entiende «camarera», «metre» o «mozo de descarga». Muestra una vista previa con errores y duplicados antes de guardar. Se puede volver a importar sin duplicar a nadie (se identifica por teléfono). Hay plantilla descargable y **exportación de los códigos de acceso** a Excel para repartirlos.
 - **Fichaje con geolocalización** (ver reglas abajo), liquidación y tarifas: horas por persona (admite turnos que pasan de medianoche) e importes con el mínimo de horas por puesto. Exportación a Excel.
 
+**Gestión de RRHH**
+- **Varios usuarios de RRHH**, todos con acceso completo. Cada uno entra con su email y su contraseña (cifrada con scrypt; bloqueo tras 5 intentos) y aparece con su nombre en el chat. Se gestionan en Ajustes → Usuarios. Desactivar a alguien o cambiarle la contraseña cierra sus sesiones al momento.
+- **Fincas guardadas**: dirección, punto de fichaje, contacto e **indicaciones de acceso**, que el personal ve en la app («Cómo llegar»). **Clientes guardados** con contacto y notas.
+- **Plantillas de evento**: «Guardar como plantilla» en cualquier evento, y «Empezar desde una plantilla» al crear otro. Copian el personal, el horario, la finca y las notas.
+- **Informes** por periodo: eventos, servicios, horas, coste, % de aceptación, tiempo medio de respuesta, coste por mes, desglose por evento y por trabajador (valoración media, rechazos, retiradas, retrasos, ausencias) e incidencias por tipo. Se exportan a Excel.
+
+**Personal: documentación, turnos, nómina y material**
+- **Mis datos**: DNI/NIE, Seguridad Social, IBAN, nacimiento, dirección y email. Los completa el trabajador desde su app o RRHH desde la ficha. El DNI/NIE y el IBAN se validan con su dígito de control.
+- **Documentos**: DNI, tarjeta de la Seguridad Social, carnet de manipulador, cuenta bancaria, contrato… en foto o PDF y con fecha de caducidad. RRHH los revisa. **Aviso 30 días antes de caducar y el día que caducan**, al trabajador y a RRHH, y resumen en el panel. Solo los ven RRHH y el propio trabajador.
+- **Cambio de turno**: quien no puede ir propone a un compañero libre y capacitado para ese puesto, el compañero acepta desde su app y **RRHH lo aprueba con un clic**. El compañero queda confirmado y quien cedió el turno no recibe penalización.
+- **Nómina en la app**: servicios, horas e importe bruto estimado de cada mes, con el detalle por evento.
+- **Uniforme y material**: el uniforme de cada puesto (Ajustes → Uniforme) más «Qué llevar» de cada evento forman una lista con casillas en la app. RRHH registra el **material prestado** (chaquetas, sacacorchos…) y su devolución, y el trabajador ve lo que tiene.
+
 **Personal (app)**
 - Entra una sola vez con su **teléfono y el código de 6 cifras** que le da RRHH.
 - Acepta o rechaza convocatorias, ficha entrada y salida y marca los días que no puede trabajar.
@@ -54,6 +67,7 @@ Aplicación para que RRHH gestione de forma rápida el personal de **bodas y eve
 | El día anterior, desde las 17:00 | Al equipo confirmado: «Mañana: evento, citación y lugar» |
 | 10 min después de la citación sin haber fichado | Al trabajador, al maître o responsable y a RRHH |
 | La mañana siguiente (10:00), si faltan valoraciones | Al maître o responsable |
+| 30 días antes de que caduque un documento y el día que caduca | Al trabajador y a RRHH |
 
   Los tiempos están en `REMINDERS` (`src/lib/reminders.ts`). Con `REMINDERS=off` se desactivan.
 - **Panel en directo** para el maître o camarero responsable (en la app) y para RRHH (botón «🔴 En directo» del evento). Muestra quién trabaja, quién no ha fichado (en rojo, con botón para llamar) y quién ha salido, y se actualiza cada 30 s. El responsable puede **marcar la llegada** de alguien que no puede fichar, por ejemplo si se ha quedado sin batería; queda como fichaje manual con su nombre.
@@ -110,14 +124,14 @@ Sin ubicación fijada, el evento muestra un aviso y el personal no puede fichar.
    | Variable | Valor |
    |---|---|
    | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` (referencia a la base de datos) |
-   | `ADMIN_PASSWORD` | la contraseña de RRHH (larga) |
+   | `ADMIN_PASSWORD` | clave de instalación: solo sirve para crear el primer usuario de RRHH en `/login` |
    | `SESSION_SECRET` | una cadena aleatoria de 40+ caracteres |
    | `APP_URL` | la URL pública (paso 5), p. ej. `https://artigot-production.up.railway.app` |
    | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | ejecuta `npm run vapid` en tu ordenador y copia las dos claves |
    | `VAPID_SUBJECT` | `mailto:` + un email de contacto de la empresa |
 
 5. **Settings → Networking → Generate Domain** para obtener la URL pública, o conecta un dominio propio. Pon esa URL en `APP_URL`.
-6. Al desplegar se aplican las migraciones solas y se crean las tarifas por defecto. Entra en `/login`, da de alta al personal y dales su teléfono y código (botón **Copiar instrucciones de acceso** en cada ficha).
+6. Al desplegar se aplican las migraciones solas y se crean las tarifas por defecto. Entra en `/login`: la primera vez pide la clave de instalación para crear tu usuario. Después da de alta al resto de RRHH en Ajustes → Usuarios, importa al personal y dales su teléfono y código (botón **Copiar instrucciones de acceso** en cada ficha o **Exportar códigos**).
 
 Con esto ya funcionan la web de RRHH, la web app del personal y los **avisos en navegador y en la web app**. En iPhone, los avisos web exigen iOS 16.4 o superior y añadir la web a la pantalla de inicio.
 

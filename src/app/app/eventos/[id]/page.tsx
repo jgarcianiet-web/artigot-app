@@ -8,6 +8,8 @@ import { recentMessages } from "@/lib/chat";
 import { db } from "@/lib/db";
 import { isLeadRole, today } from "@/lib/domain";
 import { reviewWindowOpen } from "@/lib/reviews";
+import { Checklist } from "@/components/StaffForms";
+import { checklistFor, getUniform } from "@/lib/staff";
 import { respond } from "../../actions";
 
 export default async function WorkerEvent({ params }: { params: Promise<{ id: string }> }) {
@@ -15,10 +17,11 @@ export default async function WorkerEvent({ params }: { params: Promise<{ id: st
   const me = await requireWorker();
   const a = await db.assignment.findUnique({
     where: { eventId_workerId: { eventId: id, workerId: me.id } },
-    include: { event: true },
+    include: { event: { include: { savedVenue: { select: { accessNotes: true } } } } },
   });
   if (!a) notFound();
   const confirmed = a.status === "CONFIRMADO";
+  const checklist = checklistFor(await getUniform(), a.role, a.event.checklist);
   const canRespond = a.event.date >= today() && !a.checkIn && (a.status === "CONVOCADO" || confirmed);
 
   return (
@@ -42,12 +45,17 @@ export default async function WorkerEvent({ params }: { params: Promise<{ id: st
             </div>
           )}
           {canRespond && confirmed && (
-            <form action={respond.bind(null, a.id, false)}>
-              <button className="btn btn-danger btn-sm">Ya no puedo ir</button>
-            </form>
+            <div className="flex flex-wrap gap-2">
+              <Link href={`/app/eventos/${a.eventId}/cambio`} className="btn btn-sm">🔁 Cambiar mi turno con un compañero</Link>
+              <form action={respond.bind(null, a.id, false)}>
+                <button className="btn btn-danger btn-sm">Ya no puedo ir</button>
+              </form>
+            </div>
           )}
         </div>
       </details>
+
+      {confirmed && <Checklist id={a.id} {...checklist} extra={checklist.event} />}
 
       {confirmed && isLeadRole(a.role) && a.event.date <= today() && (
         <Link href={`/app/eventos/${a.eventId}/equipo`} className="btn w-full">👥 Panel del equipo e incidencias</Link>
