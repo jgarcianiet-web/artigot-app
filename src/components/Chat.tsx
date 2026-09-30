@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatMessage } from "@/lib/chat";
+import { shrinkImage } from "@/lib/image";
 
 type Me = { workerId: string | null };
 
@@ -65,26 +66,52 @@ export function Chat({
     bottom.current?.scrollIntoView({ block: "end" });
   }, [messages.length]);
 
-  async function send() {
-    const body = text.trim();
-    if (!body || sending) return;
+  async function post(init: RequestInit, clearText: boolean) {
     setSending(true);
     setError(null);
     try {
-      const res = await fetch(`${base}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body }),
-      });
-      if (!res.ok) throw new Error(await res.text());
+      const res = await fetch(`${base}/messages`, { method: "POST", ...init });
+      if (!res.ok) throw new Error(res.status === 400 ? await res.text() : "");
       const m: ChatMessage = await res.json();
       setMessages((prev) => merge(prev, [m]));
-      setText("");
-    } catch {
-      setError("No se ha podido enviar. Revisa la conexión e inténtalo de nuevo.");
+      if (clearText) setText("");
+    } catch (e) {
+      setError((e as Error).message || "No se ha podido enviar. Revisa la conexión e inténtalo de nuevo.");
     } finally {
       setSending(false);
     }
+  }
+
+  async function send() {
+    const body = text.trim();
+    if (!body || sending) return;
+    await post({ headers: { "Content-Type": "application/json" }, body: JSON.stringify({ body }) }, true);
+  }
+
+  async function sendPhoto(file: File) {
+    const form = new FormData();
+    form.set("file", await shrinkImage(file));
+    form.set("body", text.trim());
+    await post({ body: form }, true);
+  }
+
+  function sendLocation() {
+    if (!("geolocation" in navigator)) return setError("Este dispositivo no permite compartir la ubicación.");
+    setSending(true);
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        const form = new FormData();
+        form.set("lat", String(p.coords.latitude));
+        form.set("lng", String(p.coords.longitude));
+        form.set("body", text.trim());
+        post({ body: form }, true);
+      },
+      () => {
+        setSending(false);
+        setError("No se ha podido obtener tu ubicación. Revisa los permisos.");
+      },
+      { enableHighAccuracy: true, timeout: 15_000 },
+    );
   }
 
   const mine = (m: ChatMessage) => (me.workerId ? m.workerId === me.workerId : m.fromAdmin);
@@ -125,7 +152,22 @@ export function Chat({
                       {m.authorName}
                     </div>
                   )}
-                  <div className="break-words whitespace-pre-wrap">{m.body}</div>
+                  {m.fileId && (
+                    <a href={`/api/files/${m.fileId}`} target="_blank" className="-mx-1 my-1 block">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={`/api/files/${m.fileId}`} alt="Foto" loading="lazy" className="max-h-64 rounded-md object-cover" />
+                    </a>
+                  )}
+                  {m.lat != null && m.lng != null && (
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${m.lat},${m.lng}`}
+                      target="_blank"
+                      className="my-1 flex items-center gap-1 font-medium text-brand-700 underline"
+                    >
+                      📍 Ver ubicación
+                    </a>
+                  )}
+                  {m.body && <div className="break-words whitespace-pre-wrap">{m.body}</div>}
                   <div className="text-right text-[10px] text-stone-500">{timeFmt.format(d)}</div>
                 </div>
               </div>
@@ -142,6 +184,23 @@ export function Chat({
           send();
         }}
       >
+        <label className={`btn h-10 w-10 shrink-0 cursor-pointer rounded-full p-0 ${sending ? "pointer-events-none opacity-50" : ""}`} title="Enviar foto">
+          📷
+          <input
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            aria-label="Enviar foto"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (f) sendPhoto(f);
+            }}
+          />
+        </label>
+        <button type="button" className="btn h-10 w-10 shrink-0 rounded-full p-0" title="Compartir mi ubicación" disabled={sending} onClick={sendLocation}>
+          📍
+        </button>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}

@@ -49,6 +49,9 @@ export default async function WorkerEvent({ params }: { params: Promise<{ id: st
         </div>
       </details>
 
+      {confirmed && isLeadRole(a.role) && a.event.date <= today() && (
+        <Link href={`/app/eventos/${a.eventId}/equipo`} className="btn w-full">👥 Panel del equipo e incidencias</Link>
+      )}
       {confirmed && isLeadRole(a.role) && reviewWindowOpen(a.event) && (
         <Link href={`/app/eventos/${a.eventId}/valorar`} className="btn btn-primary w-full">⭐ Valorar a mi equipo</Link>
       )}

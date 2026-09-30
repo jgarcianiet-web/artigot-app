@@ -44,7 +44,7 @@ export default async function AdminChats() {
                     </span>
                   </span>
                   <span className={`block truncate text-sm ${n ? "font-medium text-stone-800" : "text-stone-500"}`}>
-                    {last ? `${last.authorName}: ${last.body}` : "Sin mensajes todavía"}
+                    {last ? `${last.authorName}: ${last.body || (last.fileId ? "📷 Foto" : "📍 Ubicación")}` : "Sin mensajes todavía"}
                   </span>
                 </span>
                 {n > 0 && <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-medium text-white">{n}</span>}

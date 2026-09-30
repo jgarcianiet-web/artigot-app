@@ -110,6 +110,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
             {unreadChat > 0 && <span className="rounded-full bg-white px-1.5 text-xs text-brand-700">{unreadChat}</span>}
             {unreadChat === 0 && messageCount > 0 && <span className="text-xs opacity-80">({messageCount})</span>}
           </Link>
+          <Link href={`/admin/eventos/${event.id}/directo`} className="btn">🔴 En directo</Link>
           <Link href={`/admin/eventos/${event.id}/editar`} className="btn">Editar</Link>
           <form action={duplicateEvent.bind(null, event.id)}>
             <SubmitButton className="btn">Duplicar</SubmitButton>

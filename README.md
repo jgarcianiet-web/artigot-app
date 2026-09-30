@@ -43,6 +43,23 @@ Aplicación para que RRHH gestione de forma rápida el personal de **bodas y eve
 - En cada evento, **⚡ Selección automática** convoca a los mejor puntuados que estén libres ese día. Cubre primero maître y responsable, y nunca convoca a la misma persona para dos puestos.
 - **Reposición automática** (activada por defecto en cada evento): si alguien rechaza, se retira o RRHH marca que «No puede», se convoca solo al siguiente mejor puntuado del mismo puesto y RRHH recibe un aviso con el nombre del sustituto, o de que no queda nadie libre. A quien rechazó no se le vuelve a convocar a ese evento. En la lista de candidatos, al pasar el ratón por la puntuación se ve su desglose. La ficha de cada trabajador muestra su puntuación, la media por criterio y todas sus valoraciones.
 
+**El día del evento**
+
+- **Recordatorios automáticos** (se comprueban cada 5 minutos y ninguno se envía dos veces):
+
+| Cuándo | A quién |
+|---|---|
+| 12 h sin responder a una convocatoria | Al trabajador |
+| 24 h sin responder | A RRHH |
+| El día anterior, desde las 17:00 | Al equipo confirmado: «Mañana: evento, citación y lugar» |
+| 10 min después de la citación sin haber fichado | Al trabajador, al maître o responsable y a RRHH |
+| La mañana siguiente (10:00), si faltan valoraciones | Al maître o responsable |
+
+  Los tiempos están en `REMINDERS` (`src/lib/reminders.ts`). Con `REMINDERS=off` se desactivan.
+- **Panel en directo** para el maître o camarero responsable (en la app) y para RRHH (botón «🔴 En directo» del evento). Muestra quién trabaja, quién no ha fichado (en rojo, con botón para llamar) y quién ha salido, y se actualiza cada 30 s. El responsable puede **marcar la llegada** de alguien que no puede fichar, por ejemplo si se ha quedado sin batería; queda como fichaje manual con su nombre.
+- **Incidencias** (roturas, quejas, accidentes, personal) con hasta 5 fotos y la persona implicada. Las registra el responsable desde el móvil o RRHH. RRHH recibe un aviso, las ve en el evento y en el menú «Incidencias», y las marca como resueltas.
+- **Chat con fotos y ubicación**: botones 📷 y 📍. Las fotos se reducen en el móvil antes de enviarse y solo las ven RRHH y el personal confirmado del evento. Las fotos de incidencias solo las ven RRHH y el responsable.
+
 **Reglas del fichaje**
 
 | Regla | Detalle |

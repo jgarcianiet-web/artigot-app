@@ -6,7 +6,8 @@ import { after } from "next/server";
 import { destroySession, requireWorker, workerLogin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { forgetDevice } from "@/lib/devices";
-import { checkClock } from "@/lib/clockRules";
+import { checkClock, clockWindow } from "@/lib/clockRules";
+import { createIncident, type IncidentResult } from "@/lib/incidents";
 import { formatDate, isLeadRole, isRole, nowTime, type Role, today } from "@/lib/domain";
 import { autoReplace } from "@/lib/staffing";
 import { notify } from "@/lib/push";
@@ -163,4 +164,30 @@ export async function saveReviews(eventId: string, _prev: ReviewResult | null, f
     return { ok: false, message: `Guardadas ${saved}. Faltan puntuaciones de: ${incomplete.join(", ")}.` };
   }
   return { ok: true, message: saved ? `¡Gracias! ${saved} valoraciones guardadas.` : "No has puntuado a nadie todavía." };
+}
+
+// ---------- Día del evento (maître / camarero responsable) ----------
+
+/** El responsable marca la llegada de alguien de su equipo (p. ej. sin batería). Queda como fichaje manual. */
+export async function markArrival(assignmentId: string) {
+  const me = await requireWorker();
+  const a = await db.assignment.findUnique({ where: { id: assignmentId }, include: { event: true } });
+  if (!a || a.status !== "CONFIRMADO" || a.checkIn || !(await isEventLead(a.eventId, me.id))) return;
+  const w = clockWindow(a.event, a.role);
+  const now = new Date();
+  if (now < w.opensAt || now > w.closesAt) return;
+  await db.assignment.update({
+    where: { id: a.id },
+    data: { checkIn: nowTime(), checkInManual: true, notes: `Llegada marcada por ${me.name}` },
+  });
+  revalidatePath(`/app/eventos/${a.eventId}/equipo`);
+  revalidatePath(`/admin/eventos/${a.eventId}`);
+}
+
+export async function reportIncident(eventId: string, _prev: IncidentResult | null, form: FormData): Promise<IncidentResult> {
+  const me = await requireWorker();
+  if (!(await isEventLead(eventId, me.id))) return { ok: false, message: "Solo el maître o el camarero responsable pueden registrar incidencias." };
+  const r = await createIncident({ kind: "worker", id: me.id, name: me.name, role: me.role }, eventId, form);
+  revalidatePath(`/app/eventos/${eventId}/equipo`);
+  return r;
 }
