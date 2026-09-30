@@ -4,14 +4,16 @@ import { ActionForm } from "@/components/client";
 import Link from "next/link";
 import { useActionState } from "react";
 import { login } from "../app/actions";
+import { Logo } from "@/components/Logo";
 
 export default function WorkerLogin() {
   const [error, action, pending] = useActionState(login, null);
   return (
     <main className="flex min-h-dvh items-center justify-center p-4">
       <ActionForm action={action} className="card w-full max-w-sm space-y-4">
-        <div>
-          <h1>Artigot Personal</h1>
+        <div className="space-y-3 text-center">
+          <Logo height={56} className="mx-auto" />
+          <h1 className="text-base font-medium text-stone-600">Área del personal</h1>
           <p className="text-sm text-stone-500">Entra con tu teléfono y el código de 6 cifras que te ha dado RRHH.</p>
         </div>
         <div>

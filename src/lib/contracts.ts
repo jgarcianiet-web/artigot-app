@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { after } from "next/server";
 import { db } from "./db";
@@ -154,8 +156,15 @@ export async function contractPdf(contractId: string) {
       y = H - M;
     }
   };
-  page.drawText(pdfSafe(company.name || "Artigot"), { x: M, y, size: 10, font: bold, color: rgb(0.35, 0.25, 0.84) });
-  y -= 28;
+  try {
+    const logo = await pdf.embedPng(await readFile(path.join(process.cwd(), "public", "logo.png")));
+    const h = 34;
+    page.drawImage(logo, { x: M, y: y - h + 10, width: (logo.width * h) / logo.height, height: h });
+    y -= h + 14;
+  } catch {
+    page.drawText(pdfSafe(company.name || "Artigot"), { x: M, y, size: 10, font: bold });
+    y -= 28;
+  }
   for (const l of wrap(pdfSafe(c.title), bold, 15, W - 2 * M)) {
     page.drawText(l, { x: M, y, size: 15, font: bold });
     y -= 20;

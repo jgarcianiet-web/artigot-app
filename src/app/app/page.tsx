@@ -79,7 +79,7 @@ export default async function WorkerHome() {
   return (
     <div className="space-y-6">
       <header>
-        <p className="text-sm text-stone-500">Artigot · {ROLE_LABEL[worker.role as Role]}</p>
+        <p className="text-sm text-stone-500">{ROLE_LABEL[worker.role as Role]}</p>
         <h1>Hola, {worker.name.split(" ")[0]}</h1>
       </header>
 
