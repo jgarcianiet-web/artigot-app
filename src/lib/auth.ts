@@ -1,4 +1,4 @@
-import { createHmac, randomInt, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, randomInt, scryptSync, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "./db";
@@ -7,7 +7,7 @@ const COOKIE = "session";
 const ADMIN_MAX_AGE = 60 * 60 * 24 * 14; // 14 días
 const WORKER_MAX_AGE = 60 * 60 * 24 * 365; // 1 año: el trabajador no debería tener que volver a entrar
 
-type Payload = { k: "a"; n: string; e: number } | { k: "w"; id: string; v: number; e: number };
+type Payload = { k: "a"; id: string; v: number; e: number } | { k: "w"; id: string; v: number; e: number };
 
 export type Viewer =
   | { kind: "admin"; name: string }
@@ -55,29 +55,77 @@ export async function destroySession() {
   (await cookies()).delete(COOKIE);
 }
 
+const MAX_FAILED = 5;
+const LOCK_MINUTES = 15;
+
 // ---------- RRHH ----------
 
-export function checkPassword(password: string) {
+/** Clave de instalación: solo sirve para crear el primer usuario de RRHH. */
+export function checkSetupKey(key: string) {
   const expected = process.env.ADMIN_PASSWORD;
   if (!expected) return false;
-  return safeEqual(sign(password), sign(expected));
+  return safeEqual(sign(key), sign(expected));
 }
 
-export async function createAdminSession(name: string) {
-  await writeSession({ k: "a", n: name, e: Date.now() + ADMIN_MAX_AGE * 1000 }, ADMIN_MAX_AGE);
+export function hashPassword(password: string) {
+  const salt = randomBytes(16);
+  const hash = scryptSync(password, salt, 32);
+  return `scrypt$${salt.toString("base64url")}$${hash.toString("base64url")}`;
+}
+
+function verifyPassword(password: string, stored: string) {
+  const [alg, salt, hash] = stored.split("$");
+  if (alg !== "scrypt" || !salt || !hash) return false;
+  const actual = scryptSync(password, Buffer.from(salt, "base64url"), 32);
+  const expected = Buffer.from(hash, "base64url");
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
+
+export const normalizeEmail = (email: string) => email.trim().toLowerCase();
+
+export async function createAdminSession(user: { id: string; sessionVersion: number }) {
+  await writeSession({ k: "a", id: user.id, v: user.sessionVersion, e: Date.now() + ADMIN_MAX_AGE * 1000 }, ADMIN_MAX_AGE);
+}
+
+export async function adminLogin(email: string, password: string): Promise<string | null> {
+  const user = await db.adminUser.findUnique({ where: { email: normalizeEmail(email) } });
+  const generic = "Email o contraseña incorrectos";
+  if (!user || !user.active) {
+    verifyPassword(password, "scrypt$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"); // mismo coste que un intento real
+    return generic;
+  }
+  if (user.lockedUntil && user.lockedUntil > new Date()) return "Demasiados intentos. Vuelve a probar en unos minutos.";
+  if (!verifyPassword(password, user.passwordHash)) {
+    const failed = user.failedLogins + 1;
+    await db.adminUser.update({
+      where: { id: user.id },
+      data: failed >= MAX_FAILED ? { failedLogins: 0, lockedUntil: new Date(Date.now() + LOCK_MINUTES * 60_000) } : { failedLogins: failed },
+    });
+    return generic;
+  }
+  await db.adminUser.update({ where: { id: user.id }, data: { failedLogins: 0, lockedUntil: null, lastLoginAt: new Date() } });
+  await createAdminSession(user);
+  return null;
+}
+
+/** Usuario de RRHH con sesión válida (activo y con la versión de sesión vigente), o null. */
+export async function currentAdmin() {
+  const p = await readSession();
+  if (p?.k !== "a") return null;
+  const user = await db.adminUser.findUnique({ where: { id: p.id } });
+  return user && user.active && user.sessionVersion === p.v ? user : null;
 }
 
 /** Nombre de la persona de RRHH con sesión, o null. */
 export async function adminName() {
-  const p = await readSession();
-  return p?.k === "a" ? p.n : null;
+  return (await currentAdmin())?.name ?? null;
 }
 
 export async function isAdmin() {
-  return (await adminName()) !== null;
+  return (await currentAdmin()) !== null;
 }
 
-/** Para páginas y acciones de RRHH: redirige al login si no hay sesión. */
+/** Para páginas y acciones de RRHH: redirige al login si no hay sesión. Devuelve el nombre. */
 export async function requireAdmin() {
   const name = await adminName();
   if (name === null) redirect("/login");
@@ -91,8 +139,6 @@ export const phoneKey = (phone: string) => phone.replace(/\D/g, "").slice(-9);
 
 export const newAccessCode = () => String(randomInt(0, 1_000_000)).padStart(6, "0");
 
-const MAX_FAILED = 5;
-const LOCK_MINUTES = 15;
 
 export async function workerLogin(phone: string, code: string): Promise<string | null> {
   const worker = await db.worker.findUnique({ where: { phoneKey: phoneKey(phone) } });

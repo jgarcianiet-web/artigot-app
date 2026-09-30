@@ -15,7 +15,7 @@ export default async function WorkerEvent({ params }: { params: Promise<{ id: st
   const me = await requireWorker();
   const a = await db.assignment.findUnique({
     where: { eventId_workerId: { eventId: id, workerId: me.id } },
-    include: { event: true },
+    include: { event: { include: { savedVenue: { select: { accessNotes: true } } } } },
   });
   if (!a) notFound();
   const confirmed = a.status === "CONFIRMADO";

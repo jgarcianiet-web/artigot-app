@@ -12,6 +12,7 @@ import {
   setEventStatus,
 } from "@/app/actions";
 import { ConfirmButton, SelectAll, SubmitButton } from "@/components/client";
+import { SaveTemplate } from "./SaveTemplate";
 import { CoverageBar, ScoreBadge, StatusBadge } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
 import { unreadCounts } from "@/lib/chat";
@@ -112,6 +113,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
           </Link>
           <Link href={`/admin/eventos/${event.id}/directo`} className="btn">🔴 En directo</Link>
           <Link href={`/admin/eventos/${event.id}/editar`} className="btn">Editar</Link>
+          <SaveTemplate eventId={event.id} suggestion={`${EVENT_TYPE_LABEL[event.type]} ${event.needCamareros + event.needMaitres + event.needResponsables + event.needMozos} personas`} />
           <form action={duplicateEvent.bind(null, event.id)}>
             <SubmitButton className="btn">Duplicar</SubmitButton>
           </form>

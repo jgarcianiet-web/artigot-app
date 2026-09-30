@@ -1,5 +1,6 @@
 "use client";
 
+import { ActionForm } from "@/components/client";
 import { useActionState, useState } from "react";
 import { saveReviews, type ReviewResult } from "@/app/app/actions";
 import { RoleBadge } from "@/components/ui";
@@ -80,7 +81,7 @@ function MemberCard({ m }: { m: Member }) {
 export function ReviewForm({ eventId, members }: { eventId: string; members: Member[] }) {
   const [result, action, pending] = useActionState<ReviewResult | null, FormData>(saveReviews.bind(null, eventId), null);
   return (
-    <form action={action} className="space-y-3">
+    <ActionForm action={action} className="space-y-3">
       {members.map((m) => (
         <MemberCard key={m.workerId} m={m} />
       ))}
@@ -92,6 +93,6 @@ export function ReviewForm({ eventId, members }: { eventId: string; members: Mem
       <button className="btn btn-primary sticky bottom-16 w-full py-3 text-base shadow-lg" disabled={pending}>
         {pending ? "Guardando…" : "Guardar valoraciones"}
       </button>
-    </form>
+    </ActionForm>
   );
 }

@@ -12,6 +12,7 @@ type Props = {
     venue: string;
     lat?: number | null;
     lng?: number | null;
+    savedVenue?: { accessNotes: string | null } | null;
     notes: string | null;
   };
 };
@@ -38,6 +39,11 @@ export function EventInfo({ event, role }: Props) {
       >
         {event.venue}
       </a>
+      {event.savedVenue?.accessNotes && (
+        <p className="pt-1 text-sm whitespace-pre-line text-stone-600">
+          <strong>Cómo llegar:</strong> {event.savedVenue.accessNotes}
+        </p>
+      )}
       {event.notes && <p className="pt-1 text-sm whitespace-pre-line text-stone-600">{event.notes}</p>}
     </div>
   );

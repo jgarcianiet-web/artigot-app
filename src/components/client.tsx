@@ -1,10 +1,44 @@
 "use client";
 
-import { useState } from "react";
+import { createContext, type FormHTMLAttributes, type Ref, useContext, useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
 
+const PendingContext = createContext(false);
+
+/**
+ * Formulario que envía a una acción sin que React lo vacíe al terminar: si el servidor
+ * devuelve un error, lo escrito se conserva para corregirlo.
+ */
+export function ActionForm({
+  action,
+  children,
+  ...props
+}: { action: (form: FormData) => void; ref?: Ref<HTMLFormElement> } & Omit<FormHTMLAttributes<HTMLFormElement>, "action" | "onSubmit">) {
+  const [pending, start] = useTransition();
+  return (
+    <PendingContext.Provider value={pending}>
+      <form
+        {...props}
+        onSubmit={(e) => {
+          e.preventDefault();
+          const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+          const data = new FormData(e.currentTarget, submitter);
+          start(() => action(data));
+        }}
+      >
+        {children}
+      </form>
+    </PendingContext.Provider>
+  );
+}
+
+/** ¿Hay un envío en curso en el formulario que contiene este componente? */
+export function useSubmitting() {
+  return useFormStatus().pending || useContext(PendingContext);
+}
+
 export function SubmitButton({ children, className = "btn btn-primary" }: { children: React.ReactNode; className?: string }) {
-  const { pending } = useFormStatus();
+  const pending = useSubmitting();
   return (
     <button type="submit" className={className} disabled={pending}>
       {pending ? "Guardando…" : children}

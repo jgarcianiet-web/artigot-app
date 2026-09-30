@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { saveWorker } from "@/app/actions";
-import { SubmitButton } from "@/components/client";
+import { ActionForm, SubmitButton } from "@/components/client";
 import { ROLE_LABEL, ROLES } from "@/lib/domain";
 
 type Worker = {
@@ -20,7 +20,7 @@ type Worker = {
 export function WorkerForm({ worker }: { worker?: Worker }) {
   const [error, action] = useActionState(saveWorker, null);
   return (
-    <form action={action} className="card max-w-2xl space-y-4">
+    <ActionForm action={action} className="card max-w-2xl space-y-4">
       {worker && <input type="hidden" name="id" value={worker.id} />}
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
@@ -76,6 +76,6 @@ export function WorkerForm({ worker }: { worker?: Worker }) {
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <SubmitButton>{worker ? "Guardar cambios" : "Crear trabajador"}</SubmitButton>
-    </form>
+    </ActionForm>
   );
 }

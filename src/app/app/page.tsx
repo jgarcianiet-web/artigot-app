@@ -19,7 +19,7 @@ export default async function WorkerHome() {
     include: {
       assignments: {
         where: { event: { date: { gte: addDays(t, -60) } } },
-        include: { event: true },
+        include: { event: { include: { savedVenue: { select: { accessNotes: true } } } } },
         orderBy: { event: { date: "asc" } },
       },
       unavailabilities: { where: { date: { gte: t, lte: addDays(t, DAYS_AHEAD) } } },

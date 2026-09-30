@@ -65,6 +65,11 @@ model Event {
   lng           Float?
   client        String?
   notes         String?
+  // Finca y cliente guardados (opcionales; venue/client guardan el texto que se muestra)
+  venueId       String?
+  clientId      String?
+  savedVenue    Venue?       @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  savedClient   Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
   needCamareros Int          @default(0)
   needMaitres   Int          @default(0)
   // Camarero responsable: hace de maître en eventos pequeños
@@ -230,4 +235,62 @@ model Incident {
 model ReminderLog {
   key    String   @id
   sentAt DateTime @default(now())
+}
+
+// Usuario de RRHH. Todos tienen acceso completo. sessionVersion cierra sus sesiones al desactivarlo o cambiar la contraseña.
+model AdminUser {
+  id             String    @id @default(cuid())
+  name           String
+  email          String    @unique
+  passwordHash   String
+  active         Boolean   @default(true)
+  sessionVersion Int       @default(0)
+  failedLogins   Int       @default(0)
+  lockedUntil    DateTime?
+  lastLoginAt    DateTime?
+  createdAt      DateTime  @default(now())
+}
+
+// Finca o lugar habitual: dirección, punto para el fichaje e indicaciones para el personal
+model Venue {
+  id           String          @id @default(cuid())
+  name         String          @unique
+  address      String?
+  lat          Float?
+  lng          Float?
+  accessNotes  String?
+  contactName  String?
+  contactPhone String?
+  createdAt    DateTime        @default(now())
+  events       Event[]
+  templates    EventTemplate[]
+}
+
+model Client {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  contact   String?
+  phone     String?
+  email     String?
+  notes     String?
+  createdAt DateTime @default(now())
+  events    Event[]
+}
+
+// Plantilla de evento: personal necesario, horario y notas habituales
+model EventTemplate {
+  id               String   @id @default(cuid())
+  name             String   @unique
+  type             String   @default("BODA")
+  startTime        String
+  endTime          String
+  unloadTime       String?
+  needCamareros    Int      @default(0)
+  needResponsables Int      @default(0)
+  needMaitres      Int      @default(0)
+  needMozos        Int      @default(0)
+  notes            String?
+  venueId          String?
+  venue            Venue?   @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  createdAt        DateTime @default(now())
 }
