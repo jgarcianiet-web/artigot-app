@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { deleteCandidate, hireCandidateAction, updateCandidate } from "@/app/actions";
+import { deleteCandidate, hireCandidateAction, markCandidateSeen, updateCandidate } from "@/app/actions";
+import { MarkSeen } from "./MarkSeen";
 import { ConfirmButton, SubmitButton } from "@/components/client";
 import { RoleBadge } from "@/components/ui";
 import { CANDIDATE_STATUS } from "@/lib/candidates";
@@ -16,6 +17,7 @@ export default async function CandidateDetail({ params }: { params: Promise<{ id
   const existing = await db.worker.findUnique({ where: { phoneKey: c.phoneKey }, select: { id: true, name: true } });
   return (
     <div className="max-w-3xl space-y-4">
+      {!c.seenAt && <MarkSeen action={markCandidateSeen.bind(null, c.id)} />}
       <Link href="/admin/candidatos" className="text-sm text-stone-500 hover:underline">‹ Candidatos</Link>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
