@@ -68,8 +68,14 @@ export default async function WorkerHome() {
     incompleteWorkers([me.id]),
     db.device.count({ where: { workerId: me.id } }),
   ]);
-  const dataMissing = (incomplete[0]?.missing ?? []).filter((m) => m !== "firma de protección de datos");
+  const dataMissing = (incomplete[0]?.missing ?? []).filter((m) => m !== "firma de protección de datos" && m !== "foto de perfil");
   const steps = [
+    {
+      key: "foto",
+      title: "Sube tu foto de perfil",
+      text: worker.photoStatus === "RECHAZADA" ? `Tu foto no vale (${worker.photoNote ?? "sube otra"}). Sube otra de frente, con la cara bien visible.` : "De frente y con la cara bien visible. RRHH la revisa.",
+      done: !!worker.photoFileId && worker.photoStatus !== "RECHAZADA",
+    },
     { key: "rgpd", title: "Firma la información de protección de datos", text: "Lee qué datos tratamos y para qué, y fírmalo con el dedo.", done: !!privacy },
     { key: "datos", title: "Completa tus datos y documentos", text: `Necesitamos tu DNI, Seguridad Social e IBAN con sus documentos para darte de alta y pagarte.${dataMissing.length ? ` Te falta: ${dataMissing.join(", ")}.` : ""}`, done: !!privacy && dataMissing.length === 0 },
     { key: "avisos", title: "Activa los avisos", text: "Así te enteras al momento de convocatorias, cambios y mensajes del chat.", done: devices > 0 },

@@ -1,7 +1,8 @@
 import { Prisma } from "@prisma/client";
 import { clockWindow, hhmm, madridTime } from "./clockRules";
 import { db } from "./db";
-import { addDays, callTime, formatDate, isLeadRole, LEAD_ROLES, ROLE_LABEL, type Role } from "./domain";
+import { mailEnabled, sendMail } from "./mail";
+import { addDays, appUrl, callTime, formatDate, isLeadRole, LEAD_ROLES, ROLE_LABEL, type Role } from "./domain";
 import { notify } from "./push";
 import { REVIEW_DAYS } from "./reviews";
 import { DOC_LABEL, DOC_WARN_DAYS } from "./staff";
@@ -228,6 +229,14 @@ export async function runReminders(now = new Date()) {
         body: `Te falta: ${missingText(w.missing)}. Sin ello no podemos darte de alta ni pagarte. Complétalo en tu perfil.`,
         tag: "datos",
       });
+      // Quien aún no ha entrado en la app no recibe avisos: se le escribe al email
+      if (!w.devices && w.email && mailEnabled()) {
+        await sendMail(
+          w.email,
+          "Completa tus datos en la app de Artigot",
+          `Hola ${w.name.split(" ")[0]}, en la app de Artigot te falta: ${missingText(w.missing)}.\nEntra en ${appUrl()} con tu ${w.phone ? "teléfono" : "email"} y tu código de acceso y complétalo en tu perfil. Si no tienes el código, pídeselo a RRHH.`,
+        ).catch((e) => console.error("email datos", w.id, e));
+      }
       sent.push(key);
     }
   }

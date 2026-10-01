@@ -10,7 +10,7 @@ import { ROLE_LABEL, ROLES } from "@/lib/domain";
 type Worker = {
   id: string;
   name: string;
-  phone: string;
+  phone: string | null;
   email: string | null;
   role: string;
   roles: string[];
@@ -39,7 +39,7 @@ export function WorkerForm({ worker, docs = {} }: { worker?: Worker; docs?: DocS
         </div>
         <div>
           <label className="label">Teléfono (WhatsApp)</label>
-          <input name="phone" type="tel" className="input" defaultValue={worker?.phone} required placeholder="600 123 456" />
+          <input name="phone" type="tel" className="input" defaultValue={worker?.phone ?? ""} placeholder="600 123 456" />
         </div>
         <div>
           <label className="label">Email (opcional)</label>

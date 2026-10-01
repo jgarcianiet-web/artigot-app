@@ -5,6 +5,7 @@ import { ConfirmButton, SubmitButton } from "@/components/client";
 import { RoleBadge } from "@/components/ui";
 import { CANDIDATE_STATUS } from "@/lib/candidates";
 import { db } from "@/lib/db";
+import { mailEnabled } from "@/lib/mail";
 import { ROLE_LABEL, ROLES } from "@/lib/domain";
 
 const when = new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", dateStyle: "long", timeStyle: "short" });
@@ -46,9 +47,16 @@ export default async function CandidateDetail({ params }: { params: Promise<{ id
               {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
             </select>
           </div>
-          <SubmitButton>{existing ? `Enlazar con ${existing.name}` : "Dar de alta como trabajador"}</SubmitButton>
+          {c.email && (
+            <label className="flex items-center gap-2 pb-2 text-sm">
+              <input type="checkbox" name="sendEmail" value="1" defaultChecked={mailEnabled()} disabled={!mailEnabled()} className="size-4" />
+              Enviarle el código por email ({c.email})
+            </label>
+          )}
+          <SubmitButton>{existing ? `Enlazar con ${existing.name}` : "Crear usuario"}</SubmitButton>
           <p className="w-full text-xs text-stone-500">
             {existing ? "Ya existe un trabajador con este teléfono: se enlazará con él." : "Se crea su ficha con un código de acceso a la app."}
+            {!mailEnabled() && " El envío de emails no está configurado (SMTP): copia las instrucciones desde su ficha."}
           </p>
         </form>
       )}

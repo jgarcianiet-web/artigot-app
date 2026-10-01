@@ -2,6 +2,7 @@ import { AdminNav } from "@/components/AdminNav";
 import { PushSetup } from "@/components/PushSetup";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { pendingPhotos } from "@/lib/photo";
 import { pushConfig } from "@/lib/push";
 import { logout } from "../actions";
 
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const name = await requireAdmin();
-  const docsPending = await db.workerDocument.count({ where: { verified: false, worker: { active: true } } });
+  const docsPending = (await db.workerDocument.count({ where: { verified: false, worker: { active: true } } })) + (await pendingPhotos());
   return (
     <div className="min-h-screen lg:flex">
       <AdminNav name={name} logout={logout} badges={{ "/admin/documentos": docsPending }} />

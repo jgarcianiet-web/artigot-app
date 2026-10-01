@@ -65,15 +65,15 @@ export function A3AltaForm({ cfg, lists, next }: { cfg: A3AltaConfig; lists: Lis
   );
 }
 
-export function A3ImportForm() {
+export function A3ImportForm({ title = "Importar la base de datos de A3", text }: { title?: string; text?: string }) {
   const [res, run] = useActionState(importA3DatabaseAction, null);
   return (
     <ActionForm action={run} className="card max-w-3xl space-y-3">
       <div>
-        <h2>Importar la base de datos de A3</h2>
+        <h2>{title}</h2>
         <p className="text-sm text-stone-500">
-          Sube el Excel con la hoja «Base de Datos» (DNI, Nombre, CÓDIGO, NASS, CENTRO). Se busca a cada trabajador por DNI o por nombre y se completan su código de A3,
-          NASS, centro y apellidos si no los tiene. No se cambia nada que ya esté relleno.
+          {text ??
+            "Sube el Excel con la hoja «Base de Datos» (DNI, Nombre, CÓDIGO, NASS, CENTRO). Se busca a cada trabajador por DNI o por nombre y se completan su código de A3, NASS, centro y apellidos si no los tiene. No se cambia nada que ya esté relleno."}
         </p>
       </div>
       <input type="file" name="file" accept=".xlsx,.xlsm,.csv" required className="block text-sm" />

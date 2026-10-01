@@ -105,7 +105,7 @@ export default async function StaffList({
                   </td>
                   <td><RoleBadge role={w.role} /></td>
                   <td><ScoreBadge score={scores.get(w.id)!.score} title={explainScore(scores.get(w.id)!)} /></td>
-                  <td className="whitespace-nowrap"><a href={`tel:${w.phone}`}>{w.phone}</a></td>
+                  <td className="whitespace-nowrap">{w.phone ? <a href={`tel:${w.phone}`}>{w.phone}</a> : <span className="text-stone-400">—</span>}</td>
                   <td className="hidden text-stone-500 md:table-cell">{w.zone}</td>
                   <td className="text-right">{w._count.assignments}</td>
                 </tr>

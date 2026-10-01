@@ -2,6 +2,11 @@ import Link from "next/link";
 import { privacySignature } from "@/lib/privacy";
 import { incompleteWorkers } from "@/lib/completeness";
 import { notFound } from "next/navigation";
+import { accessText, mailEnabled } from "@/lib/mail";
+import { EmailCode } from "./EmailCode";
+import { AdminPhotoUpload } from "./AdminPhoto";
+import { PhotoReview } from "@/components/PhotoReview";
+import { PHOTO_STATUS } from "@/lib/photo";
 import {
   addLoan,
   adminUploadDocument,
@@ -21,13 +26,14 @@ import { computeScores, CRITERIA, reviewAverage, SCORING } from "@/lib/scoring";
 import { DocumentUploadForm } from "@/components/StaffForms";
 import { DOC_LABEL, docState, formatIban } from "@/lib/staff";
 import { db } from "@/lib/db";
-import { appUrl, formatDate, num, today, workedHours } from "@/lib/domain";
+import { formatDate, num, today, workedHours } from "@/lib/domain";
 
 const DEVICE_LABEL: Record<string, string> = { web: "Navegador / web app", fcm: "App Android", apns: "App iPhone" };
 
 const Missing = () => <span className="text-amber-700">Falta</span>;
 
-export default async function WorkerDetail({ params }: { params: Promise<{ id: string }> }) {
+export default async function WorkerDetail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ email?: string }> }) {
+  const emailResult = (await searchParams).email;
   const t = today();
   const worker = await db.worker.findUnique({
     where: { id: (await params).id },
@@ -49,16 +55,7 @@ export default async function WorkerDetail({ params }: { params: Promise<{ id: s
   const privacy = await privacySignature(worker.id);
   const missing = worker.active ? ((await incompleteWorkers([worker.id]))[0]?.missing ?? []) : [];
 
-  const instructions = [
-    `Hola ${worker.name.split(" ")[0]}, ya tienes acceso a la app de Artigot para ver convocatorias, confirmar, fichar y hablar en el chat de cada evento.`,
-    `Entra en ${appUrl()} (o en la app) con:`,
-    `Teléfono: ${worker.phone}`,
-    `Código: ${worker.accessCode}`,
-    process.env.ANDROID_APK_URL && `App Android: ${process.env.ANDROID_APK_URL}`,
-    process.env.IOS_APP_URL && `App iPhone: ${process.env.IOS_APP_URL}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const instructions = accessText(worker);
   const score = (await computeScores([worker.id], today())).get(worker.id)!;
   const criteriaAvg = CRITERIA.map((c) => {
     const vals = worker.reviews.map((r) => r[c.key]).filter((v): v is number => v != null);
@@ -69,7 +66,26 @@ export default async function WorkerDetail({ params }: { params: Promise<{ id: s
 
   return (
     <div className="space-y-6">
+      {emailResult && (
+        <p className={`rounded-lg p-3 text-sm ${emailResult === "ok" ? "bg-emerald-50 text-emerald-900" : "bg-amber-50 text-amber-900"}`}>
+          {emailResult === "ok" ? `✓ Usuario creado y código de acceso enviado a ${worker.email}.` : `Usuario creado. ${emailResult}`}
+        </p>
+      )}
       <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-4">
+          <div className="shrink-0 space-y-1 text-center">
+            {worker.photoFileId ? (
+              <a href={`/api/files/${worker.photoFileId}`} target="_blank">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`/api/files/${worker.photoFileId}`} alt={`Foto de ${worker.name}`} className="size-20 rounded-full object-cover" />
+              </a>
+            ) : (
+              <div className="flex size-20 items-center justify-center rounded-full bg-stone-200 text-3xl" title="Sin foto">👤</div>
+            )}
+            {worker.photoStatus && (
+              <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${PHOTO_STATUS[worker.photoStatus]?.cls ?? ""}`}>{PHOTO_STATUS[worker.photoStatus]?.label}</span>
+            )}
+          </div>
         <div>
           <h1>{worker.name}</h1>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-stone-600">
@@ -78,13 +94,19 @@ export default async function WorkerDetail({ params }: { params: Promise<{ id: s
               <span key={r} className="opacity-70"><RoleBadge role={r} /></span>
             ))}
             <Stars value={worker.rating} />
-            <a href={`tel:${worker.phone}`}>{worker.phone}</a>
+            {worker.phone ? <a href={`tel:${worker.phone}`}>{worker.phone}</a> : <span className="text-amber-700">Sin teléfono (entra con su email)</span>}
             {worker.email && <span>· {worker.email}</span>}
             {worker.zone && <span>· {worker.zone}</span>}
             {!worker.active && <span className="font-medium text-red-600">· Inactivo</span>}
           </div>
           {worker.notes && <p className="mt-2 max-w-xl text-sm whitespace-pre-line text-stone-600">{worker.notes}</p>}
+          <div className="mt-2 space-y-2">
+            {worker.photoStatus === "PENDIENTE" && worker.photoFileId && <PhotoReview workerId={worker.id} />}
+            {worker.photoStatus === "RECHAZADA" && worker.photoNote && <p className="text-xs text-red-700">Foto rechazada: {worker.photoNote}. Se le ha pedido otra.</p>}
+            <AdminPhotoUpload id={worker.id} />
+          </div>
         </div>
+          </div>
         <div className="flex flex-wrap gap-2">
           <Link href={`/admin/personal/${worker.id}/editar`} className="btn">Editar</Link>
           <form action={toggleWorkerActive.bind(null, worker.id)}>
@@ -174,7 +196,7 @@ export default async function WorkerDetail({ params }: { params: Promise<{ id: s
         <div className="flex flex-wrap items-end gap-6">
           <div>
             <div className="text-xs text-stone-500">Teléfono</div>
-            <div className="font-medium">{worker.phone}</div>
+            <div className="font-medium">{worker.phone ?? <span className="text-amber-700">Sin teléfono: entra con {worker.email}</span>}</div>
           </div>
           <div>
             <div className="text-xs text-stone-500">Código de acceso</div>
@@ -190,6 +212,7 @@ export default async function WorkerDetail({ params }: { params: Promise<{ id: s
         )}
         <div className="flex flex-wrap gap-2">
           <CopyButton text={instructions} label="Copiar instrucciones de acceso" />
+          {worker.email && mailEnabled() && <EmailCode id={worker.id} email={worker.email} />}
           <form action={regenerateAccessCode.bind(null, worker.id)}>
             <ConfirmButton className="btn btn-sm" message="Se cerrará su sesión en todos sus dispositivos y tendrá que entrar con el código nuevo. ¿Continuar?">
               Generar código nuevo

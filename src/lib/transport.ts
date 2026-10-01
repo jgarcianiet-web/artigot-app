@@ -22,7 +22,7 @@ type Row = {
   transport: string | null;
   seats: number | null;
   rideWithId: string | null;
-  worker: { name: string; phone: string; zone: string | null };
+  worker: { name: string; phone: string | null; zone: string | null };
 };
 
 export type Car = { driver: Row; seats: number; passengers: Row[]; free: number };

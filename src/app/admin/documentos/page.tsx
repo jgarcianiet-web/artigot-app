@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { rejectDocument, verifyAllDocuments, verifyDocument } from "@/app/actions";
 import { Empty } from "@/components/ui";
+import { PhotoReview } from "@/components/PhotoReview";
+import { pendingPhotos } from "@/lib/photo";
 import { db } from "@/lib/db";
 import { addDays, formatDate, today } from "@/lib/domain";
 import { DOC_LABEL, DOC_WARN_DAYS } from "@/lib/staff";
@@ -11,7 +13,10 @@ const when = (d: Date) => new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/M
 export default async function Documents({ searchParams }: { searchParams: Promise<{ ver?: string }> }) {
   const view = (await searchParams).ver === "caducan" ? "caducan" : "revisar";
   const t = today();
-  const [pending, expiring, pendingCount, expiringCount] = await Promise.all([
+  const [photos, pending, expiring, pendingCount, expiringCount] = await Promise.all([
+    view === "revisar"
+      ? db.worker.findMany({ where: { active: true, photoStatus: "PENDIENTE", photoFileId: { not: null } }, select: { id: true, name: true, photoFileId: true }, orderBy: { name: "asc" } })
+      : [],
     view === "revisar"
       ? db.workerDocument.findMany({
           where: { verified: false, worker: { active: true } },
@@ -29,6 +34,7 @@ export default async function Documents({ searchParams }: { searchParams: Promis
     db.workerDocument.count({ where: { verified: false, worker: { active: true } } }),
     db.workerDocument.count({ where: { expiresAt: { not: null, lte: addDays(t, DOC_WARN_DAYS) }, worker: { active: true } } }),
   ]);
+  const photosCount = await pendingPhotos();
   const byWorker = new Map<string, typeof pending>();
   for (const d of pending) byWorker.set(d.workerId, [...(byWorker.get(d.workerId) ?? []), d]);
 
@@ -36,12 +42,32 @@ export default async function Documents({ searchParams }: { searchParams: Promis
     <div className="space-y-4">
       <div>
         <h1>Documentos</h1>
-        <p className="text-sm text-stone-500">Revisa lo que sube el personal. Si un documento no vale, recházalo indicando el motivo: se le avisa para que lo suba de nuevo.</p>
+        <p className="text-sm text-stone-500">Revisa las fotos de perfil y los documentos que sube el personal. Si algo no vale, recházalo indicando el motivo: se le avisa para que lo suba de nuevo.</p>
       </div>
       <nav className="flex gap-1 text-sm">
-        <Link href="/admin/documentos" className={`rounded-md px-3 py-1.5 ${view === "revisar" ? "bg-stone-900 text-white" : "bg-stone-100 hover:bg-stone-200"}`}>Por revisar ({pendingCount})</Link>
+        <Link href="/admin/documentos" className={`rounded-md px-3 py-1.5 ${view === "revisar" ? "bg-stone-900 text-white" : "bg-stone-100 hover:bg-stone-200"}`}>Por revisar ({pendingCount + photosCount})</Link>
         <Link href="/admin/documentos?ver=caducan" className={`rounded-md px-3 py-1.5 ${view === "caducan" ? "bg-stone-900 text-white" : "bg-stone-100 hover:bg-stone-200"}`}>Caducados o a punto ({expiringCount})</Link>
       </nav>
+
+      {view === "revisar" && photos.length > 0 && (
+        <section className="card space-y-3">
+          <h2>Fotos de perfil por revisar ({photos.length})</h2>
+          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {photos.map((w) => (
+              <li key={w.id} className="flex items-center gap-3 rounded-lg border border-stone-200 p-3">
+                <a href={`/api/files/${w.photoFileId}`} target="_blank" className="shrink-0">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={`/api/files/${w.photoFileId}`} alt={`Foto de ${w.name}`} className="size-20 rounded-full object-cover" loading="lazy" />
+                </a>
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Link href={`/admin/personal/${w.id}`} className="link block truncate text-sm font-medium">{w.name}</Link>
+                  <PhotoReview workerId={w.id} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {view === "revisar" && (byWorker.size === 0 ? <Empty>No hay documentos por revisar. 👍</Empty> : (
         <div className="space-y-4">

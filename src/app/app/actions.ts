@@ -1,10 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { uploadPhoto } from "@/lib/photo";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
-import { destroySession, requireWorker, workerLogin } from "@/lib/auth";
+import { destroySession, phoneKey, requireWorker, workerLogin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { forgetDevice } from "@/lib/devices";
 import { checkClock, clockWindow, hhmm } from "@/lib/clockRules";
@@ -265,6 +266,7 @@ export async function saveMyData(_prev: FormResult, form: FormData): Promise<For
   const birthDate = String(form.get("birthDate") ?? "");
   const address = String(form.get("address") ?? "").trim().slice(0, 200);
   const email = String(form.get("email") ?? "").trim();
+  const newPhone = String(form.get("phone") ?? "").trim();
   const sex = String(form.get("sex") ?? "");
   const nationality = String(form.get("nationality") ?? "").trim().toLocaleUpperCase("es-ES").slice(0, 60);
   if (!(await privacySignature(me.id))) return { ok: false, message: "Antes de completar tus datos tienes que firmar la cláusula de protección de datos." };
@@ -277,6 +279,14 @@ export async function saveMyData(_prev: FormResult, form: FormData): Promise<For
   if (birthDate && !/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) return { ok: false, message: "Fecha de nacimiento no válida." };
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, message: "Email no válido." };
   const before = await db.worker.findUniqueOrThrow({ where: { id: me.id } });
+  // Quien entró con su email puede añadir su móvil (una sola vez; después lo cambia RRHH)
+  let phoneData = {};
+  if (!before.phone && newPhone) {
+    const key = phoneKey(newPhone);
+    if (key.length < 9) return { ok: false, message: "El teléfono no es válido." };
+    if (await db.worker.findUnique({ where: { phoneKey: key } })) return { ok: false, message: "Ese teléfono ya lo tiene otra persona. Habla con RRHH." };
+    phoneData = { phone: newPhone, phoneKey: key };
+  }
   const docError = await checkIdentityDocs(me.id, before, { dni, nss, iban }, form);
   if (docError) return { ok: false, message: docError };
   const after_ = await db.worker.update({
@@ -284,9 +294,10 @@ export async function saveMyData(_prev: FormResult, form: FormData): Promise<For
     data: { dni: dni || null, iban: iban || null, nss: nss || null, birthDate: birthDate || null, address: address || null, email: email || null,
       ...(form.has("sex") && { sex: sex === "Hombre" || sex === "Mujer" ? sex : null }),
       ...(form.has("nationality") && { nationality: nationality || null }),
+      ...phoneData,
     },
   });
-  const d = diff(before, after_, { dni: "DNI", nss: "NSS", iban: "IBAN", birthDate: "Nacimiento", address: "Dirección", email: "Email", sex: "Sexo", nationality: "Nacionalidad" });
+  const d = diff(before, after_, { dni: "DNI", nss: "NSS", iban: "IBAN", birthDate: "Nacimiento", address: "Dirección", email: "Email", sex: "Sexo", nationality: "Nacionalidad", phone: "Teléfono" });
   if (d.changed) await audit(me.name, "Trabajador", "Trabajador", "Datos (desde la app)", `${me.name}: ${d.text}`, { entityId: me.id, data: d.data });
   let stored: string[];
   try {
@@ -333,6 +344,22 @@ export async function deleteMyDocument(id: string) {
   await db.workerDocument.delete({ where: { id } });
   if (d.fileId) await deleteStoredFile(d.fileId);
   revalidatePath("/app/perfil");
+}
+
+// ---------- Foto de perfil ----------
+
+export async function uploadMyPhoto(_prev: FormResult, form: FormData): Promise<FormResult> {
+  const me = await requireWorker();
+  const file = form.get("photo");
+  if (!(file instanceof File) || !file.size) return { ok: false, message: "Elige o haz una foto." };
+  try {
+    await uploadPhoto(me.id, file, { name: me.name, admin: false });
+  } catch (e) {
+    return { ok: false, message: (e as Error).message };
+  }
+  revalidatePath("/app", "layout");
+  revalidatePath("/admin/documentos");
+  return { ok: true, message: "Foto enviada. RRHH la revisará y te avisaremos si hay que cambiarla." };
 }
 
 // ---------- Firma de documentos ----------

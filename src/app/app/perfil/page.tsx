@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { DocumentUploadForm, MyDataForm } from "@/components/StaffForms";
+import { DocumentUploadForm, MyDataForm, PhotoForm } from "@/components/StaffForms";
 import { requireWorker } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate, ROLE_LABEL, today, type Role } from "@/lib/domain";
 import { DOC_LABEL, docState } from "@/lib/staff";
 import { privacySignature } from "@/lib/privacy";
 import { identityDocStatus } from "@/lib/identityDocs";
-import { deleteMyDocument, logout, saveMyData, startPrivacySignature, uploadMyDocument } from "../actions";
+import { deleteMyDocument, logout, saveMyData, startPrivacySignature, uploadMyDocument, uploadMyPhoto } from "../actions";
 
 const STATE = {
   "sin-caducidad": "",
@@ -30,9 +30,11 @@ export default async function MyProfile() {
   return (
     <div className="space-y-5">
       <header>
-        <p className="text-sm text-stone-500">{ROLE_LABEL[worker.role as Role]} · {worker.phone}</p>
+        <p className="text-sm text-stone-500">{ROLE_LABEL[worker.role as Role]} · {worker.phone ?? worker.email}</p>
         <h1>{worker.name}</h1>
       </header>
+
+      <PhotoForm action={uploadMyPhoto} photoId={worker.photoFileId} status={worker.photoStatus} note={worker.photoNote} />
 
       {privacy ? (
         <MyDataForm action={saveMyData} data={worker} docs={await identityDocStatus(me.id)} />

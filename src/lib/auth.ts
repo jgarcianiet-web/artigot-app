@@ -140,9 +140,17 @@ export const phoneKey = (phone: string) => phone.replace(/\D/g, "").slice(-9);
 export const newAccessCode = () => String(randomInt(0, 1_000_000)).padStart(6, "0");
 
 
-export async function workerLogin(phone: string, code: string): Promise<string | null> {
-  const worker = await db.worker.findUnique({ where: { phoneKey: phoneKey(phone) } });
-  const generic = "Teléfono o código incorrectos";
+/** Trabajador por su teléfono o, si escribe un email, por su email (puede haber varios con el mismo). */
+async function findForLogin(login: string, code: string) {
+  const v = login.trim();
+  if (!v.includes("@")) return db.worker.findUnique({ where: { phoneKey: phoneKey(v) } });
+  const matches = await db.worker.findMany({ where: { email: { equals: v, mode: "insensitive" }, active: true } });
+  return matches.find((w) => safeEqual(sign(code.trim()), sign(w.accessCode))) ?? matches[0] ?? null;
+}
+
+export async function workerLogin(login: string, code: string): Promise<string | null> {
+  const worker = await findForLogin(login, code);
+  const generic = login.includes("@") ? "Email o código incorrectos" : "Teléfono o código incorrectos";
   if (!worker || !worker.active) return generic;
   if (worker.lockedUntil && worker.lockedUntil > new Date()) {
     return `Demasiados intentos. Vuelve a probar en unos minutos o pide a RRHH un código nuevo.`;
