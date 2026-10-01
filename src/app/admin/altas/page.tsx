@@ -6,7 +6,7 @@ import { formatDate, today } from "@/lib/domain";
 import { missingAltas } from "@/lib/employment";
 import { dayMovements, employmentWarnings, syncAutoEmployments } from "@/lib/autoAltas";
 import { addDays } from "@/lib/domain";
-import { deleteEmployment, toggleReported } from "./actions";
+import { deleteEmployment, markDayReported, toggleReported } from "./actions";
 import { EmploymentForm, EndForm } from "./Forms";
 
 const VIEWS = {
@@ -132,6 +132,23 @@ export default async function Employments({ searchParams }: { searchParams: Prom
             <div className="card p-3"><div className="text-2xl font-semibold">{moves.siguen}</div><div className="text-xs text-stone-500">Siguen mañana</div></div>
             <div className="card p-3"><div className="text-2xl font-semibold">{moves.bajas}</div><div className="text-xs text-stone-500">Bajas (último día)</div></div>
           </div>
+          {(() => {
+            const bajas = moves.bajasDelDia;
+            const noCode = bajas.filter((r) => !r.a3Code).map((r) => r.name);
+            return (bajas.length > 0 || moves.altasDelDia > 0) && (
+              <div className="card flex flex-wrap items-center gap-2 text-sm">
+                {bajas.length > 0 && (
+                  <>
+                    <a href={`/admin/altas/a3-bajas?dia=${day}`} className="btn btn-primary btn-sm">⬇ Excel de bajas para A3 ({bajas.length})</a>
+                    <form action={markDayReported.bind(null, day, "end")}><button className="btn btn-sm">✓ Bajas del día comunicadas</button></form>
+                  </>
+                )}
+                {moves.altasDelDia > 0 && <form action={markDayReported.bind(null, day, "start")}><button className="btn btn-sm">✓ Altas del día comunicadas</button></form>}
+                <span className="text-xs text-stone-500">Importa el Excel en A3 («MB - Baja») para generar el SILTRA; después marca las bajas como comunicadas.</span>
+                {noCode.length > 0 && <span className="w-full text-xs text-red-700">Sin código de A3 (complétalo antes de importar): {noCode.join(", ")}</span>}
+              </div>
+            );
+          })()}
           {moves.rows.length === 0 ? (
             <Empty>Nadie confirmado este día.</Empty>
           ) : (

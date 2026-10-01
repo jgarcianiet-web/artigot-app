@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { isRole, ROLE_PLURAL, ROLES, today } from "@/lib/domain";
 import { computeScores, explainScore } from "@/lib/scoring";
 import { incompleteWorkers } from "@/lib/completeness";
+import { BulkBar, SelectAll } from "./BulkBar";
 
 export default async function StaffList({
   searchParams,
@@ -80,10 +81,13 @@ export default async function StaffList({
       {workers.length === 0 ? (
         <Empty>No hay trabajadores con esos filtros.</Empty>
       ) : (
+        <>
+        <BulkBar />
         <div className="card overflow-x-auto p-0">
           <table className="table">
             <thead>
               <tr>
+                <th className="w-8"><SelectAll /></th>
                 <th>Nombre</th>
                 <th>Puesto</th>
                 <th title="Puntuación del algoritmo (0-100)">Puntuación</th>
@@ -95,6 +99,7 @@ export default async function StaffList({
             <tbody>
               {workers.map((w) => (
                 <tr key={w.id} className={w.active ? "" : "opacity-50"}>
+                  <td><input type="checkbox" name="ids" value={w.id} form="bulk-workers" aria-label={`Seleccionar a ${w.name}`} className="size-4" /></td>
                   <td>
                     <Link href={`/admin/personal/${w.id}`} className="link">{w.name}</Link>
                     {w.unavailabilities.length > 0 && <span className="ml-2 text-xs text-red-600">No disponible hoy</span>}
@@ -113,6 +118,7 @@ export default async function StaffList({
             </tbody>
           </table>
         </div>
+        </>
       )}
     </div>
   );

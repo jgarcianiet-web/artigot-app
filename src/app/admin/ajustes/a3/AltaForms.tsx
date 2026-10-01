@@ -6,7 +6,7 @@ import type { A3AltaConfig } from "@/lib/a3alta";
 import { ROLE_LABEL, ROLES } from "@/lib/domain";
 import { importA3DatabaseAction, saveA3AltaAction } from "./actions";
 
-type Lists = { countries: string[]; education: string[]; contracts: string[]; occupations: string[]; tariffGroups: string[]; regimes: string[]; contributions: string[] };
+type Lists = { bajaReasons: string[]; bajaInactivity: string[]; countries: string[]; education: string[]; contracts: string[]; occupations: string[]; tariffGroups: string[]; regimes: string[]; contributions: string[] };
 
 function Pick({ name, label, value, options, wide }: { name: string; label: string; value: string; options: string[]; wide?: boolean }) {
   return (
@@ -53,6 +53,11 @@ export function A3AltaForm({ cfg, lists, next }: { cfg: A3AltaConfig; lists: Lis
             <Pick key={r} name={`occupation_${r}`} label={ROLE_LABEL[r]} value={cfg.occupation[r]} options={lists.occupations} />
           ))}
         </div>
+      </fieldset>
+      <fieldset className="grid gap-3 sm:grid-cols-2">
+        <legend className="label">Bajas (Excel «MB - Baja»)</legend>
+        <Pick name="bajaReason" label="Motivo de baja" value={cfg.bajaReason} options={lists.bajaReasons} />
+        <Pick name="bajaInactivity" label="Inactividad (opcional)" value={cfg.bajaInactivity} options={["", ...lists.bajaInactivity.filter((x) => x.trim())]} />
       </fieldset>
       <label className="block max-w-xs text-sm">
         Último código de trabajador usado en A3

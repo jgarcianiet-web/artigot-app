@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentAdmin } from "@/lib/auth";
 import { storeStaffImage } from "@/lib/files";
+import { db } from "@/lib/db";
 import { isMember, postStaffMessage, roomMessages } from "@/lib/staffChat";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +14,9 @@ async function authorize(roomId: string) {
 export async function GET(_req: Request, { params }: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await params;
   if (!(await authorize(roomId))) return new NextResponse("No autorizado", { status: 403 });
-  return NextResponse.json(await roomMessages(roomId));
+  // Al (re)conectar: mensajes y hasta dónde ha leído cada uno (para los ✓✓ perdidos mientras tanto)
+  const reads = await db.staffRoomMember.findMany({ where: { roomId }, select: { adminId: true, lastReadAt: true } });
+  return NextResponse.json({ messages: await roomMessages(roomId), reads: Object.fromEntries(reads.map((r) => [r.adminId, r.lastReadAt.toISOString()])) });
 }
 
 /** Texto (JSON) o foto (multipart). */

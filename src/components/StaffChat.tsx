@@ -45,8 +45,16 @@ export function StaffChat({ roomId, meId, initial, members, group }: { roomId: s
     es.onopen = () => {
       setOnline(true);
       fetch(`${base}/messages`)
-        .then((r) => (r.ok ? r.json() : []))
-        .then((list: StaffChatMessage[]) => setMessages((prev) => merge(prev, list)))
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data: { messages: StaffChatMessage[]; reads: Record<string, string> } | null) => {
+          if (!data) return;
+          setMessages((prev) => merge(prev, data.messages));
+          setReads((r) => {
+            const next = { ...r };
+            for (const [id, at] of Object.entries(data.reads)) if (at > (next[id] ?? "")) next[id] = at;
+            return next;
+          });
+        })
         .catch(() => {});
     };
     es.onerror = () => setOnline(false);

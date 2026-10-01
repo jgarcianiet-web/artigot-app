@@ -151,6 +151,7 @@ export type DayRow = {
   name: string;
   dni: string | null;
   nss: string | null;
+  a3Code: string | null;
   role: string;
   events: string;
   /** Empieza hoy (no trabajó ayer) */
@@ -166,7 +167,7 @@ export async function dayMovements(date: string) {
   const work = await workDays(addDays(date, -1), addDays(date, 1));
   const ids = [...work.entries()].filter(([, d]) => d.has(date)).map(([id]) => id);
   const [workers, employments] = await Promise.all([
-    db.worker.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, dni: true, nss: true } }),
+    db.worker.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, dni: true, nss: true, a3Code: true } }),
     db.employment.findMany({ where: { workerId: { in: ids }, startDate: { lte: date }, OR: [{ endDate: null }, { endDate: { gte: date } }] } }),
   ]);
   const rows: DayRow[] = workers.map((w) => {
@@ -175,7 +176,7 @@ export async function dayMovements(date: string) {
     const sigue = days.has(addDays(date, 1));
     const e = employments.find((x) => x.workerId === w.id) ?? null;
     return {
-      workerId: w.id, name: w.name, dni: w.dni, nss: w.nss, role: today_.role, events: today_.event,
+      workerId: w.id, name: w.name, dni: w.dni, nss: w.nss, a3Code: w.a3Code, role: today_.role, events: today_.event,
       alta: !days.has(addDays(date, -1)),
       sigue,
       bajaDate: sigue ? null : today_.overnight ? addDays(date, 1) : date,
@@ -183,8 +184,13 @@ export async function dayMovements(date: string) {
     };
   });
   rows.sort((a, b) => Number(b.alta) - Number(a.alta) || a.name.localeCompare(b.name, "es"));
+  // Bajas con fecha de hoy (incluye las de un servicio de ayer que pasó de medianoche)
+  const bajasDelDia = await db.employment.findMany({ where: { endDate: date }, select: { id: true, worker: { select: { name: true, a3Code: true } } } });
+  const altasDelDia = await db.employment.count({ where: { startDate: date } });
   return {
     rows,
+    bajasDelDia: bajasDelDia.map((e) => ({ name: e.worker.name, a3Code: e.worker.a3Code })),
+    altasDelDia,
     altas: rows.filter((r) => r.alta).length,
     siguen: rows.filter((r) => r.sigue).length,
     bajas: rows.filter((r) => !r.sigue).length,

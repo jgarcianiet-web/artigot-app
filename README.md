@@ -12,6 +12,7 @@ Aplicación para que RRHH gestione de forma rápida el personal de **bodas y eve
 **RRHH**
 - **Panel**: eventos de los próximos 30 días con su cobertura y aviso de los que en 7 días aún no tienen el personal completo.
 - **Personal**: fichas con puesto, teléfono, valoración, zona, días no disponibles e historial. En cada ficha aparece su **código de acceso** a la app y en qué dispositivos tiene los avisos activos.
+- **Dar de baja o borrar a varios a la vez** (Personal): casillas y «seleccionar a todos». Quien ya tiene pagos registrados no se borra (se da de baja) para no perder el histórico de nóminas.
 - **Eventos y convocatoria**: número de camareros, maîtres y mozos necesarios y hora de descarga de los mozos. **Autocompletar** convoca en un clic a los mejores candidatos libres ese día. Cada convocado **recibe un aviso en el móvil** y acepta o rechaza desde la app.
 - **Chat del evento**: lo ven RRHH y el personal **confirmado** en ese evento. Quien rechaza o es cancelado deja de verlo. Los mensajes llegan al momento y quien no tiene la app abierta recibe una notificación push. El menú **Chats** reúne todos los chats, con los no leídos primero.
 - **Calendario**: vista mensual con los eventos coloreados por cobertura (verde completo, ámbar faltan respuestas, rojo faltan personas), el personal libre de cada día y alta de un evento pulsando el día.
@@ -49,6 +50,7 @@ Aplicación para que RRHH gestione de forma rápida el personal de **bodas y eve
   - Para cada día se ve quién es **ALTA**, quién **SIGUE** (trabaja también al día siguiente) y quién es **BAJA**, con su botón «✓ RED».
   - Si alguien se cae o se añade, se recalcula. Lo que no se había comunicado se corrige solo; lo ya comunicado a RED nunca se cambia sin avisar: aparece en «Revisar en RED».
   - Las altas puestas a mano (p. ej. un indefinido) mandan. Solo se generan periodos que terminan desde hace 3 días: lo anterior ya está tramitado.
+- **Bajas del día para A3**: en «Día a día», «Excel de bajas para A3» rellena la plantilla «MB - Baja» de A3 (empresa, código, «APELLIDOS, NOMBRE», fecha y motivo, por defecto «Baja por pase a inactividad fijos discontinuos», configurable en Ajustes → Nóminas A3) para importarla en A3 y generar el SILTRA. Después, un botón marca todas las bajas del día como comunicadas.
 
 **Alta del personal, datos y foto**
 - **Importar el personal** (Personal → Importar) desde Excel o CSV, también listados exportados de otros programas (Nombre, Email, Teléfono, Rol…).

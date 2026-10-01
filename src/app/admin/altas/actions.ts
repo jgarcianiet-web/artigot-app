@@ -71,6 +71,18 @@ export async function toggleReported(id: string, which: "start" | "end") {
   refresh(e.workerId);
 }
 
+/** Marca como comunicadas a la Seguridad Social todas las bajas (o altas) de un día. */
+export async function markDayReported(day: string, which: "start" | "end") {
+  const by = await requireAdmin();
+  if (!isDate(day)) return;
+  const r = await db.employment.updateMany({
+    where: which === "end" ? { endDate: day, endReported: false } : { startDate: day, startReported: false },
+    data: which === "end" ? { endReported: true } : { startReported: true },
+  });
+  if (r.count) await auditAdmin(by, "Alta S. S.", "Comunicación RED", `${r.count} ${which === "end" ? "bajas" : "altas"} del ${day} marcadas como comunicadas`);
+  refresh();
+}
+
 export async function deleteEmployment(id: string) {
   const by = await requireAdmin();
   const e = await db.employment.delete({ where: { id }, include: { worker: { select: { name: true } } } });

@@ -133,7 +133,12 @@ export async function postStaffMessage(me: { id: string; name: string }, roomId:
   return msg;
 }
 
-export async function markStaffRead(adminId: string, roomId: string, at = new Date()) {
+export async function markStaffRead(adminId: string, roomId: string, when?: Date) {
+  // La hora de los mensajes la pone la base de datos: se usa la del último para que el reloj del
+  // servidor (que puede ir unos milisegundos por detrás) no deje un mensaje ya visto como no leído
+  const latest = when ? null : await db.staffMessage.findFirst({ where: { roomId }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
+  const now = new Date();
+  const at = when ?? (latest && latest.createdAt > now ? latest.createdAt : now);
   const r = await db.staffRoomMember.updateMany({ where: { roomId, adminId, lastReadAt: { lt: at } }, data: { lastReadAt: at } });
   if (r.count) bus.emit(staffChannel(roomId), { type: "read", adminId, at: at.toISOString() } satisfies StaffEvent);
 }
