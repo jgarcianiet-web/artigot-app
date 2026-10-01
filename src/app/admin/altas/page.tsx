@@ -134,18 +134,32 @@ export default async function Employments({ searchParams }: { searchParams: Prom
           </div>
           {(() => {
             const bajas = moves.bajasDelDia;
+            const altas = moves.altasDelDia;
+            const altasA3 = altas.filter((r) => r.a3Code);
+            const altasNew = altas.filter((r) => !r.a3Code).map((r) => r.name);
             const noCode = bajas.filter((r) => !r.a3Code).map((r) => r.name);
-            return (bajas.length > 0 || moves.altasDelDia > 0) && (
-              <div className="card flex flex-wrap items-center gap-2 text-sm">
+            return (bajas.length > 0 || altas.length > 0) && (
+              <div className="card space-y-2 text-sm">
+                {altas.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {altasA3.length > 0 && <a href={`/admin/altas/a3-altas?dia=${day}`} className="btn btn-primary btn-sm">⬇ Excel de altas para A3 ({altasA3.length})</a>}
+                    <form action={markDayReported.bind(null, day, "start")}><button className="btn btn-sm">✓ Altas del día comunicadas</button></form>
+                    <span className="text-xs text-stone-500">Importa el Excel en A3 («MA - Alta sucesiva») para generar el SILTRA; después marca las altas como comunicadas.</span>
+                    {altasNew.length > 0 && (
+                      <span className="w-full text-xs text-amber-800">
+                        Aún no están en A3 (sin código), van en el <Link href="/admin/altas/a3" className="link">alta masiva</Link>: {altasNew.join(", ")}
+                      </span>
+                    )}
+                  </div>
+                )}
                 {bajas.length > 0 && (
-                  <>
+                  <div className="flex flex-wrap items-center gap-2">
                     <a href={`/admin/altas/a3-bajas?dia=${day}`} className="btn btn-primary btn-sm">⬇ Excel de bajas para A3 ({bajas.length})</a>
                     <form action={markDayReported.bind(null, day, "end")}><button className="btn btn-sm">✓ Bajas del día comunicadas</button></form>
-                  </>
+                    <span className="text-xs text-stone-500">Importa el Excel en A3 («MB - Baja») para generar el SILTRA; después marca las bajas como comunicadas.</span>
+                    {noCode.length > 0 && <span className="w-full text-xs text-red-700">Sin código de A3 (complétalo antes de importar): {noCode.join(", ")}</span>}
+                  </div>
                 )}
-                {moves.altasDelDia > 0 && <form action={markDayReported.bind(null, day, "start")}><button className="btn btn-sm">✓ Altas del día comunicadas</button></form>}
-                <span className="text-xs text-stone-500">Importa el Excel en A3 («MB - Baja») para generar el SILTRA; después marca las bajas como comunicadas.</span>
-                {noCode.length > 0 && <span className="w-full text-xs text-red-700">Sin código de A3 (complétalo antes de importar): {noCode.join(", ")}</span>}
               </div>
             );
           })()}
