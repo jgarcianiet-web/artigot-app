@@ -5,10 +5,12 @@ import { addDays, EVENT_TYPE_LABEL, formatDate, ROLE_PLURAL, today } from "@/lib
 import { coverage } from "@/lib/staffing";
 import { DOC_LABEL, DOC_WARN_DAYS } from "@/lib/staff";
 import { missingAltas, unreported } from "@/lib/employment";
+import { syncAutoEmployments } from "@/lib/autoAltas";
 import { incompleteWorkers } from "@/lib/completeness";
 
 export default async function Dashboard() {
   const t = today();
+  await syncAutoEmployments();
   const [events, activeWorkers, pendingCount, openIncidents, docsToReview, docsExpiring] = await Promise.all([
     db.event.findMany({
       where: { date: { gte: t, lte: addDays(t, 30) }, status: "ABIERTO" },

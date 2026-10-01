@@ -545,6 +545,10 @@ model Employment {
   // Comunicado a la Seguridad Social (Sistema RED)
   startReported   Boolean   @default(false)
   endReported     Boolean   @default(false)
+  // Generada sola a partir del personal confirmado (días seguidos = un alta; se baja el último día)
+  auto            Boolean   @default(false)
+  // Aviso para RRHH (p. ej. cambió después de comunicarla a la Seguridad Social)
+  warning         String?
   createdBy       String
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
