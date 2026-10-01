@@ -316,6 +316,7 @@ model AdminUser {
   lockedUntil    DateTime?
   lastLoginAt    DateTime?
   createdAt      DateTime  @default(now())
+  staffRooms     StaffRoomMember[]
 }
 
 // Finca o lugar habitual: dirección, punto para el fichaje e indicaciones para el personal
@@ -598,4 +599,45 @@ model AuditLog {
 
   @@index([at])
   @@index([entity, entityId])
+}
+
+// ---------- Chat interno de RRHH (solo usuarios de RRHH) ----------
+
+// GENERAL: todo RRHH (un único grupo, todos los usuarios activos) · DIRECTO: dos personas · GRUPO: con nombre y miembros elegidos
+model StaffRoom {
+  id            String            @id @default(cuid())
+  kind          String
+  name          String?
+  createdBy     String
+  createdAt     DateTime          @default(now())
+  lastMessageAt DateTime          @default(now())
+  members       StaffRoomMember[]
+  messages      StaffMessage[]
+
+  @@index([lastMessageAt])
+}
+
+model StaffRoomMember {
+  id         String    @id @default(cuid())
+  roomId     String
+  adminId    String
+  lastReadAt DateTime  @default(now())
+  room       StaffRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  admin      AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, adminId])
+  @@index([adminId])
+}
+
+model StaffMessage {
+  id         String    @id @default(cuid())
+  roomId     String
+  adminId    String?
+  authorName String
+  body       String
+  fileId     String?
+  createdAt  DateTime  @default(now())
+  room       StaffRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, createdAt])
 }

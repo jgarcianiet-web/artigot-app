@@ -38,12 +38,14 @@ export async function saveA3AltaAction(_prev: string | null, form: FormData) {
     education: get("education"),
     nationality: get("nationality"),
     lastCode,
+    bajaReason: get("bajaReason"),
+    bajaInactivity: String(form.get("bajaInactivity") ?? "").trim(),
   };
   await saveA3Alta(value);
   const d = diff({ ...before, occupation: JSON.stringify(before.occupation) }, { ...value, occupation: JSON.stringify(value.occupation) }, {
     center: "Centro", agreement: "Convenio", category: "Categoría", position: "Puesto", regime: "Régimen", tariffGroup: "Grupo de tarifa",
     paymentType: "Tipo de cobro", contractType: "Contrato", contributionType: "Cotización", grossType: "Bruto anual", occupation: "Ocupación",
-    education: "Nivel formativo", nationality: "Nacionalidad", lastCode: "Último código",
+    education: "Nivel formativo", nationality: "Nacionalidad", lastCode: "Último código", bajaReason: "Motivo de baja", bajaInactivity: "Inactividad",
   });
   if (d.changed) await auditAdmin(by, "Ajustes", "Alta A3", d.text, { data: d.data });
   revalidatePath("/admin/ajustes/a3");

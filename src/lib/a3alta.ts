@@ -26,6 +26,9 @@ export type A3AltaConfig = {
   nationality: string;
   /** Último código de trabajador usado en A3 (el siguiente alta lleva el siguiente) */
   lastCode: number;
+  /** Bajas (formato «MB - Baja»): motivo e inactividad */
+  bajaReason: string;
+  bajaInactivity: string;
 };
 
 // Los valores de la exportación de A3 que nos pasó RRHH
@@ -49,6 +52,8 @@ export const A3_ALTA_DEFAULTS: A3AltaConfig = {
   education: "Enseñanzas de bachillerato",
   nationality: "ESPAÑA",
   lastCode: 0,
+  bajaReason: "Baja por pase a inactividad fijos discontinuos",
+  bajaInactivity: "",
 };
 
 export async function getA3Alta(): Promise<A3AltaConfig> {
@@ -285,4 +290,56 @@ export async function pendingAltas(from: string) {
     },
   });
   return workers.map(({ assignments, ...w }) => ({ worker: w, nextService: assignments[0]?.event.date ?? null }));
+}
+
+// ---------- Bajas (formato «MB - Baja» de A3) ----------
+
+export const BAJAS_TEMPLATE = path.join(process.cwd(), "templates", "a3-bajas.xlsx");
+
+let bajaLists: Promise<{ reasons: string[]; inactivity: string[] }> | null = null;
+/** Motivos de baja e inactividad que admite A3 (hoja oculta de la plantilla). */
+export function bajaTemplateLists() {
+  bajaLists ??= (async () => {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.readFile(BAJAS_TEMPLATE);
+    const ws = wb.getWorksheet("Oculta")!;
+    const col = (n: number) => {
+      const out: string[] = [];
+      for (let r = 3; r <= ws.rowCount; r++) {
+        const v = ws.getRow(r).getCell(n).value;
+        if (v != null && String(v).trim()) out.push(String(v));
+      }
+      return out;
+    };
+    return { reasons: col(1), inactivity: col(2) };
+  })();
+  return bajaLists;
+}
+
+export type BajaRow = { code: string | null; name: string; firstName?: string | null; surname1?: string | null; surname2?: string | null; date: string };
+
+/** «APELLIDOS, NOMBRE» como en A3. */
+export const a3Name = (w: Parameters<typeof splitName>[0]) => {
+  const n = splitName(w);
+  return `${[n.s1, n.s2].filter(Boolean).join(" ")}, ${n.first}`;
+};
+
+/** Rellena la plantilla de bajas de A3 con una fila por baja. */
+export async function buildBajasWorkbook(rows: BajaRow[], companyCode: string, cfg: A3AltaConfig) {
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.readFile(BAJAS_TEMPLATE);
+  const ws = wb.worksheets[0];
+  rows.forEach((r, i) => {
+    const row = ws.getRow(3 + i);
+    row.getCell("A").value = /^\d+$/.test(companyCode) ? Number(companyCode) : companyCode;
+    row.getCell("B").value = r.code ?? "";
+    row.getCell("C").value = a3Name(r);
+    const d = row.getCell("D");
+    d.value = new Date(`${r.date}T00:00:00Z`);
+    d.numFmt = "dd/mm/yyyy";
+    row.getCell("E").value = cfg.bajaReason;
+    if (cfg.bajaInactivity) row.getCell("G").value = cfg.bajaInactivity;
+    row.commit();
+  });
+  return Buffer.from(await wb.xlsx.writeBuffer());
 }

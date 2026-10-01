@@ -267,6 +267,34 @@ export async function deleteWorker(id: string) {
   redirect("/admin/personal");
 }
 
+/** Dar de baja o borrar a varios trabajadores a la vez (lista de Personal). */
+export async function bulkWorkers(_prev: string | null, form: FormData): Promise<string | null> {
+  const by = await requireAdmin();
+  const ids = [...new Set(form.getAll("ids").map(String))].slice(0, 2000);
+  const action = String(form.get("accion") ?? "");
+  if (!ids.length) return "No has seleccionado a nadie.";
+  if (action === "desactivar") {
+    const workers = await db.worker.findMany({ where: { id: { in: ids }, active: true }, select: { id: true, name: true } });
+    await db.worker.updateMany({ where: { id: { in: workers.map((w) => w.id) } }, data: { active: false } });
+    await db.device.deleteMany({ where: { workerId: { in: workers.map((w) => w.id) } } });
+    if (workers.length) await auditAdmin(by, "Trabajador", "Desactivados", `Dados de baja ${workers.length}: ${workers.map((w) => w.name).join(", ")}`.slice(0, 1000));
+    revalidatePath("/admin", "layout");
+    return `${workers.length} dados de baja.`;
+  }
+  if (action !== "borrar") return null;
+  // Quien ya tiene pagos cerrados o pagados no se borra: se perdería el histórico de nóminas
+  const withPay = await db.worker.findMany({
+    where: { id: { in: ids }, payLines: { some: { period: { status: { not: "ABIERTA" } } } } },
+    select: { id: true, name: true },
+  });
+  const keep = new Set(withPay.map((w) => w.id));
+  const victims = await db.worker.findMany({ where: { id: { in: ids.filter((id) => !keep.has(id)) } }, select: { id: true, name: true, dni: true } });
+  await db.worker.deleteMany({ where: { id: { in: victims.map((w) => w.id) } } });
+  if (victims.length) await auditAdmin(by, "Trabajador", "Borrados", `Borradas ${victims.length} fichas: ${victims.map((w) => `${w.name}${w.dni ? ` (${w.dni})` : ""}`).join(", ")}`.slice(0, 1000));
+  revalidatePath("/admin", "layout");
+  return `${victims.length} borrados.${withPay.length ? ` No se han borrado (tienen pagos registrados; dalos de baja): ${withPay.map((w) => w.name).join(", ")}.` : ""}`;
+}
+
 export async function addUnavailability(workerId: string, form: FormData) {
   await requireAdmin();
   const from = date.safeParse(form.get("from"));

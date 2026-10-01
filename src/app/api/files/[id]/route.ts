@@ -19,7 +19,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   return new Response(new Uint8Array(body), {
     headers: {
       "Content-Type": file.mime,
-      "Cache-Control": ["DOC", "SIGNATURE", "CANDIDATE", "PHOTO"].includes(file.scope) ? "private, no-store" : "private, max-age=31536000, immutable",
+      "Cache-Control": ["DOC", "SIGNATURE", "CANDIDATE", "PHOTO", "STAFF"].includes(file.scope) ? "private, no-store" : "private, max-age=31536000, immutable",
       "X-Content-Type-Options": "nosniff",
       // El visor de PDF del navegador no funciona con una CSP restrictiva; a las imágenes sí se les aplica
       ...(file.mime === "application/pdf" ? { "Content-Disposition": "inline" } : { "Content-Security-Policy": "default-src 'none'" }),
