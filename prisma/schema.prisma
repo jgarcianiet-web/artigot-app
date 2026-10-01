@@ -94,6 +94,11 @@ model Event {
   lat           Float?
   lng           Float?
   client        String?
+  // Comercial que lleva el evento
+  salesRep      String?
+  // Presupuesto de personal (si es null se calcula con el personal necesario, las tarifas y el horario)
+  budget        Float?
+  budgetNote    String?
   notes         String?
   // Qué debe llevar el personal a este evento (una cosa por línea), además del uniforme de su puesto
   checklist     String?

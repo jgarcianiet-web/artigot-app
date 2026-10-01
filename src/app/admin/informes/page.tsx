@@ -29,7 +29,10 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
 
   return (
     <div className="space-y-5">
-      <h1>Informes</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1>Informes</h1>
+        <Link href={`/admin/informes/presupuestos?${qs}`} className="btn">Presupuesto y gasto por evento / comercial ›</Link>
+      </div>
       <form className="flex flex-wrap items-end gap-2">
         <div>
           <label className="label" htmlFor="desde">Desde</label>

@@ -94,25 +94,6 @@ export function DocumentUploadForm({ action, title = "Subir documento" }: { acti
   );
 }
 
-export function SwapProposalForm({ action, partners }: { action: Action; partners: { id: string; name: string; zone: string | null }[] }) {
-  const [r, run] = useActionState(action, null);
-  return (
-    <ActionForm action={run} className="card space-y-3">
-      <h2>Proponer un cambio</h2>
-      <p className="text-sm text-stone-500">Elige a un compañero libre ese día. Si acepta, RRHH lo aprueba y quedarás liberado sin penalización.</p>
-      <select name="toWorkerId" className="input text-base" required defaultValue="">
-        <option value="" disabled>Elige un compañero…</option>
-        {partners.map((p) => (
-          <option key={p.id} value={p.id}>{p.name}{p.zone ? ` · ${p.zone}` : ""}</option>
-        ))}
-      </select>
-      <textarea name="message" className="input text-base" rows={2} maxLength={300} placeholder="Mensaje para tu compañero (opcional)" />
-      <Message r={r} />
-      <SubmitButton>Enviar propuesta</SubmitButton>
-    </ActionForm>
-  );
-}
-
 /** Lista de «qué llevar» con casillas que se recuerdan en este móvil. */
 export function Checklist({ id, uniform, extra, roleLabel }: { id: string; uniform: string[]; extra: string[]; roleLabel: string }) {
   const storageKey = `checklist:${id}`;

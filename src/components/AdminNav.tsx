@@ -8,18 +8,21 @@ import { Logo } from "./Logo";
 type Item = { href: string; label: string };
 const GROUPS: { title?: string; items: Item[] }[] = [
   { items: [{ href: "/admin", label: "Panel" }, { href: "/admin/calendario", label: "Calendario" }] },
-  { title: "Eventos", items: [{ href: "/admin/eventos", label: "Eventos" }, { href: "/admin/chats", label: "Chats" }, { href: "/admin/incidencias", label: "Incidencias" }] },
-  { title: "Personal", items: [{ href: "/admin/personal", label: "Personal" }, { href: "/admin/documentos", label: "Documentos" }, { href: "/admin/sondeos", label: "Sondeos" }, { href: "/admin/candidatos", label: "Candidatos" }, { href: "/admin/altas", label: "Altas y bajas" }] },
-  { title: "Nóminas", items: [{ href: "/admin/liquidacion", label: "Liquidación" }, { href: "/admin/pagos", label: "Pagos" }, { href: "/admin/jornada", label: "Registro de jornada" }, { href: "/admin/informes", label: "Informes" }] },
-  { items: [{ href: "/admin/registro", label: "Registro de cambios" }, { href: "/admin/ajustes", label: "Ajustes" }] },
+  { title: "Eventos", items: [{ href: "/admin/eventos", label: "Eventos" }, { href: "/admin/chats", label: "Chats" }, { href: "/admin/incidencias", label: "Incidencias" }, { href: "/admin/sondeos", label: "Sondeos" }] },
+  { title: "Personal", items: [{ href: "/admin/personal", label: "Personal" }, { href: "/admin/documentos", label: "Documentos" }, { href: "/admin/candidatos", label: "Candidatos" }, { href: "/admin/altas", label: "Altas y bajas" }] },
+  { title: "Nóminas", items: [{ href: "/admin/liquidacion", label: "Horas y pagos" }, { href: "/admin/informes", label: "Informes" }] },
+  { items: [{ href: "/admin/ajustes", label: "Ajustes" }] },
 ];
 
 // Rutas que viven bajo Ajustes aunque no empiecen por /admin/ajustes
-const SETTINGS = ["/admin/fincas", "/admin/clientes", "/admin/plantillas", "/admin/tarifas", "/admin/usuarios"];
+const SETTINGS = ["/admin/fincas", "/admin/clientes", "/admin/plantillas", "/admin/tarifas", "/admin/usuarios", "/admin/registro"];
+// «Horas y pagos» agrupa liquidación, pagos y registro de jornada
+const PAY = ["/admin/pagos", "/admin/jornada"];
 
 function isActive(path: string, href: string) {
   if (href === "/admin") return path === "/admin";
   if (href === "/admin/ajustes" && SETTINGS.some((s) => path.startsWith(s))) return true;
+  if (href === "/admin/liquidacion" && PAY.some((s) => path.startsWith(s))) return true;
   return path === href || path.startsWith(`${href}/`);
 }
 

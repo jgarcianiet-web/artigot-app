@@ -16,7 +16,6 @@ import { checkIdentityDocs, storeIdentityDocs } from "@/lib/identityDocs";
 import { eventTransport, isTransport, MAX_SEATS } from "@/lib/transport";
 import { answerPoll } from "@/lib/polls";
 import { DOC_LABEL, validDniNie, validIban } from "@/lib/staff";
-import { answerSwap, OPEN_SWAP, proposeSwap } from "@/lib/swaps";
 import { formatDate, isLeadRole, isRole, nowTime, type Role, today } from "@/lib/domain";
 import { autoReplace } from "@/lib/staffing";
 import { notify } from "@/lib/push";
@@ -334,27 +333,6 @@ export async function deleteMyDocument(id: string) {
   await db.workerDocument.delete({ where: { id } });
   if (d.fileId) await deleteStoredFile(d.fileId);
   revalidatePath("/app/perfil");
-}
-
-// ---------- Cambios de turno ----------
-
-export async function proposeMySwap(assignmentId: string, _prev: FormResult, form: FormData): Promise<FormResult> {
-  const me = await requireWorker();
-  const r = await proposeSwap(me.id, assignmentId, String(form.get("toWorkerId") ?? ""), String(form.get("message") ?? "").trim() || null);
-  revalidatePath("/app", "layout");
-  return r;
-}
-
-export async function answerMySwap(swapId: string, accept: boolean) {
-  const me = await requireWorker();
-  await answerSwap(me.id, swapId, accept);
-  revalidatePath("/app", "layout");
-}
-
-export async function cancelMySwap(swapId: string) {
-  const me = await requireWorker();
-  await db.swapRequest.updateMany({ where: { id: swapId, fromWorkerId: me.id, status: { in: OPEN_SWAP } }, data: { status: "CANCELADO" } });
-  revalidatePath("/app", "layout");
 }
 
 // ---------- Firma de documentos ----------

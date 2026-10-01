@@ -13,9 +13,9 @@ import {
 } from "@/app/actions";
 import { ConfirmButton, SelectAll, SubmitButton } from "@/components/client";
 import { SaveTemplate } from "./SaveTemplate";
-import { Contracts } from "./Contracts";
+import { TeamAltas } from "./TeamAltas";
+import { budgetRows, pctText } from "@/lib/budget";
 import { AdminTransport } from "./Transport";
-import { SwapApprovals } from "@/components/SwapApprovals";
 import { CoverageBar, ScoreBadge, StatusBadge } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
 import { unreadCounts } from "@/lib/chat";
@@ -66,10 +66,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
     db.message.count({ where: { eventId: event.id } }),
   ]);
   const unreadChat = unread.get(event.id) ?? 0;
-  const swaps = await db.swapRequest.findMany({
-    where: { eventId: event.id, status: { in: ["PROPUESTO", "ACEPTADO"] } },
-    include: { event: { select: { id: true, name: true, date: true } }, fromWorker: { select: { name: true } }, toWorker: { select: { name: true } }, assignment: { select: { role: true } } },
-  });
+  const [budget] = await budgetRows({ eventId: event.id });
   const rateByRole = new Map(rates.map((r) => [r.role, r]));
   const cov = coverage(event, event.assignments);
   const missing = gaps(event, event.assignments);
@@ -103,6 +100,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
           <p className="text-sm text-stone-600">
             {event.venue}
             {event.client && ` · Cliente: ${event.client}`}
+            {event.salesRep && ` · Comercial: ${event.salesRep}`}
           </p>
           {event.lat == null && (
             <p className="mt-1 text-sm font-medium text-amber-700">
@@ -133,12 +131,27 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
-      {swaps.length > 0 && (
-        <section className="space-y-2">
-          <h2>🔁 Cambios de turno</h2>
-          <SwapApprovals swaps={swaps} showEvent={false} />
-        </section>
-      )}
+      {(() => {
+        const b = budget;
+        const color = b.deviation == null ? "" : b.deviation > 0 ? "text-red-700" : "text-emerald-700";
+        return (
+          <section className="card grid gap-3 sm:grid-cols-5 sm:items-center">
+            <div><div className="text-xs text-stone-500">Presupuesto de personal{b.estimated && " (calculado)"}</div><div className="text-lg font-semibold tabular-nums">{euro(b.budget)}</div></div>
+            <div>
+              <div className="text-xs text-stone-500">Gasto según fichajes</div>
+              <div className="text-lg font-semibold tabular-nums">{b.cost || b.done ? euro(b.cost) : "—"}</div>
+              {b.pending > 0 && <div className="text-xs text-amber-700">{b.pending} sin horas</div>}
+            </div>
+            <div><div className="text-xs text-stone-500">Desviación</div><div className={`text-lg font-semibold tabular-nums ${color}`}>{b.deviation == null ? "—" : `${b.deviation > 0 ? "+" : ""}${euro(b.deviation)}`}</div></div>
+            <div><div className="text-xs text-stone-500">%</div><div className={`text-lg font-semibold tabular-nums ${color}`}>{pctText(b.pct)}</div></div>
+            <div className="flex flex-wrap gap-2 sm:justify-end">
+              <a href={`/admin/informes/presupuestos/pdf?evento=${event.id}`} className="btn btn-sm" target="_blank">PDF</a>
+              <Link href={`/admin/eventos/${event.id}/editar`} className="btn btn-sm">Cambiar</Link>
+            </div>
+            {b.note && <p className="text-sm text-stone-600 sm:col-span-5">{b.note}</p>}
+          </section>
+        );
+      })()}
 
       {/* Cobertura */}
       <section className="card space-y-3">
@@ -351,7 +364,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
 
       {confirmed.length > 0 && <AdminTransport eventId={event.id} meetingPoint={event.meetingPoint} meetingTime={event.meetingTime} />}
 
-      {confirmed.length > 0 && <Contracts eventId={event.id} eventDate={event.date} confirmed={confirmed} />}
+      {confirmed.length > 0 && <TeamAltas eventId={event.id} eventDate={event.date} confirmed={confirmed} />}
 
       {/* Fichaje */}
       {confirmed.length > 0 && (

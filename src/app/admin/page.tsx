@@ -3,14 +3,13 @@ import { CoverageBar, Empty } from "@/components/ui";
 import { db } from "@/lib/db";
 import { addDays, EVENT_TYPE_LABEL, formatDate, ROLE_PLURAL, today } from "@/lib/domain";
 import { coverage } from "@/lib/staffing";
-import { SwapApprovals } from "@/components/SwapApprovals";
 import { DOC_LABEL, DOC_WARN_DAYS } from "@/lib/staff";
 import { missingAltas, unreported } from "@/lib/employment";
 import { incompleteWorkers } from "@/lib/completeness";
 
 export default async function Dashboard() {
   const t = today();
-  const [events, activeWorkers, pendingCount, openIncidents, swaps, docsToReview, docsExpiring] = await Promise.all([
+  const [events, activeWorkers, pendingCount, openIncidents, docsToReview, docsExpiring] = await Promise.all([
     db.event.findMany({
       where: { date: { gte: t, lte: addDays(t, 30) }, status: "ABIERTO" },
       include: { assignments: { select: { role: true, status: true } } },
@@ -19,11 +18,6 @@ export default async function Dashboard() {
     db.worker.count({ where: { active: true } }),
     db.assignment.count({ where: { status: "CONVOCADO", event: { date: { gte: t } } } }),
     db.incident.count({ where: { resolved: false } }),
-    db.swapRequest.findMany({
-      where: { status: { in: ["PROPUESTO", "ACEPTADO"] }, event: { date: { gte: t } } },
-      include: { event: { select: { id: true, name: true, date: true } }, fromWorker: { select: { name: true } }, toWorker: { select: { name: true } }, assignment: { select: { role: true } } },
-      orderBy: [{ status: "asc" }, { createdAt: "asc" }],
-    }),
     db.workerDocument.findMany({ where: { verified: false, worker: { active: true } }, include: { worker: { select: { id: true, name: true } } } }),
     db.workerDocument.findMany({
       where: { expiresAt: { not: null, lte: addDays(t, DOC_WARN_DAYS) }, worker: { active: true } },
@@ -81,13 +75,6 @@ export default async function Dashboard() {
           );
         })}
       </div>
-
-      {swaps.length > 0 && (
-        <section className="space-y-2">
-          <h2>🔁 Cambios de turno</h2>
-          <SwapApprovals swaps={swaps} />
-        </section>
-      )}
 
       {(incomplete.length > 0 || docsPending > 0) && (
         <section className="space-y-2">
