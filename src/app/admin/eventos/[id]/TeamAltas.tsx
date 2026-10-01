@@ -1,10 +1,11 @@
 import { db } from "@/lib/db";
 import { ROLE_LABEL, type Role } from "@/lib/domain";
 import { covers } from "@/lib/employment";
-import { registerEventAltasForm } from "@/app/admin/altas/actions";
+import { syncAutoEmployments } from "@/lib/autoAltas";
 
 /** Alta en la Seguridad Social de cada confirmado. */
 export async function TeamAltas({ eventId, eventDate, confirmed }: { eventId: string; eventDate: string; confirmed: { id: string; role: string; workerId: string; worker: { name: string; dni: string | null; nss: string | null } }[] }) {
+  await syncAutoEmployments();
   const employments = await db.employment.findMany({ where: { workerId: { in: confirmed.map((a) => a.workerId) } }, select: { workerId: true, startDate: true, endDate: true, startReported: true } });
   const alta = (workerId: string) => employments.find((e) => e.workerId === workerId && covers(e, eventDate));
   const withoutAlta = confirmed.filter((a) => !alta(a.workerId)).length;
@@ -15,11 +16,7 @@ export async function TeamAltas({ eventId, eventDate, confirmed }: { eventId: st
         <h2>Altas en la Seguridad Social</h2>
         <div className="flex flex-wrap gap-2">
           <a href={`/admin/eventos/${eventId}/alta`} className="btn">Datos para el alta en la S. S. (Excel)</a>
-          {withoutAlta > 0 && (
-            <form action={registerEventAltasForm.bind(null, eventId)}>
-              <button className="btn">Registrar altas ({withoutAlta})</button>
-            </form>
-          )}
+          <a href={`/admin/altas?dia=${eventDate}`} className="btn">Altas y bajas del día</a>
         </div>
       </div>
       <p className="text-sm text-stone-600">

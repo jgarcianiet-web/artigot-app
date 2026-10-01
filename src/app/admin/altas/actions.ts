@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { newAccessCode, phoneKey, requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { addDays, formatDate, ROLE_LABEL, type Role } from "@/lib/domain";
-import { analyzeEmployments, CONTRACT_TYPES, covers, END_REASONS, type EmploymentImportRow } from "@/lib/employment";
+import { formatDate } from "@/lib/domain";
+import { analyzeEmployments, CONTRACT_TYPES, END_REASONS, type EmploymentImportRow } from "@/lib/employment";
 import { auditAdmin } from "@/lib/audit";
 
 const isDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
@@ -79,36 +79,6 @@ export async function deleteEmployment(id: string) {
 }
 
 /** Alta de un día (o dos si el evento pasa de medianoche) para el personal confirmado que no la tiene. */
-export async function registerEventAltas(eventId: string) {
-  const by = await requireAdmin();
-  const event = await db.event.findUniqueOrThrow({
-    where: { id: eventId },
-    include: { assignments: { where: { status: "CONFIRMADO" }, include: { worker: { include: { employments: true } } } } },
-  });
-  const crossesMidnight = !!event.endTime && event.endTime < event.startTime;
-  const end = crossesMidnight ? addDays(event.date, 1) : event.date;
-  let n = 0;
-  for (const a of event.assignments) {
-    if (a.worker.employments.some((e) => covers(e, event.date))) continue;
-    if (await overlap(a.workerId, event.date, end)) continue;
-    await db.employment.create({
-      data: {
-        workerId: a.workerId, startDate: event.date, endDate: end, contractType: CONTRACT_TYPES[0],
-        category: ROLE_LABEL[a.role as Role] ?? a.role, endReason: "Fin de contrato", notes: `Evento: ${event.name}`, createdBy: by,
-      },
-    });
-    n++;
-  }
-  if (n) await auditAdmin(by, "Alta S. S.", "Altas del evento", `${n} altas registradas para ${event.name} (${event.date})`, { entityId: eventId });
-  refresh();
-  revalidatePath(`/admin/eventos/${eventId}`);
-  return n;
-}
-
-export async function registerEventAltasForm(eventId: string) {
-  await registerEventAltas(eventId);
-}
-
 // ---------- Importación ----------
 
 export type ImportState = { rows?: EmploymentImportRow[]; columns?: { header: string; field: string | null }[]; error?: string; done?: string } | null;

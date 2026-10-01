@@ -4,10 +4,13 @@ import { Empty } from "@/components/ui";
 import { db } from "@/lib/db";
 import { formatDate, today } from "@/lib/domain";
 import { missingAltas } from "@/lib/employment";
-import { deleteEmployment, registerEventAltasForm, toggleReported } from "./actions";
+import { dayMovements, employmentWarnings, syncAutoEmployments } from "@/lib/autoAltas";
+import { addDays } from "@/lib/domain";
+import { deleteEmployment, toggleReported } from "./actions";
 import { EmploymentForm, EndForm } from "./Forms";
 
 const VIEWS = {
+  dia: "Día a día",
   activos: "De alta ahora",
   mes: "Movimientos del mes",
   "sin-comunicar": "Sin comunicar a la S. S.",
@@ -25,13 +28,18 @@ function Reported({ id, which, value }: { id: string; which: "start" | "end"; va
   );
 }
 
-export default async function Employments({ searchParams }: { searchParams: Promise<{ ver?: string; mes?: string }> }) {
+export default async function Employments({ searchParams }: { searchParams: Promise<{ ver?: string; mes?: string; dia?: string }> }) {
   const sp = await searchParams;
   const t = today();
-  const view: View = sp.ver && sp.ver in VIEWS ? (sp.ver as View) : "activos";
+  const view: View = sp.ver && sp.ver in VIEWS ? (sp.ver as View) : "dia";
+  const day = sp.dia && /^\d{4}-\d{2}-\d{2}$/.test(sp.dia) ? sp.dia : t;
+  // Las altas y bajas se generan solas con el personal confirmado
+  await syncAutoEmployments();
+  const [moves, warnings] = await Promise.all([view === "dia" ? dayMovements(day) : null, employmentWarnings()]);
   const month = sp.mes && /^\d{4}-\d{2}$/.test(sp.mes) ? sp.mes : t.slice(0, 7);
   const where =
-    view === "activos" ? { startDate: { lte: t }, OR: [{ endDate: null }, { endDate: { gte: t } }] }
+    view === "dia" ? { id: "-" }
+    : view === "activos" ? { startDate: { lte: t }, OR: [{ endDate: null }, { endDate: { gte: t } }] }
     : view === "mes" ? { OR: [{ startDate: { gte: `${month}-01`, lte: `${month}-31` } }, { endDate: { gte: `${month}-01`, lte: `${month}-31` } }] }
     : view === "sin-comunicar" ? { OR: [{ startReported: false }, { endDate: { not: null }, endReported: false }] }
     : {};
@@ -63,18 +71,27 @@ export default async function Employments({ searchParams }: { searchParams: Prom
         </div>
       </div>
 
+      {warnings.length > 0 && (
+        <section className="card space-y-2 border-amber-300 bg-amber-50">
+          <h2>⚠️ Revisar en RED</h2>
+          <ul className="space-y-1 text-sm">
+            {warnings.map((e) => (
+              <li key={e.id}><Link href={`/admin/personal/${e.worker.id}`} className="link font-medium">{e.worker.name}</Link>: {e.warning}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {byEvent.size > 0 && (
         <section className="card space-y-2 border-red-300 bg-red-50">
-          <h2>⚠️ Convocados sin alta (próximos 14 días)</h2>
+          <h2>⚠️ Confirmados sin alta (próximos 14 días)</h2>
+          <p className="text-sm text-red-900">Tienen un alta puesta a mano que no cubre ese día; corrígela o bórrala y se generará sola.</p>
           <ul className="space-y-2 text-sm">
             {[...byEvent.values()].map(({ event, names }) => (
               <li key={event.id} className="flex flex-wrap items-center justify-between gap-2">
                 <span>
                   <Link href={`/admin/eventos/${event.id}`} className="link font-medium">{event.name}</Link> · {formatDate(event.date)}: {names.join(", ")}
                 </span>
-                <form action={registerEventAltasForm.bind(null, event.id)}>
-                  <button className="btn btn-sm">Registrar sus altas ({names.length})</button>
-                </form>
               </li>
             ))}
           </ul>
@@ -101,7 +118,57 @@ export default async function Employments({ searchParams }: { searchParams: Prom
         )}
       </nav>
 
-      {rows.length === 0 ? (
+      {moves && (
+        <section className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href={`/admin/altas?dia=${addDays(day, -1)}`} className="btn" aria-label="Día anterior">‹</Link>
+            <span className="min-w-56 text-center font-semibold first-letter:uppercase">{formatDate(day, { long: true })}</span>
+            <Link href={`/admin/altas?dia=${addDays(day, 1)}`} className="btn" aria-label="Día siguiente">›</Link>
+            <form className="flex items-center gap-1"><input type="date" name="dia" defaultValue={day} className="input py-1" /><button className="btn btn-sm">Ir</button></form>
+            {day !== t && <Link href="/admin/altas" className="text-sm text-stone-500 hover:underline">Hoy</Link>}
+          </div>
+          <div className="grid grid-cols-3 gap-3 sm:max-w-xl">
+            <div className="card p-3"><div className="text-2xl font-semibold">{moves.altas}</div><div className="text-xs text-stone-500">Altas (empiezan)</div></div>
+            <div className="card p-3"><div className="text-2xl font-semibold">{moves.siguen}</div><div className="text-xs text-stone-500">Siguen mañana</div></div>
+            <div className="card p-3"><div className="text-2xl font-semibold">{moves.bajas}</div><div className="text-xs text-stone-500">Bajas (último día)</div></div>
+          </div>
+          {moves.rows.length === 0 ? (
+            <Empty>Nadie confirmado este día.</Empty>
+          ) : (
+            <div className="card overflow-x-auto p-0">
+              <table className="table text-sm">
+                <thead><tr><th>Persona</th><th>DNI / NSS</th><th>Servicio</th><th>Alta S. S.</th><th>Baja S. S.</th></tr></thead>
+                <tbody>
+                  {moves.rows.map((r) => {
+                    const e = r.employment;
+                    return (
+                      <tr key={r.workerId} className="align-top">
+                        <td><Link href={`/admin/personal/${r.workerId}`} className="link">{r.name}</Link>{e?.warning && <div className="text-xs text-amber-700">⚠ {e.warning}</div>}</td>
+                        <td className="whitespace-nowrap text-xs">{r.dni ?? <span className="text-red-600">sin DNI</span>}<br />{r.nss ?? <span className="text-red-600">sin NSS</span>}</td>
+                        <td className="text-xs">{r.events}</td>
+                        <td className="whitespace-nowrap">
+                          {r.alta ? <span className="font-medium text-emerald-700">ALTA hoy</span> : <span className="text-stone-500">viene de antes{e && ` (alta ${formatDate(e.startDate)})`}</span>}
+                          {r.alta && e && <Reported id={e.id} which="start" value={e.startReported} />}
+                        </td>
+                        <td className="whitespace-nowrap">
+                          {r.sigue ? <span className="font-medium text-sky-700">SIGUE</span> : <span className="font-medium text-red-700">BAJA {r.bajaDate === day ? "hoy" : formatDate(r.bajaDate!)}</span>}
+                          {!r.sigue && e && <Reported id={e.id} which="end" value={e.endReported} />}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="text-xs text-stone-500">
+            Se calcula solo con el personal confirmado: los días seguidos son un único periodo (alta el primer día, baja el último; si el servicio pasa de medianoche, la baja es al día siguiente).
+            Si alguien se cae o se añade, se actualiza. Lo ya comunicado a RED nunca se cambia sin avisar.
+          </p>
+        </section>
+      )}
+
+      {view === "dia" ? null : rows.length === 0 ? (
         <Empty>No hay registros en esta vista.</Empty>
       ) : (
         <div className="card overflow-x-auto p-0">

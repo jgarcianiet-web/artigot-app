@@ -10,6 +10,7 @@ import { generateTimeRecords, monthLabel, shiftMonth } from "./timeRecord";
 import { audit } from "./audit";
 import { incompleteWorkers, missingText } from "./completeness";
 import { backupNow } from "./backup";
+import { syncAutoEmployments } from "./autoAltas";
 import { migrateFilesToStorage, sweepOrphanFiles } from "./files";
 import { storageEnabled } from "./storage";
 
@@ -215,6 +216,9 @@ export async function runReminders(now = new Date()) {
       sent.push(`jornada:${prev}`);
     }
   }
+
+  // 10. Altas y bajas automáticas según el personal confirmado
+  await syncAutoEmployments().catch((e) => console.error("altas automáticas", e));
 
   // 8. Datos incompletos: recordatorio al trabajador cada 3 días (cada día si tiene servicio en la próxima semana)
   if (now >= madridTime(today, REMINDERS.DATA_REMINDER_HOUR)) {
