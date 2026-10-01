@@ -11,7 +11,7 @@ import {
   setAssignmentStatus,
   setEventStatus,
 } from "@/app/actions";
-import { ConfirmButton, SelectAll, SubmitButton } from "@/components/client";
+import { ConfirmButton, ListFilter, SelectAll, SubmitButton } from "@/components/client";
 import { SaveTemplate } from "./SaveTemplate";
 import { TeamAltas } from "./TeamAltas";
 import { budgetRows, pctText } from "@/lib/budget";
@@ -29,6 +29,7 @@ import {
   isLeadRole,
   num,
   payable,
+  rateFor,
   ROLE_LABEL,
   ROLE_PLURAL,
   ROLES,
@@ -67,7 +68,6 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
   ]);
   const unreadChat = unread.get(event.id) ?? 0;
   const [budget] = await budgetRows({ eventId: event.id });
-  const rateByRole = new Map(rates.map((r) => [r.role, r]));
   const cov = coverage(event, event.assignments);
   const missing = gaps(event, event.assignments);
   const totalMissing = ROLES.reduce((s, r) => s + missing[r], 0);
@@ -246,9 +246,11 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
               {free.length === 0 ? (
                 <p className="text-sm text-stone-500">No quedan {ROLE_PLURAL[role].toLowerCase()} libres ese día.</p>
               ) : (
-                <div className="max-h-80 overflow-y-auto">
+                <>
+                <ListFilter name="workerId" />
+                <div className="max-h-96 overflow-y-auto">
                   <table className="table">
-                    <thead>
+                    <thead className="sticky top-0 z-10 bg-white">
                       <tr>
                         <th className="w-8"><SelectAll name="workerId" /></th>
                         <th>Nombre</th>
@@ -258,7 +260,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
                     </thead>
                     <tbody>
                       {free.map((c, i) => (
-                        <tr key={c.id}>
+                        <tr key={c.id} data-search={`${c.name} ${c.zone ?? ""} ${c.phone ?? ""} ${(c.phone ?? "").replace(/\D/g, "")}`}>
                           <td>
                             <input
                               type="checkbox"
@@ -283,6 +285,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
                     </tbody>
                   </table>
                 </div>
+                </>
               )}
             </form>
           </section>
@@ -394,7 +397,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
               <tbody>
                 {confirmed.map((a) => {
                   const h = workedHours(a);
-                  const { billedHours, amount } = payable(h, rateByRole.get(a.role));
+                  const { billedHours, amount } = payable(h, rateFor(rates, a.role, event.type, a.worker.customRates));
                   totalHours += billedHours ?? 0;
                   totalCost += amount;
                   return (

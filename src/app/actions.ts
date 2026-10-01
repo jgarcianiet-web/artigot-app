@@ -1,5 +1,6 @@
 "use server";
 
+import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { redirect } from "next/navigation";
@@ -28,7 +29,7 @@ import { addDocument } from "@/lib/documents";
 import { createIncident, type IncidentResult } from "@/lib/incidents";
 import { DOC_LABEL, lines, validDniNie, validIban } from "@/lib/staff";
 import { checkIdentityDocs, storeIdentityDocs } from "@/lib/identityDocs";
-import { EVENT_TYPES, formatDate, isRole, LEAD_ROLES, ROLE_LABEL, ROLES, type Role } from "@/lib/domain";
+import { EVENT_TYPE_LABEL, EVENT_TYPES, formatDate, isRole, LEAD_ROLES, ROLE_LABEL, ROLES, type Role } from "@/lib/domain";
 import { notify } from "@/lib/push";
 import { autoReplace, candidatesFor, fillGaps, notifyInvited } from "@/lib/staffing";
 import { deleteStoredFile } from "@/lib/files";
@@ -165,7 +166,7 @@ const workerSchema = z.object({
 
 const WORKER_LABELS = {
   name: "Nombre", phone: "Teléfono", email: "Email", role: "Puesto", roles: "Puestos", rating: "Valoración", zone: "Zona",
-  dni: "DNI", nss: "NSS", iban: "IBAN", birthDate: "Nacimiento", address: "Dirección", a3Code: "Código A3", carSeats: "Plazas en coche",
+  dni: "DNI", nss: "NSS", iban: "IBAN", birthDate: "Nacimiento", address: "Dirección", a3Code: "Código A3", carSeats: "Plazas en coche", customRates: "Tarifa propia",
 };
 
 export async function saveWorker(_prev: string | null, form: FormData) {
@@ -186,7 +187,8 @@ export async function saveWorker(_prev: string | null, form: FormData) {
   if (clash && clash.id !== id) return `Ese teléfono ya es de ${clash.name}`;
   // Puestos que puede desempeñar: los marcados más el principal
   const roles = [...new Set([parsed.data.role, ...form.getAll("roles").map(String).filter(isRole)])];
-  const data = { ...parsed.data, roles, phoneKey: key };
+  const customRates = rateMap(form, "own_");
+  const data = { ...parsed.data, roles, phoneKey: key, customRates: customRates ?? Prisma.DbNull };
   const before = id ? await db.worker.findUnique({ where: { id } }) : null;
   const docError = await checkIdentityDocs(id, before, parsed.data, form);
   if (docError) return docError;
@@ -787,7 +789,7 @@ export async function saveA3(_prev: string | null, form: FormData) {
   const by = await requireAdmin();
   const get = (k: string) => String(form.get(k) ?? "").trim();
   const roleConcepts = Object.fromEntries(ROLES.map((r) => [r, get(`concept_${r}`)]).filter(([, v]) => v));
-  const value = { companyCode: get("companyCode"), hoursConcept: get("hoursConcept"), hoursConceptName: get("hoursConceptName") || "Horas eventos", roleConcepts };
+  const value = { companyCode: get("companyCode"), hoursConcept: get("hoursConcept"), hoursConceptName: get("hoursConceptName") || "Horas eventos", roleConcepts, bonusConcept: get("bonusConcept") };
   if (!value.companyCode || !value.hoursConcept) return "Indica el código de empresa y el código de concepto de A3.";
   await db.setting.upsert({ where: { key: "a3" }, create: { key: "a3", value }, update: { value } });
   await auditAdmin(by, "Ajustes", "A3", `Configuración de A3: empresa ${value.companyCode}, concepto ${value.hoursConcept}`);
@@ -913,6 +915,16 @@ export async function saveTimesheet(eventId: string, form: FormData) {
 
 // ---------- Tarifas ----------
 
+/** €/hora por tipo de evento leídos de un formulario (campos «prefijo + BODA»…); null si no hay ninguno. */
+function rateMap(form: FormData, prefix: string) {
+  const out: Record<string, number> = {};
+  for (const t of EVENT_TYPES) {
+    const v = Number(String(form.get(`${prefix}${t}`) ?? "").trim().replace(",", "."));
+    if (String(form.get(`${prefix}${t}`) ?? "").trim() && Number.isFinite(v) && v > 0) out[t] = Math.round(v * 1000) / 1000;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 export async function saveRates(form: FormData) {
   const by = await requireAdmin();
   const old = new Map((await db.rate.findMany()).map((r) => [r.role, r]));
@@ -920,14 +932,16 @@ export async function saveRates(form: FormData) {
   for (const role of ROLES) {
     const hourlyRate = Number(String(form.get(`rate_${role}`) ?? "0").replace(",", "."));
     const minHours = Number(String(form.get(`min_${role}`) ?? "0").replace(",", "."));
-    if (!Number.isFinite(hourlyRate) || !Number.isFinite(minHours)) continue;
+    const eventBonus = Number(String(form.get(`bonus_${role}`) ?? "0").replace(",", ".") || 0);
+    if (![hourlyRate, minHours, eventBonus].every((n) => Number.isFinite(n) && n >= 0)) continue;
+    const typeRates = rateMap(form, `type_${role}_`);
     const o = old.get(role);
-    if (!o || o.hourlyRate !== hourlyRate || o.minHours !== minHours) rateChanges.push(`${ROLE_LABEL[role]}: ${o?.hourlyRate ?? "—"} €/h, mín. ${o?.minHours ?? "—"} h → ${hourlyRate} €/h, mín. ${minHours} h`);
-    await db.rate.upsert({
-      where: { role },
-      create: { role, hourlyRate, minHours },
-      update: { hourlyRate, minHours },
-    });
+    const fmt = (t: unknown) => Object.entries((t ?? {}) as Record<string, number>).map(([k, v]) => `${EVENT_TYPE_LABEL[k] ?? k} ${v} €/h`).join(", ") || "—";
+    if (!o || o.hourlyRate !== hourlyRate || o.minHours !== minHours || o.eventBonus !== eventBonus || fmt(o.typeRates) !== fmt(typeRates)) {
+      rateChanges.push(`${ROLE_LABEL[role]}: ${o?.hourlyRate ?? "—"} €/h (${fmt(o?.typeRates)}), mín. ${o?.minHours ?? "—"} h, plus ${o?.eventBonus ?? 0} € → ${hourlyRate} €/h (${fmt(typeRates)}), mín. ${minHours} h, plus ${eventBonus} €`);
+    }
+    const data = { hourlyRate, minHours, eventBonus, typeRates: typeRates ?? Prisma.DbNull };
+    await db.rate.upsert({ where: { role }, create: { role, ...data }, update: data });
   }
   if (rateChanges.length) await auditAdmin(by, "Ajustes", "Tarifas", rateChanges.join("; "));
   revalidatePath("/admin", "layout");

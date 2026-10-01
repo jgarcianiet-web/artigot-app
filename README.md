@@ -20,6 +20,13 @@ Aplicación para que RRHH gestione de forma rápida el personal de **bodas y eve
 - **Fichaje con geolocalización** (ver reglas abajo), liquidación y tarifas: horas por persona (admite turnos que pasan de medianoche) e importes con el mínimo de horas por puesto. Exportación a Excel.
 
 **Gestión de RRHH**
+- **Tarifas** (Ajustes → Tarifas):
+  - €/hora general de cada puesto y, si es distinto, el de **boda**, **evento** u **otro**;
+  - mínimo de horas y **plus por evento** (los camareros responsables cobran +10 € por servicio).
+- **Tarifa propia por persona** (en su ficha, por tipo de evento): manda sobre la del puesto.
+  - Todo se tiene en cuenta en la nómina, la remesa, el coste y el presupuesto de cada evento y la exportación a A3.
+  - En A3 va una línea por precio y el plus en una línea aparte (concepto configurable).
+- **Buscar al convocar**: en cada evento, buscador en la lista de disponibles (por nombre, zona o teléfono, sin importar tildes) para marcar a quien quieras y convocarlo.
 - **Mensajes (chat interno de RRHH)**, tipo WhatsApp y solo para los usuarios de RRHH (el personal nunca lo ve).
   - Un grupo «Todo RRHH» con todos, chats privados entre dos personas y grupos con nombre.
   - Fotos, mensajes en tiempo real, ✓ enviado / ✓✓ leído (azul cuando lo han leído todos) y contador de no leídos en el menú.

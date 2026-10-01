@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { addDays, payable, ROLE_LABEL, ROLES, type Role, workedHours } from "./domain";
+import { addDays, payable, rateFor, ROLE_LABEL, ROLES, type Role, workedHours } from "./domain";
 
 // ---------- Documentación ----------
 
@@ -75,15 +75,14 @@ export async function workerMonth(workerId: string, month: string) {
   const [assignments, rates] = await Promise.all([
     db.assignment.findMany({
       where: { workerId, status: "CONFIRMADO", event: { date: { gte: `${month}-01`, lte: `${month}-31` } } },
-      include: { event: { select: { name: true, date: true, venue: true } } },
+      include: { event: { select: { name: true, date: true, venue: true, type: true } }, worker: { select: { customRates: true } } },
       orderBy: { event: { date: "asc" } },
     }),
     db.rate.findMany(),
   ]);
-  const rateByRole = new Map(rates.map((r) => [r.role, r]));
   const rows = assignments.map((a) => {
     const hours = workedHours(a);
-    const rate = rateByRole.get(a.role);
+    const rate = rateFor(rates, a.role, a.event.type, a.worker.customRates);
     const { billedHours, amount } = payable(hours, rate);
     return { id: a.id, event: a.event, role: a.role, checkIn: a.checkIn, checkOut: a.checkOut, hours, billedHours, amount, hourlyRate: rate?.hourlyRate ?? 0 };
   });

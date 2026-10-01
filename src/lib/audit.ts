@@ -48,9 +48,11 @@ const mask = (k: string, v: unknown) => {
 export function diff(before: Record<string, unknown> | null, after: Record<string, unknown>, labels: Record<string, string>) {
   const changes: string[] = [];
   const data: Record<string, [unknown, unknown]> = {};
+  // Objetos (p. ej. tarifas por tipo de evento) se comparan y se muestran como texto
+  const plain = (v: unknown) => (v && typeof v === "object" && !Array.isArray(v) && !(v instanceof Date) ? JSON.stringify(v) : v);
   for (const [k, label] of Object.entries(labels)) {
-    const a = before?.[k] ?? null;
-    const b = after[k] ?? null;
+    const a = plain(before?.[k] ?? null);
+    const b = plain(after[k] ?? null);
     const same = Array.isArray(a) || Array.isArray(b) ? JSON.stringify(a) === JSON.stringify(b) : String(a ?? "") === String(b ?? "");
     if (same) continue;
     changes.push(`${label}: ${mask(k, Array.isArray(a) ? a.join(", ") : a)} → ${mask(k, Array.isArray(b) ? b.join(", ") : b)}`);

@@ -14,6 +14,8 @@ export type A3Config = {
   hoursConceptName: string;
   /** Concepto específico por puesto (opcional); si falta, se usa hoursConcept. */
   roleConcepts: Partial<Record<Role, string>>;
+  /** Concepto del plus por evento (p. ej. plus de camarero responsable); si falta, el de horas */
+  bonusConcept: string;
 };
 
 export async function getA3(): Promise<A3Config> {
@@ -24,6 +26,7 @@ export async function getA3(): Promise<A3Config> {
     hoursConcept: v.hoursConcept ?? "",
     hoursConceptName: v.hoursConceptName ?? "Horas eventos",
     roleConcepts: v.roleConcepts ?? {},
+    bonusConcept: v.bonusConcept ?? "",
   };
 }
 
@@ -33,19 +36,38 @@ export async function a3Lines(from: string, to: string) {
   const cfg = await getA3();
   const lines = await payrollLines(from, to);
   const period = from.slice(0, 7) === to.slice(0, 7) ? from.slice(0, 7) : `${from}/${to}`;
-  const groups = new Map<string, { worker: (typeof lines)[number]["a"]["worker"]; role: string; hours: number; amount: number; price: number; missing: number }>();
+  const groups = new Map<string, { worker: (typeof lines)[number]["a"]["worker"]; role: string; hours: number; amount: number; price: number; missing: number; bonusCount: number; bonus: number }>();
   for (const l of lines) {
-    const key = `${l.a.workerId}|${l.a.role}`;
-    const g = groups.get(key) ?? { worker: l.a.worker, role: l.a.role, hours: 0, amount: 0, price: l.hourlyRate, missing: 0 };
+    // Una línea por persona, puesto y precio (puede cobrar distinto en bodas y en eventos)
+    const key = `${l.a.workerId}|${l.a.role}|${l.hourlyRate}`;
+    const g = groups.get(key) ?? { worker: l.a.worker, role: l.a.role, hours: 0, amount: 0, price: l.hourlyRate, missing: 0, bonusCount: 0, bonus: 0 };
     g.hours += l.billedHours ?? 0;
-    g.amount += l.amount;
+    // El plus por evento va en su propia línea (unidades = servicios); aquí solo las horas
+    g.amount += l.amount - l.bonus;
+    if (l.bonus) {
+      g.bonusCount++;
+      g.bonus = l.bonus;
+    }
     if (l.hours == null) g.missing++;
     groups.set(key, g);
   }
   const rows = [...groups.values()]
     .filter((g) => g.hours > 0)
     .sort((a, b) => a.worker.name.localeCompare(b.worker.name, "es") || ROLES.indexOf(a.role as Role) - ROLES.indexOf(b.role as Role))
-    .map((g) => ({
+    .flatMap((g) => [g, ...(g.bonusCount ? [{ ...g, isBonus: true as const }] : [])])
+    .map((g) => "isBonus" in g ? ({
+      companyCode: cfg.companyCode,
+      workerCode: g.worker.a3Code ?? "",
+      nif: g.worker.dni ?? "",
+      name: g.worker.name,
+      concept: cfg.bonusConcept || cfg.roleConcepts[g.role as Role] || cfg.hoursConcept,
+      conceptName: `Plus por evento · ${ROLE_LABEL[g.role as Role] ?? g.role}`,
+      units: g.bonusCount,
+      price: round2(g.bonus),
+      amount: round2(g.bonusCount * g.bonus),
+      period,
+      missing: 0,
+    }) : ({
       companyCode: cfg.companyCode,
       workerCode: g.worker.a3Code ?? "",
       nif: g.worker.dni ?? "",

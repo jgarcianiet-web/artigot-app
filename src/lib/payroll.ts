@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { payable, workedHours } from "./domain";
+import { payable, rateFor, workedHours } from "./domain";
 
 export async function payrollLines(from: string, to: string) {
   const [assignments, rates] = await Promise.all([
@@ -10,12 +10,11 @@ export async function payrollLines(from: string, to: string) {
     }),
     db.rate.findMany(),
   ]);
-  const rateByRole = new Map(rates.map((r) => [r.role, r]));
   return assignments.map((a) => {
     const hours = workedHours(a);
-    const rate = rateByRole.get(a.role);
-    const { billedHours, amount } = payable(hours, rate);
-    return { a, hours, billedHours, amount, hourlyRate: rate?.hourlyRate ?? 0 };
+    const rate = rateFor(rates, a.role, a.event.type, a.worker.customRates);
+    const { billedHours, amount, bonus } = payable(hours, rate);
+    return { a, hours, billedHours, amount, bonus, hourlyRate: rate?.hourlyRate ?? 0 };
   });
 }
 
