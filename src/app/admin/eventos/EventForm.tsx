@@ -18,6 +18,9 @@ type Event = {
   lat: number | null;
   lng: number | null;
   client: string | null;
+  salesRep: string | null;
+  budget: number | null;
+  budgetNote: string | null;
   notes: string | null;
   checklist: string | null;
   needCamareros: number;
@@ -37,6 +40,7 @@ export function EventForm({
   defaults,
   venues,
   clients,
+  salesReps = [],
   radius,
   defaultDate,
 }: {
@@ -45,6 +49,7 @@ export function EventForm({
   defaults?: Partial<Event>;
   venues: VenueOption[];
   clients: ClientOption[];
+  salesReps?: string[];
   radius: number;
   defaultDate?: string;
 }) {
@@ -155,6 +160,31 @@ export function EventForm({
             </label>
           )}
         </div>
+      </fieldset>
+
+      <fieldset className="grid gap-4 rounded-lg border border-stone-200 p-4 sm:grid-cols-3">
+        <legend className="px-1 text-sm font-semibold">Comercial y presupuesto</legend>
+        <div>
+          <label className="label" htmlFor="salesRep">Comercial</label>
+          <input id="salesRep" name="salesRep" list="sales-reps" className="input" defaultValue={v.salesRep ?? ""} placeholder="Quién lleva el evento" />
+          <datalist id="sales-reps">
+            {salesReps.map((s) => (
+              <option key={s} value={s} />
+            ))}
+          </datalist>
+        </div>
+        <div>
+          <label className="label" htmlFor="budget">Presupuesto de personal (€)</label>
+          <input id="budget" name="budget" inputMode="decimal" className="input" defaultValue={v.budget != null ? String(v.budget).replace(".", ",") : ""} placeholder="Automático" />
+        </div>
+        <div>
+          <label className="label" htmlFor="budgetNote">Comentario</label>
+          <input id="budgetNote" name="budgetNote" className="input" defaultValue={v.budgetNote ?? ""} placeholder="p. ej. incluye la descarga" />
+        </div>
+        <p className="text-xs text-stone-500 sm:col-span-3">
+          Si dejas el presupuesto vacío se calcula con el personal necesario, las tarifas y el horario (de la citación al fin, con el mínimo de horas).
+          Al cerrar el evento se compara con lo fichado.
+        </p>
       </fieldset>
 
       <fieldset className="rounded-lg border border-stone-200 p-4">

@@ -1,18 +1,14 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
-import { after } from "next/server";
 import { db } from "./db";
-import { callTime, euro, formatDate, ROLE_LABEL, type Role } from "./domain";
-import { notify } from "./push";
 import { readStoredFile } from "./files";
 import type { RecordData } from "./timeRecord";
 
 /**
- * Documento de condiciones del servicio que firma cada trabajador confirmado.
- * El texto sale de una plantilla editable (Ajustes → Empresa y contratos) con marcadores {{…}}
- * y se congela al generarlo. La firma es una firma electrónica simple: trazo en el móvil + fecha,
- * hora e IP. El texto por defecto es orientativo: debe revisarlo vuestra asesoría laboral.
+ * Documentos que firma el personal en la app: cláusula de protección de datos y registro de
+ * jornada mensual (los documentos de condiciones por evento ya no se generan; los firmados se
+ * conservan). La firma es una firma electrónica simple: trazo en el móvil + fecha, hora e IP.
  */
 
 export type Company = { name: string; cif: string; address: string; city: string; agreement: string; template: string };
@@ -52,66 +48,8 @@ export async function getCompany(): Promise<Company> {
   };
 }
 
-const todayLong = () =>
-  new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", day: "numeric", month: "long", year: "numeric" }).format(new Date());
-
 export function renderTemplate(template: string, values: Record<string, string>) {
   return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k: string) => values[k] ?? `{{${k}}}`);
-}
-
-/** Genera el documento para cada confirmado que aún no lo tenga y les avisa para que lo firmen. */
-export async function generateContracts(eventId: string, createdBy: string) {
-  const [company, event, rates] = await Promise.all([
-    getCompany(),
-    db.event.findUniqueOrThrow({
-      where: { id: eventId },
-      include: { assignments: { where: { status: "CONFIRMADO", contract: null }, include: { worker: true } } },
-    }),
-    db.rate.findMany(),
-  ]);
-  const missing: string[] = [];
-  let created = 0;
-  for (const a of event.assignments) {
-    const w = a.worker;
-    if (!w.dni || !w.nss) missing.push(w.name);
-    const rate = rates.find((r) => r.role === a.role);
-    const body = renderTemplate(company.template, {
-      empresa: company.name || "[razón social]",
-      cif: company.cif || "[CIF]",
-      domicilio: company.address || "[domicilio]",
-      ciudad: company.city || "[ciudad]",
-      convenio: company.agreement,
-      hoy: todayLong(),
-      trabajador: w.name,
-      dni: w.dni ?? "[pendiente]",
-      nss: w.nss ?? "[pendiente]",
-      puesto: ROLE_LABEL[a.role as Role]?.toLowerCase() ?? a.role,
-      evento: event.name,
-      fecha: formatDate(event.date, { long: true }),
-      lugar: event.venue,
-      citacion: callTime(event, a.role),
-      fin: event.endTime ?? "según necesidades del servicio",
-      tarifa: rate ? euro(rate.hourlyRate) : "[tarifa]",
-      minimo: rate ? String(rate.minHours).replace(".", ",") : "0",
-    });
-    await db.contract.create({
-      data: { assignmentId: a.id, workerId: w.id, eventId, title: `Condiciones del servicio · ${event.name}`, body, createdBy },
-    });
-    created++;
-  }
-  if (created) {
-    const ids = event.assignments.map((a) => a.workerId);
-    after(() =>
-      notify({
-        workerIds: ids,
-        workerUrl: "/app",
-        title: "Documento para firmar",
-        body: `Tienes que firmar las condiciones del servicio de ${event.name}. Solo te llevará un momento.`,
-        tag: `contrato-${eventId}`,
-      }),
-    );
-  }
-  return { created, missing };
 }
 
 // ---------- PDF ----------

@@ -47,7 +47,6 @@ export default async function WorkerEvent({ params }: { params: Promise<{ id: st
           )}
           {canRespond && confirmed && (
             <div className="flex flex-wrap gap-2">
-              <Link href={`/app/eventos/${a.eventId}/cambio`} className="btn btn-sm">🔁 Cambiar mi turno con un compañero</Link>
               <form action={respond.bind(null, a.id, false)}>
                 <button className="btn btn-danger btn-sm">Ya no puedo ir</button>
               </form>

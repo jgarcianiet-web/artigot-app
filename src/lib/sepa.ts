@@ -57,8 +57,8 @@ const validBic = (s: string) => /^[A-Z]{6}[A-Z2-9][A-NP-Z0-9]([A-Z0-9]{3})?$/.te
 
 export function checkDebtor(d: SepaInput["debtor"]) {
   const errors: string[] = [];
-  if (!sepaText(d.name, 70)) errors.push("Falta la razón social de la empresa (Ajustes → Empresa y contratos).");
-  if (!/^[A-Z0-9]{9}$/.test(d.nif.toUpperCase())) errors.push("Falta el CIF de la empresa o no es correcto (Ajustes → Empresa y contratos).");
+  if (!sepaText(d.name, 70)) errors.push("Falta la razón social de la empresa (Ajustes → Empresa y protección de datos).");
+  if (!/^[A-Z0-9]{9}$/.test(d.nif.toUpperCase())) errors.push("Falta el CIF de la empresa o no es correcto (Ajustes → Empresa y protección de datos).");
   if (!validIban(d.iban)) errors.push("Falta la cuenta (IBAN) de la empresa o no es correcta (Ajustes → Pagos y remesas).");
   if (d.bic && !validBic(d.bic.toUpperCase())) errors.push("El BIC de la empresa no es correcto.");
   if (!/^[A-Z0-9]{3}$/.test(d.suffix.toUpperCase())) errors.push("El sufijo del ordenante debe tener 3 caracteres (normalmente 000).");

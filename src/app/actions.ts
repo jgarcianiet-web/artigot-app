@@ -20,13 +20,12 @@ import { auditAdmin, diff } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { forgetDevice } from "@/lib/devices";
 import { hireCandidate } from "@/lib/candidates";
-import { DEFAULT_TEMPLATE, generateContracts } from "@/lib/contracts";
+import { DEFAULT_TEMPLATE, getCompany } from "@/lib/contracts";
 import { DEFAULT_PRIVACY_TEMPLATE, ensurePrivacyDoc, getPrivacy } from "@/lib/privacy";
 import { addDocument } from "@/lib/documents";
 import { createIncident, type IncidentResult } from "@/lib/incidents";
 import { DOC_LABEL, lines, validDniNie, validIban } from "@/lib/staff";
 import { checkIdentityDocs, storeIdentityDocs } from "@/lib/identityDocs";
-import { approveSwap, rejectSwap } from "@/lib/swaps";
 import { EVENT_TYPES, formatDate, isRole, LEAD_ROLES, ROLE_LABEL, ROLES, type Role } from "@/lib/domain";
 import { notify } from "@/lib/push";
 import { autoReplace, candidatesFor, fillGaps, notifyInvited } from "@/lib/staffing";
@@ -273,6 +272,17 @@ const eventSchema = z.object({
   lat: optCoord(90),
   lng: optCoord(180),
   client: optText,
+  salesRep: optText,
+  budget: z
+    .string()
+    .optional()
+    .transform((v) => {
+      const t = (v ?? "").trim().replace(/[€\s]/g, "");
+      return t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t; // «1.500,50» o «1500.50»
+    })
+    .refine((v) => v === "" || (Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) < 1e7), "Presupuesto no válido")
+    .transform((v) => (v === "" ? null : Math.round(Number(v) * 100) / 100)),
+  budgetNote: optText,
   notes: optText,
   checklist: optText,
   needCamareros: z.coerce.number().int().min(0).max(500),
@@ -319,7 +329,7 @@ export async function saveEvent(_prev: string | null, form: FormData) {
   const before = id ? await db.event.findUniqueOrThrow({ where: { id } }) : null;
   const data = { ...parsed.data, ...(await linkVenueAndClient(form, parsed.data)) };
   const event = id ? await db.event.update({ where: { id }, data }) : await db.event.create({ data });
-  const ed = diff(before, event, { name: "Nombre", date: "Fecha", startTime: "Inicio", endTime: "Fin", unloadTime: "Descarga", venue: "Lugar", client: "Cliente", needCamareros: "Camareros", needMaitres: "Maîtres", needResponsables: "Responsables", needMozos: "Mozos" });
+  const ed = diff(before, event, { name: "Nombre", date: "Fecha", startTime: "Inicio", endTime: "Fin", unloadTime: "Descarga", venue: "Lugar", client: "Cliente", salesRep: "Comercial", budget: "Presupuesto", budgetNote: "Comentario presupuesto", needCamareros: "Camareros", needMaitres: "Maîtres", needResponsables: "Responsables", needMozos: "Mozos" });
   if (!before) await auditAdmin(by, "Evento", "Alta", `Nuevo evento: ${event.name} (${formatDate(event.date)})`, { entityId: event.id });
   else if (ed.changed) await auditAdmin(by, "Evento", "Cambios", `${event.name}: ${ed.text}`, { entityId: event.id, data: ed.data });
 
@@ -640,20 +650,6 @@ export async function deleteLoan(id: string) {
   revalidatePath(`/admin/personal/${l.workerId}`);
 }
 
-export async function approveSwapAction(id: string) {
-  const name = await requireAdmin();
-  const r = await approveSwap(id, name);
-  await auditAdmin(name, "Cambio de turno", "Aprobado", r.message, { entityId: id });
-  revalidatePath("/admin", "layout");
-}
-
-export async function rejectSwapAction(id: string) {
-  const name = await requireAdmin();
-  await rejectSwap(id, name);
-  await auditAdmin(name, "Cambio de turno", "Rechazado", "Cambio de turno no aprobado", { entityId: id });
-  revalidatePath("/admin", "layout");
-}
-
 export async function saveUniform(form: FormData) {
   await requireAdmin();
   const value = Object.fromEntries(ROLES.map((r) => [r, lines(String(form.get(r) ?? "")).slice(0, 30)]));
@@ -662,14 +658,6 @@ export async function saveUniform(form: FormData) {
 }
 
 // ---------- Contratos y ajustes de empresa ----------
-
-export async function generateContractsAction(eventId: string, _prev: string | null) {
-  const name = await requireAdmin();
-  const { created, missing } = await generateContracts(eventId, name);
-  revalidatePath(`/admin/eventos/${eventId}`);
-  if (!created) return "Todos los confirmados ya tienen su documento.";
-  return `${created} documento(s) generado(s) y enviado(s) a firmar.${missing.length ? ` Faltan DNI o Seguridad Social de: ${missing.join(", ")}.` : ""}`;
-}
 
 export async function deleteContract(id: string) {
   const by = await requireAdmin();
@@ -682,7 +670,8 @@ export async function deleteContract(id: string) {
 export async function saveCompany(_prev: string | null, form: FormData) {
   const by = await requireAdmin();
   const get = (k: string) => String(form.get(k) ?? "").trim();
-  const template = get("template").replace(/\r\n/g, "\n");
+  const before = await getCompany();
+  const template = form.has("template") ? get("template").replace(/\r\n/g, "\n") : before.template;
   const value = {
     name: get("name"),
     cif: get("cif").toUpperCase(),
@@ -692,9 +681,9 @@ export async function saveCompany(_prev: string | null, form: FormData) {
     template: template === DEFAULT_TEMPLATE.trim() ? "" : template,
   };
   await db.setting.upsert({ where: { key: "empresa" }, create: { key: "empresa", value }, update: { value } });
-  await auditAdmin(by, "Ajustes", "Empresa", `Datos de empresa y texto de condiciones guardados (${value.name || "sin razón social"}, ${value.cif || "sin CIF"})`);
+  await auditAdmin(by, "Ajustes", "Empresa", `Datos de empresa guardados (${value.name || "sin razón social"}, ${value.cif || "sin CIF"})`);
   revalidatePath("/admin/ajustes/empresa");
-  return "Guardado. Los documentos nuevos usarán estos datos; los ya generados no cambian.";
+  return "Guardado.";
 }
 
 export async function savePrivacy(_prev: string | null, form: FormData) {

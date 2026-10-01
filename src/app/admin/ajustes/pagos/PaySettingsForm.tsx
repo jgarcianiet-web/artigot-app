@@ -38,7 +38,7 @@ export function PaySettingsForm({ s }: { s: PaySettings }) {
         <label className="text-sm sm:col-span-2">IBAN<input name="debtorIban" className="input mt-1 font-mono" defaultValue={s.debtorIban} placeholder="ES00 0000 0000 0000 0000 0000" /></label>
         <label className="text-sm">BIC (opcional)<input name="debtorBic" className="input mt-1 font-mono" defaultValue={s.debtorBic} /></label>
         <label className="text-sm">Sufijo del ordenante<input name="sepaSuffix" className="input mt-1 font-mono" defaultValue={s.sepaSuffix} maxLength={3} /></label>
-        <p className="text-xs text-stone-500 sm:col-span-2">El sufijo lo da el banco al contratar el servicio de remesas (casi siempre 000). La razón social y el CIF se toman de Ajustes → Empresa y contratos.</p>
+        <p className="text-xs text-stone-500 sm:col-span-2">El sufijo lo da el banco al contratar el servicio de remesas (casi siempre 000). La razón social y el CIF se toman de Ajustes → Empresa y protección de datos.</p>
       </fieldset>
       {msg && <p className="text-sm text-stone-700">{msg}</p>}
       <SubmitButton>Guardar</SubmitButton>
