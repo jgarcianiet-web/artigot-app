@@ -197,33 +197,30 @@ export function EventForm({
 
       <fieldset className="rounded-lg border border-stone-200 p-4">
         <legend className="px-1 text-sm font-semibold">Personal necesario</legend>
-        <div className="grid gap-4 sm:grid-cols-5">
-          <div>
-            <label className="label">Camareros</label>
-            <input name="needCamareros" type="number" min={0} className="input" defaultValue={v.needCamareros ?? 0} />
-          </div>
-          <div>
-            <label className="label">Maîtres</label>
-            <input name="needMaitres" type="number" min={0} className="input" defaultValue={v.needMaitres ?? 0} />
-          </div>
-          <div>
-            <label className="label" title="Hace de maître en eventos pequeños">Camareros responsables</label>
-            <input name="needResponsables" type="number" min={0} className="input" defaultValue={v.needResponsables ?? 0} />
-          </div>
-          <div>
-            <label className="label">Mozos</label>
-            <input name="needMozos" type="number" min={0} className="input" defaultValue={v.needMozos ?? 0} />
-          </div>
-          <div>
-            <label className="label">Hora descarga (mozos)</label>
-            <input name="unloadTime" type="time" className="input" defaultValue={v.unloadTime ?? ""} />
-          </div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
+          {[
+            { name: "needCamareros", label: "Camareros", value: v.needCamareros },
+            { name: "needMaitres", label: "Maîtres", value: v.needMaitres },
+            { name: "needResponsables", label: "Responsables", value: v.needResponsables, title: "Camareros responsables: hacen de maître en eventos pequeños" },
+            { name: "needMozos", label: "Mozos", value: v.needMozos },
+          ].map((f) => (
+            <label key={f.name} className="flex flex-col gap-1" title={f.title}>
+              <span className="label mb-0 truncate">{f.label}</span>
+              <input name={f.name} type="number" min={0} inputMode="numeric" className="input h-10" defaultValue={f.value ?? 0} />
+            </label>
+          ))}
+          <label className="flex flex-col gap-1">
+            <span className="label mb-0 truncate">Descarga mozos</span>
+            <input name="unloadTime" type="time" className="input h-10" defaultValue={v.unloadTime ?? ""} />
+          </label>
         </div>
-        <label className="mt-3 flex items-center gap-2 text-sm">
-          <input type="checkbox" name="autoReplace" value="1" defaultChecked={v.autoReplace ?? true} className="size-4" />
-          Reposición automática: si alguien rechaza o se retira, convocar solo al siguiente mejor puntuado del mismo puesto
+        <p className="mt-2 text-xs text-stone-500">
+          «Responsables» son camareros responsables (hacen de maître en eventos pequeños). Si pones hora de descarga, los mozos se citan a esa hora en vez de a la de servicio.
+        </p>
+        <label className="mt-3 flex items-start gap-2 text-sm">
+          <input type="checkbox" name="autoReplace" value="1" defaultChecked={v.autoReplace ?? true} className="mt-0.5 size-4 shrink-0" />
+          <span>Reposición automática: si alguien rechaza o se retira, se convoca solo al siguiente mejor puntuado del mismo puesto.</span>
         </label>
-        <p className="mt-2 text-xs text-stone-500">Si indicas hora de descarga, los mozos serán citados a esa hora en lugar de a la hora de servicio.</p>
       </fieldset>
 
       <div className="grid gap-4 sm:grid-cols-2">

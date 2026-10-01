@@ -40,6 +40,11 @@
   .input {
     @apply w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100;
   }
+  /* Misma altura para cajas de texto, fechas, horas y desplegables (sin contar áreas de texto) */
+  input.input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(.py-1),
+  select.input:not(.py-1) {
+    @apply min-h-10;
+  }
   .label {
     @apply mb-1 block text-sm font-medium text-stone-700;
   }
