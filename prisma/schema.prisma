@@ -42,6 +42,8 @@ model Worker {
   nationality     String?
   education       String?
   a3Center        String?
+  // Tarifa propia de esta persona por tipo de evento ({ "BODA": 14, "EVENTO": 12.5 }); manda sobre la del puesto
+  customRates     Json?
   // % de retención de IRPF propio (si es null se usa el general de Ajustes → Pagos)
   irpf            Float?
   // Plazas libres en su coche (null o 0 = no suele llevar coche)
@@ -184,6 +186,10 @@ model Rate {
   role       String @id
   hourlyRate Float
   minHours   Float  @default(0)
+  // Plus fijo por cada servicio (p. ej. +10 € al camarero responsable)
+  eventBonus Float  @default(0)
+  // €/hora distintos según el tipo de evento ({ "BODA": 13, "EVENTO": 12 }); si falta, hourlyRate
+  typeRates  Json?
 }
 
 // Mensaje del chat de un evento. workerId nulo = escrito por RRHH (authorName = nombre de quien escribe)

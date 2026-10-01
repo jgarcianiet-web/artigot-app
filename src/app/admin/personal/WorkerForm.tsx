@@ -5,7 +5,7 @@ import { saveWorker } from "@/app/actions";
 import { ActionForm, SubmitButton } from "@/components/client";
 import { IDENTITY_FILE_KEYS, IdentityFields } from "@/components/IdentityFields";
 import { shrinkFormImages } from "@/lib/image";
-import { ROLE_LABEL, ROLES } from "@/lib/domain";
+import { EVENT_TYPE_LABEL, EVENT_TYPES, ROLE_LABEL, ROLES } from "@/lib/domain";
 
 type Worker = {
   id: string;
@@ -23,6 +23,7 @@ type Worker = {
   birthDate: string | null;
   address: string | null;
   a3Code: string | null;
+  customRates?: unknown;
 };
 
 type DocStatus = Record<string, { fileId: string | null; verified: boolean }>;
@@ -96,6 +97,25 @@ export function WorkerForm({ worker, docs = {} }: { worker?: Worker; docs?: DocS
           <legend className="px-1 text-sm font-semibold">Solo RRHH (el trabajador no lo ve)</legend>
           <label className="label" htmlFor="a3Code">Código de trabajador en A3</label>
           <input id="a3Code" name="a3Code" className="input" defaultValue={worker?.a3Code ?? ""} />
+          <div className="mt-3">
+            <span className="label">Tarifa propia (€/hora, opcional)</span>
+            <div className="grid grid-cols-3 gap-3">
+              {EVENT_TYPES.map((t) => (
+                <label key={t} className="flex flex-col gap-1 text-sm">
+                  <span className="text-stone-600">{EVENT_TYPE_LABEL[t]}</span>
+                  <input
+                    name={`own_${t}`}
+                    inputMode="decimal"
+                    className="input"
+                    placeholder="la del puesto"
+                    defaultValue={(worker?.customRates as Record<string, number> | null | undefined)?.[t] ?? ""}
+                    aria-label={`Tarifa propia en ${EVENT_TYPE_LABEL[t].toLowerCase()}`}
+                  />
+                </label>
+              ))}
+            </div>
+            <p className="mt-1 text-xs text-stone-500">Si cobra distinto que el resto de su puesto. Vacío = tarifa del puesto (Ajustes → Tarifas). El plus por evento y el mínimo de horas se mantienen.</p>
+          </div>
         </fieldset>
         <div className="sm:col-span-2">
           <label className="label">Notas (opcional)</label>

@@ -14,12 +14,19 @@ import { validDniNie, validIban } from "./staff";
  * trabajador en la app (recordatorio automático de datos incompletos).
  */
 
-type Col = "dni" | "name" | "surname" | "phone" | "email" | "code" | "nss" | "center" | "iban" | "birth" | "address" | "sex" | "nationality" | "zone";
+type Col = "dni" | "name" | "surname" | "phone" | "email" | "code" | "nss" | "center" | "iban" | "birth" | "address" | "sex" | "nationality" | "zone" | "rateBODA" | "rateEVENTO" | "rateOTRO" | "rateAll";
 
 function colFor(header: string): Col | null {
   const h = norm(header);
   if (!h) return null;
   if (/^(dni|nie|nif|dni nie|nif nie|documento|n documento|num documento)$/.test(h)) return "dni";
+  // Tarifa propia (€/hora): «Tarifa boda», «Precio hora evento», «€/h otro» o «Tarifa» para todos
+  if (/\b(tarifa|precio|eur|euros)\b/.test(h) && !/\b(total|importe)\b/.test(h)) {
+    if (/\bboda/.test(h)) return "rateBODA";
+    if (/\bevento/.test(h)) return "rateEVENTO";
+    if (/\botro/.test(h)) return "rateOTRO";
+    if (/^(tarifa|tarifa hora|tarifa propia|precio|precio hora|eur hora|euros hora|eur h)$/.test(h)) return "rateAll";
+  }
   if (/^(codigo|cod|cod trabajador|codigo trabajador|codigo a3|cod a3)$/.test(h)) return "code";
   if (/^(nass|nss|naf|n ss|num ss|seguridad social|n seguridad social|numero seguridad social|n afiliacion|afiliacion)$/.test(h)) return "nss";
   if (/^(centro|cod centro|codigo centro)$/.test(h)) return "center";
@@ -42,12 +49,17 @@ const nameKey = (s: string) => norm(s.replace(",", " ")).split(" ").filter(Boole
 
 const FIELD_LABEL: Record<string, string> = {
   a3Code: "código A3", dni: "DNI", nss: "NSS", a3Center: "centro", iban: "IBAN", phone: "teléfono", email: "email",
-  birthDate: "nacimiento", address: "dirección", sex: "sexo", nationality: "nacionalidad", zone: "zona", firstName: "apellidos",
+  birthDate: "nacimiento", address: "dirección", sex: "sexo", nationality: "nacionalidad", zone: "zona", firstName: "apellidos", customRates: "tarifa propia",
 };
 
 export type A3ImportResult = { ok: boolean; message: string; details?: string[] };
 
-export async function completeFromFile(file: File, by: string): Promise<A3ImportResult> {
+const rateValue = (v: string) => {
+  const n = Number(v.replace(/[€\s]/g, "").replace(",", "."));
+  return v.trim() && Number.isFinite(n) && n > 0 && n < 500 ? Math.round(n * 1000) / 1000 : null;
+};
+
+export async function completeFromFile(file: File, by: string, opts: { replaceRates?: boolean } = {}): Promise<A3ImportResult> {
   const table = await readTable(file);
   if ("error" in table) return { ok: false, message: table.error };
   let headerIdx = -1;
@@ -67,7 +79,7 @@ export async function completeFromFile(file: File, by: string): Promise<A3Import
   const workers = await db.worker.findMany({
     select: {
       id: true, name: true, dni: true, nss: true, a3Code: true, a3Center: true, firstName: true, surname1: true, surname2: true, phone: true, phoneKey: true,
-      email: true, iban: true, birthDate: true, address: true, sex: true, nationality: true, zone: true,
+      email: true, iban: true, birthDate: true, address: true, sex: true, nationality: true, zone: true, customRates: true,
     },
   });
   const byDni = new Map(workers.filter((w) => w.dni).map((w) => [cleanDni(w.dni!), w]));
@@ -102,7 +114,7 @@ export async function completeFromFile(file: File, by: string): Promise<A3Import
     if (!w || matched.has(w.id)) continue;
     matched.add(w.id);
 
-    const data: Record<string, string> = {};
+    const data: Record<string, unknown> = {};
     const put = (field: keyof typeof w, value: string | null | undefined) => {
       if (value && !w[field]) data[field] = value;
     };
@@ -126,6 +138,18 @@ export async function completeFromFile(file: File, by: string): Promise<A3Import
     put("sex", /^(h|hombre|varon|m|masculino)$/.test(sex) ? "Hombre" : /^(mujer|f|femenino)$/.test(sex) ? "Mujer" : null);
     put("nationality", at(raw, "nationality").toLocaleUpperCase("es-ES"));
     put("zone", at(raw, "zone"));
+    // Tarifa propia por tipo de evento: se rellena la que falte (o se sustituye si se pide)
+    const current = (w.customRates ?? {}) as Record<string, number>;
+    const rates = { ...current };
+    let ratesChanged = false;
+    for (const t of ["BODA", "EVENTO", "OTRO"] as const) {
+      const v = rateValue(at(raw, `rate${t}` as Col)) ?? rateValue(at(raw, "rateAll"));
+      if (v != null && (opts.replaceRates || current[t] == null) && current[t] !== v) {
+        rates[t] = v;
+        ratesChanged = true;
+      }
+    }
+    if (ratesChanged) data.customRates = rates;
     if (name.includes(",") && !w.firstName && !w.surname1) {
       const [surnames, first] = name.split(",").map((s) => s.trim());
       const [s1, ...rest] = surnames.split(/\s+/);

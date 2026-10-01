@@ -23,6 +23,11 @@ export function A3Form({ cfg }: { cfg: A3Config }) {
           ))}
         </div>
       </fieldset>
+      <label className="block max-w-sm text-sm">
+        Código de concepto del plus por evento (opcional)
+        <input name="bonusConcept" className="input mt-1" defaultValue={cfg.bonusConcept} placeholder={cfg.hoursConcept || "—"} />
+        <span className="text-xs text-stone-500">El plus (p. ej. del camarero responsable) va en una línea aparte: unidades = servicios.</span>
+      </label>
       {msg && <p className="text-sm text-stone-700">{msg}</p>}
       <SubmitButton>Guardar</SubmitButton>
     </ActionForm>

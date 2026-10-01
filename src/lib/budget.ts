@@ -1,6 +1,6 @@
 import { PDFDocument, rgb, StandardFonts, type PDFFont } from "pdf-lib";
 import { db } from "./db";
-import { callTime, euro, formatDate, hoursBetween, isLeadRole, payable, ROLES, workedHours, type Role } from "./domain";
+import { callTime, euro, formatDate, hoursBetween, isLeadRole, payable, rateFor, ROLES, workedHours, type Role } from "./domain";
 import { getCompany } from "./contracts";
 
 /**
@@ -10,8 +10,9 @@ import { getCompany } from "./contracts";
  * corregidas del personal confirmado por su tarifa. Desviación = gasto − presupuesto.
  */
 
-type Rate = { role: string; hourlyRate: number; minHours: number };
+type Rate = Parameters<typeof rateFor>[0][number];
 type EventForBudget = {
+  type: string;
   startTime: string;
   endTime: string | null;
   unloadTime: string | null;
@@ -31,8 +32,7 @@ export function estimateBudget(event: EventForBudget, rates: Rate[]) {
     const count = Number(event[NEED[role]]) || 0;
     if (!count) continue;
     const hours = hoursBetween(callTime(event, role), event.endTime);
-    const rate = rates.find((r) => r.role === role);
-    total += count * payable(hours, rate).amount;
+    total += count * payable(hours, rateFor(rates, role, event.type)).amount;
   }
   return round2(total);
 }
@@ -62,7 +62,7 @@ export async function budgetRows(filter: { from?: string; to?: string; salesRep?
         ...(filter.eventId ? { id: filter.eventId } : { date: { gte: filter.from, lte: filter.to } }),
         ...(filter.salesRep && { salesRep: filter.salesRep === "-" ? null : filter.salesRep }),
       },
-      include: { assignments: { where: { status: "CONFIRMADO" }, include: { worker: { select: { name: true } } } } },
+      include: { assignments: { where: { status: "CONFIRMADO" }, include: { worker: { select: { name: true, customRates: true } } } } },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
     }),
     db.rate.findMany(),
@@ -73,7 +73,7 @@ export async function budgetRows(filter: { from?: string; to?: string; salesRep?
     for (const a of e.assignments) {
       const h = workedHours(a);
       if (h == null) pending++;
-      cost += payable(h, rates.find((r) => r.role === a.role)).amount;
+      cost += payable(h, rateFor(rates, a.role, e.type, a.worker.customRates)).amount;
     }
     cost = round2(cost);
     const estimated = e.budget == null;

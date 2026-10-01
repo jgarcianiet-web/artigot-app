@@ -109,10 +109,28 @@ export function workedHours(a: {
   return a.hoursOverride ?? hoursBetween(a.checkIn, a.checkOut);
 }
 
-export function payable(hours: number | null, rate: { hourlyRate: number; minHours: number } | undefined) {
-  if (hours == null || !rate) return { billedHours: hours, amount: 0 };
+type RateRow = { role: string; hourlyRate: number; minHours: number; eventBonus: number; typeRates: unknown };
+const num_ = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : null);
+
+/**
+ * Tarifa de un servicio: el €/hora es el propio de la persona para ese tipo de evento si lo tiene;
+ * si no, el del puesto para ese tipo de evento (boda, evento…); y si no, el general del puesto.
+ * El mínimo de horas y el plus por evento son siempre los del puesto.
+ */
+export function rateFor(rates: RateRow[], role: string, eventType: string, workerRates?: unknown) {
+  const r = rates.find((x) => x.role === role);
+  if (!r) return undefined;
+  const own = num_((workerRates as Record<string, unknown> | null | undefined)?.[eventType]);
+  const byType = num_((r.typeRates as Record<string, unknown> | null)?.[eventType]);
+  return { hourlyRate: own ?? byType ?? r.hourlyRate, minHours: r.minHours, eventBonus: r.eventBonus, custom: own != null };
+}
+
+/** Importe de un servicio: horas (con el mínimo) × €/hora + el plus fijo del puesto (p. ej. responsable). */
+export function payable(hours: number | null, rate: { hourlyRate: number; minHours: number; eventBonus?: number } | undefined) {
+  if (hours == null || !rate) return { billedHours: hours, amount: 0, bonus: 0 };
   const billedHours = Math.max(hours, rate.minHours);
-  return { billedHours, amount: Math.round(billedHours * rate.hourlyRate * 100) / 100 };
+  const bonus = rate.eventBonus ?? 0;
+  return { billedHours, amount: Math.round((billedHours * rate.hourlyRate + bonus) * 100) / 100, bonus };
 }
 
 export const euro = (n: number) =>
