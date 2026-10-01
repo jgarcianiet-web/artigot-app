@@ -59,12 +59,11 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
   });
   if (!event) notFound();
 
-  const [candidates, reviews, rates, unread, messageCount] = await Promise.all([
+  const [candidates, reviews, rates, unread] = await Promise.all([
     candidatesFor(event),
     db.review.findMany({ where: { eventId: event.id }, include: { reviewer: { select: { name: true } } } }),
     db.rate.findMany(),
     unreadCounts({ kind: "admin", name: adminName }, [event.id]),
-    db.message.count({ where: { eventId: event.id } }),
   ]);
   const unreadChat = unread.get(event.id) ?? 0;
   const [budget] = await budgetRows({ eventId: event.id });
@@ -114,7 +113,6 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
           <Link href={`/admin/eventos/${event.id}/chat`} className="btn btn-primary">
             💬 Chat del evento
             {unreadChat > 0 && <span className="rounded-full bg-white px-1.5 text-xs text-brand-700">{unreadChat}</span>}
-            {unreadChat === 0 && messageCount > 0 && <span className="text-xs opacity-80">({messageCount})</span>}
           </Link>
           <Link href={`/admin/eventos/${event.id}/directo`} className="btn">🔴 En directo</Link>
           <Link href={`/admin/eventos/${event.id}/editar`} className="btn">Editar</Link>

@@ -31,7 +31,7 @@ async function subscribeWeb(key: string) {
 async function setupNative(config: PushConfig) {
   const { Capacitor } = await import("@capacitor/core");
   const platform = Capacitor.getPlatform();
-  if ((platform === "android" && !config.fcm) || (platform === "ios" && !config.apns)) return;
+  if ((platform === "android" && !config.fcm) || (platform === "ios" && !config.apns)) return false;
   const { PushNotifications: push } = await import("@capacitor/push-notifications");
   await push.removeAllListeners();
   await push.addListener("registration", (t) => register({ kind: platform === "ios" ? "apns" : "fcm", token: t.value }));
@@ -46,6 +46,7 @@ async function setupNative(config: PushConfig) {
   let perm = await push.checkPermissions();
   if (perm.receive === "prompt" || perm.receive === "prompt-with-rationale") perm = await push.requestPermissions();
   if (perm.receive === "granted") await push.register();
+  return true;
 }
 
 const isNativeApp = () =>
@@ -134,7 +135,7 @@ export function EnablePushButton({ config, onDone }: { config: PushConfig; onDon
           setMsg(null);
           try {
             if (isNativeApp()) {
-              await setupNative(config);
+              if (!(await setupNative(config))) return setMsg("Los avisos de la app aún no están activados: RRHH tiene que terminar de configurarlos. Mientras tanto, te avisamos por WhatsApp o email.");
             } else {
               const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
               if (!("PushManager" in window) || !("Notification" in window)) {

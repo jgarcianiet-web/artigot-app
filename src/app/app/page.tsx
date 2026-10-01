@@ -10,6 +10,7 @@ import { db } from "@/lib/db";
 import { pendingReviews } from "@/lib/reviews";
 import { addDays, callTime, isLeadRole, formatDate, num, ROLE_LABEL, today, workedHours, type Role } from "@/lib/domain";
 import { Checklist } from "@/components/StaffForms";
+import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
 import { checklistFor, getUniform, lines } from "@/lib/staff";
 import { respond, startPrivacySignature, toggleUnavailable } from "./actions";
 import { Onboarding } from "@/components/Onboarding";
@@ -17,7 +18,8 @@ import { incompleteWorkers } from "@/lib/completeness";
 import { privacySignature } from "@/lib/privacy";
 import { pushConfig } from "@/lib/push";
 
-const DAYS_AHEAD = 56;
+/** Meses hacia delante que se pueden marcar en «Mi disponibilidad» */
+const MONTHS_AHEAD = 6;
 
 export default async function WorkerHome() {
   const me = await requireWorker();
@@ -30,7 +32,7 @@ export default async function WorkerHome() {
         include: { event: { include: { savedVenue: { select: { accessNotes: true } } } } },
         orderBy: { event: { date: "asc" } },
       },
-      unavailabilities: { where: { date: { gte: t, lte: addDays(t, DAYS_AHEAD) } } },
+      unavailabilities: { where: { date: { gte: t, lte: addDays(t, 31 * (MONTHS_AHEAD + 1)) } } },
     },
   });
 
@@ -84,8 +86,6 @@ export default async function WorkerHome() {
 
   const unavailable = new Set(worker.unavailabilities.map((u) => u.date));
   const busy = new Set(worker.assignments.filter((a) => ["CONVOCADO", "CONFIRMADO"].includes(a.status)).map((a) => a.event.date));
-  const offset = (new Date(`${t}T12:00:00Z`).getUTCDay() + 6) % 7; // semana empieza en lunes
-  const days = Array.from({ length: DAYS_AHEAD }, (_, i) => addDays(t, i));
 
   const ChatLink = ({ eventId }: { eventId: string }) => {
     const n = unread.get(eventId) ?? 0;
@@ -104,7 +104,7 @@ export default async function WorkerHome() {
         <h1>Hola, {worker.name.split(" ")[0]}</h1>
       </header>
 
-      {steps.some((st) => !st.done) && <Onboarding name={worker.name.split(" ")[0]} steps={steps} push={pushConfig()} signAction={startPrivacySignature} />}
+      {steps.some((st) => !st.done) && <Onboarding name={worker.name.split(" ")[0]} steps={steps} push={await pushConfig()} signAction={startPrivacySignature} />}
 
       {polls.map((p) => <PollCard key={p.id} poll={p} busy={busy} />)}
 
@@ -212,44 +212,13 @@ export default async function WorkerHome() {
         <p className="text-sm text-stone-500">
           Toca un día para marcarlo como <strong className="text-red-600">no disponible</strong> (o para quitarlo).
         </p>
-        <div className="grid grid-cols-7 gap-1 text-center text-xs">
-          {["L", "M", "X", "J", "V", "S", "D"].map((d) => (
-            <div key={d} className="font-medium text-stone-500">{d}</div>
-          ))}
-          {Array.from({ length: offset }, (_, i) => <div key={`o${i}`} />)}
-          {days.map((d) => {
-            const off = unavailable.has(d);
-            const work = busy.has(d);
-            const day = Number(d.slice(8));
-            return (
-              <form key={d} action={toggleUnavailable.bind(null, d)}>
-                <button
-                  className={`aspect-square w-full rounded-md border text-sm ${
-                    off
-                      ? "border-red-300 bg-red-100 text-red-700 line-through"
-                      : work
-                        ? "border-emerald-300 bg-emerald-100 font-semibold text-emerald-800"
-                        : "border-stone-200 bg-white"
-                  }`}
-                  title={d}
-                >
-                  {day === 1 || d === t ? (
-                    <span className="block leading-tight">
-                      {day}
-                      <span className="block text-[9px] uppercase">{formatDate(d).split(" ").pop()}</span>
-                    </span>
-                  ) : (
-                    day
-                  )}
-                </button>
-              </form>
-            );
-          })}
-        </div>
-        <div className="flex gap-4 text-xs text-stone-500">
-          <span><span className="inline-block size-3 rounded bg-emerald-100 ring-1 ring-emerald-300" /> Tengo servicio</span>
-          <span><span className="inline-block size-3 rounded bg-red-100 ring-1 ring-red-300" /> No disponible</span>
-        </div>
+        <AvailabilityCalendar
+          today={t}
+          monthsAhead={MONTHS_AHEAD}
+          unavailable={[...unavailable]}
+          busy={[...busy]}
+          toggle={toggleUnavailable}
+        />
       </section>
 
       {history.length > 0 && (

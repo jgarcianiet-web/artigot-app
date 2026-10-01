@@ -57,8 +57,10 @@ export default async function Candidates({ searchParams }: { searchParams: Promi
             </thead>
             <tbody>
               {candidates.map((c) => (
-                <tr key={c.id}>
-                  <td><Link href={`/admin/candidatos/${c.id}`} className="link">{c.name}</Link>{c.fileId && <span className="ml-1 text-xs text-stone-500">📎 CV</span>}</td>
+                <tr key={c.id} className={c.seenAt ? "" : "bg-amber-50/60"}>
+                  <td>
+                    {!c.seenAt && <span className="mr-1.5 inline-block size-2 rounded-full bg-amber-500 align-middle" title="Nuevo: aún no lo ha abierto nadie" />}
+                    <Link href={`/admin/candidatos/${c.id}`} className={`link ${c.seenAt ? "" : "font-semibold"}`}>{c.name}</Link>{c.fileId && <span className="ml-1 text-xs text-stone-500">📎 CV</span>}</td>
                   <td className="space-x-1">{c.roles.map((r) => <RoleBadge key={r} role={r} />)}</td>
                   <td className="text-stone-500">{c.zone}{c.hasCar && <span className="ml-1" title="Tiene coche">🚗</span>}</td>
                   <td className="whitespace-nowrap"><a href={`tel:${c.phone}`}>{c.phone}</a></td>

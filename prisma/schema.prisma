@@ -451,6 +451,8 @@ model Candidate {
   consentAt    DateTime
   workerId     String?     @unique
   createdAt    DateTime    @default(now())
+  // Cuándo lo abrió RRHH por primera vez (hasta entonces cuenta como nuevo en el menú)
+  seenAt       DateTime?
   file         StoredFile? @relation(fields: [fileId], references: [id], onDelete: SetNull)
   worker       Worker?     @relation(fields: [workerId], references: [id], onDelete: SetNull)
 

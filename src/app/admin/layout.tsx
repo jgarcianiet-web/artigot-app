@@ -13,12 +13,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const name = await requireAdmin();
   const me = await currentAdmin();
   const unreadMessages = me ? await unreadTotal(me.id) : 0;
+  const newCandidates = await db.candidate.count({ where: { seenAt: null } });
   const docsPending = (await db.workerDocument.count({ where: { verified: false, worker: { active: true } } })) + (await pendingPhotos());
   return (
     <div className="min-h-screen lg:flex">
-      <AdminNav name={name} logout={logout} badges={{ "/admin/documentos": docsPending, "/admin/mensajes": unreadMessages }} />
+      <AdminNav name={name} logout={logout} badges={{ "/admin/documentos": docsPending, "/admin/mensajes": unreadMessages, "/admin/candidatos": newCandidates }} />
       <main className="mx-auto w-full min-w-0 max-w-6xl space-y-4 px-4 py-6 lg:px-8">
-        <PushSetup config={pushConfig()} />
+        <PushSetup config={await pushConfig()} />
         {children}
       </main>
     </div>

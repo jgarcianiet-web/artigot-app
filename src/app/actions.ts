@@ -808,6 +808,13 @@ export async function saveA3Codes(form: FormData) {
 
 // ---------- Candidatos ----------
 
+/** Al abrir un candidato deja de contar como nuevo (para todo RRHH) y se actualiza el número del menú. */
+export async function markCandidateSeen(id: string) {
+  await requireAdmin();
+  const r = await db.candidate.updateMany({ where: { id, seenAt: null }, data: { seenAt: new Date() } });
+  if (r.count) revalidatePath("/admin", "layout");
+}
+
 export async function updateCandidate(id: string, form: FormData) {
   await requireAdmin();
   const status = String(form.get("status") ?? "");

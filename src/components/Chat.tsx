@@ -1,5 +1,7 @@
 "use client";
 
+import { FileLink } from "./FileLink";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatMessage } from "@/lib/chat";
 import { shrinkImage } from "@/lib/image";
@@ -153,10 +155,10 @@ export function Chat({
                     </div>
                   )}
                   {m.fileId && (
-                    <a href={`/api/files/${m.fileId}`} target="_blank" className="-mx-1 my-1 block">
+                    <FileLink href={`/api/files/${m.fileId}`} title="Foto" className="-mx-1 my-1 block">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={`/api/files/${m.fileId}`} alt="Foto" loading="lazy" className="max-h-64 rounded-md object-cover" />
-                    </a>
+                    </FileLink>
                   )}
                   {m.lat != null && m.lng != null && (
                     <a

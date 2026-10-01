@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FileLink } from "@/components/FileLink";
 import { DocumentUploadForm, MyDataForm, PhotoForm } from "@/components/StaffForms";
 import { requireWorker } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -59,7 +60,7 @@ export default async function MyProfile() {
               <li key={c.id} className="flex items-center justify-between gap-2 p-3 text-sm">
                 <span className="min-w-0 truncate">{c.title}</span>
                 {c.signedAt ? (
-                  <a href={`/api/contracts/${c.id}/pdf`} target="_blank" className="link shrink-0">✓ PDF</a>
+                  <FileLink href={`/api/contracts/${c.id}/pdf`} title={c.title} className="link shrink-0">✓ PDF</FileLink>
                 ) : (
                   <Link href={`/app/firmar/${c.id}`} className="shrink-0 font-medium text-stone-900 underline">Firmar ›</Link>
                 )}
@@ -85,7 +86,7 @@ export default async function MyProfile() {
                     {d.verified ? <span className="text-emerald-700">✓ Revisado por RRHH</span> : "Pendiente de revisar"}
                   </div>
                 </div>
-                {d.fileId && <a href={`/api/files/${d.fileId}`} target="_blank" className="btn btn-sm">Ver</a>}
+                {d.fileId && <FileLink href={`/api/files/${d.fileId}`} title={DOC_LABEL[d.type] ?? d.type} className="btn btn-sm">Ver</FileLink>}
                 {!d.verified && (
                   <form action={deleteMyDocument.bind(null, d.id)}>
                     <button className="btn btn-sm btn-danger">Borrar</button>
@@ -100,7 +101,7 @@ export default async function MyProfile() {
             <DocumentUploadForm action={uploadMyDocument} />
             <p className="text-xs text-stone-500">
               🔒 Protección de datos firmada el {formatDate(privacy.signedAt!.toISOString().slice(0, 10))} ·{" "}
-              <a href={`/api/contracts/${privacy.id}/pdf`} target="_blank" className="underline">ver PDF</a>
+              <FileLink href={`/api/contracts/${privacy.id}/pdf`} title="Protección de datos" className="underline">ver PDF</FileLink>
             </p>
           </>
         ) : (

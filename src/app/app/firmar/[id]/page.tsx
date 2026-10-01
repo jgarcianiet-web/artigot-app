@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FileLink } from "@/components/FileLink";
 import { notFound } from "next/navigation";
 import { requireWorker } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -43,7 +44,7 @@ export default async function SignContract({ params }: { params: Promise<{ id: s
         <div className="card space-y-2 bg-emerald-50">
           <p className="text-emerald-900">✓ Firmado el {when.format(c.signedAt)}.</p>
           {c.signerNote && <p className="text-sm text-stone-700">Tus observaciones: {c.signerNote}</p>}
-          <a href={`/api/contracts/${c.id}/pdf`} target="_blank" className="btn">Descargar PDF firmado</a>
+          <FileLink href={`/api/contracts/${c.id}/pdf`} title={c.title} className="btn">Ver PDF firmado</FileLink>
           {c.kind === "RGPD" && <Link href="/app/perfil" className="btn btn-primary">Subir mis documentos ›</Link>}
         </div>
       ) : (
