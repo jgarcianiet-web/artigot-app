@@ -23,6 +23,8 @@ export async function notify(opts: {
   workerIds?: string[];
   workerUrl?: string;
   admins?: boolean;
+  /** Solo a estos usuarios de RRHH (por su nombre) */
+  adminNames?: string[];
   excludeAdmin?: string;
   adminUrl?: string;
   title: string;
@@ -32,6 +34,7 @@ export async function notify(opts: {
   const or = [];
   if (opts.workerIds?.length) or.push({ workerId: { in: opts.workerIds } });
   if (opts.admins) or.push({ workerId: null, adminName: { not: null } });
+  if (opts.adminNames?.length) or.push({ workerId: null, adminName: { in: opts.adminNames } });
   if (!or.length) return;
   const devices = await db.device.findMany({ where: { OR: or } });
   const targets = devices.filter((d) => !(d.workerId === null && opts.excludeAdmin && d.adminName === opts.excludeAdmin));

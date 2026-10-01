@@ -8,7 +8,7 @@ import { isEventLead } from "./reviews";
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
 
-export type Scope = "CHAT" | "INCIDENT" | "DOC" | "CANDIDATE" | "SIGNATURE" | "PHOTO";
+export type Scope = "CHAT" | "INCIDENT" | "DOC" | "CANDIDATE" | "SIGNATURE" | "PHOTO" | "STAFF";
 
 /** Guarda una imagen subida (las fotos se reducen en el móvil antes de enviarlas). */
 export async function storeImage(file: File, opts: { eventId: string; scope: Scope; incidentId?: string }) {
@@ -20,6 +20,12 @@ export async function storeImage(file: File, opts: { eventId: string; scope: Sco
 export async function storeDocument(file: File, workerId: string) {
   if (!IMAGE_TYPES.includes(file.type) && file.type !== "application/pdf") throw new Error("Sube una foto o un PDF.");
   return store(file, { scope: "DOC", workerId });
+}
+
+/** Foto del chat interno de RRHH (solo la ve RRHH). */
+export async function storeStaffImage(file: File) {
+  if (!IMAGE_TYPES.includes(file.type)) throw new Error("Solo se pueden enviar fotos (JPG, PNG, WEBP o HEIC).");
+  return store(file, { scope: "STAFF" });
 }
 
 /** Foto de perfil del trabajador (la revisa RRHH). */
@@ -111,7 +117,7 @@ export async function sweepOrphanFiles() {
 export async function canReadFile(viewer: Viewer, file: { scope: string; eventId: string | null; workerId: string | null }) {
   if (viewer.kind === "admin") return true;
   if (file.scope === "DOC" || file.scope === "SIGNATURE" || file.scope === "PHOTO") return file.workerId === viewer.id;
-  if (file.scope === "CANDIDATE") return false; // solo RRHH
+  if (file.scope === "CANDIDATE" || file.scope === "STAFF") return false; // solo RRHH
   if (!file.eventId) return false;
   if (file.scope === "CHAT") return canAccessChat(viewer, file.eventId);
   if (file.scope === "INCIDENT") return isEventLead(file.eventId, viewer.id);

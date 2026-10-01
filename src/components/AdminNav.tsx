@@ -7,7 +7,7 @@ import { Logo } from "./Logo";
 
 type Item = { href: string; label: string };
 const GROUPS: { title?: string; items: Item[] }[] = [
-  { items: [{ href: "/admin", label: "Panel" }, { href: "/admin/calendario", label: "Calendario" }] },
+  { items: [{ href: "/admin", label: "Panel" }, { href: "/admin/calendario", label: "Calendario" }, { href: "/admin/mensajes", label: "Mensajes" }] },
   { title: "Eventos", items: [{ href: "/admin/eventos", label: "Eventos" }, { href: "/admin/chats", label: "Chats" }, { href: "/admin/incidencias", label: "Incidencias" }, { href: "/admin/sondeos", label: "Sondeos" }] },
   { title: "Personal", items: [{ href: "/admin/personal", label: "Personal" }, { href: "/admin/documentos", label: "Documentos" }, { href: "/admin/candidatos", label: "Candidatos" }, { href: "/admin/altas", label: "Altas y bajas" }] },
   { title: "Nóminas", items: [{ href: "/admin/liquidacion", label: "Horas y pagos" }, { href: "/admin/informes", label: "Informes" }] },
