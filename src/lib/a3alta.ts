@@ -343,3 +343,34 @@ export async function buildBajasWorkbook(rows: BajaRow[], companyCode: string, c
   });
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
+
+// ---------- Altas de quien ya está en A3 (formato «MA - Alta sucesiva») ----------
+
+export const ALTAS_SUCESIVAS_TEMPLATE = path.join(process.cwd(), "templates", "a3-altas-sucesivas.xlsx");
+
+export type AltaSucesivaRow = BajaRow & { role: Role };
+
+/**
+ * Rellena la plantilla de altas sucesivas de A3 (un nuevo llamamiento de un fijo discontinuo que ya
+ * tiene ficha en A3): una fila por alta con su convenio y su ocupación (CNO) según el puesto.
+ * Quien todavía no está en A3 va en el alta masiva.
+ */
+export async function buildAltasSucesivasWorkbook(rows: AltaSucesivaRow[], companyCode: string, cfg: A3AltaConfig) {
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.readFile(ALTAS_SUCESIVAS_TEMPLATE);
+  const ws = wb.worksheets[0];
+  rows.forEach((r, i) => {
+    const row = ws.getRow(3 + i);
+    row.getCell("A").value = /^\d+$/.test(companyCode) ? Number(companyCode) : companyCode;
+    row.getCell("B").value = r.code ?? "";
+    row.getCell("C").value = a3Name(r);
+    const d = row.getCell("D");
+    d.value = new Date(`${r.date}T00:00:00Z`);
+    d.numFmt = "dd/mm/yyyy";
+    if (cfg.agreement) row.getCell("P").value = cfg.agreement;
+    const cno = cfg.occupation[r.role] ?? cfg.occupation.CAMARERO;
+    if (cno) row.getCell("Q").value = cno;
+    row.commit();
+  });
+  return Buffer.from(await wb.xlsx.writeBuffer());
+}

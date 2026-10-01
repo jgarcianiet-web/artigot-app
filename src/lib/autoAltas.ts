@@ -186,11 +186,11 @@ export async function dayMovements(date: string) {
   rows.sort((a, b) => Number(b.alta) - Number(a.alta) || a.name.localeCompare(b.name, "es"));
   // Bajas con fecha de hoy (incluye las de un servicio de ayer que pasó de medianoche)
   const bajasDelDia = await db.employment.findMany({ where: { endDate: date }, select: { id: true, worker: { select: { name: true, a3Code: true } } } });
-  const altasDelDia = await db.employment.count({ where: { startDate: date } });
+  const altasDelDia = await db.employment.findMany({ where: { startDate: date }, select: { id: true, worker: { select: { name: true, a3Code: true } } } });
   return {
     rows,
     bajasDelDia: bajasDelDia.map((e) => ({ name: e.worker.name, a3Code: e.worker.a3Code })),
-    altasDelDia,
+    altasDelDia: altasDelDia.map((e) => ({ name: e.worker.name, a3Code: e.worker.a3Code })),
     altas: rows.filter((r) => r.alta).length,
     siguen: rows.filter((r) => r.sigue).length,
     bajas: rows.filter((r) => !r.sigue).length,
