@@ -1,11 +1,12 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand-50: #f5f3ff;
-  --color-brand-100: #ede9fe;
-  --color-brand-600: #5b3fd6;
-  --color-brand-700: #4a31b8;
-  --color-brand-900: #2a1a70;
+  /* Colores de Artigot Catering: negro y grises, como el logo */
+  --color-brand-50: #f5f5f4;
+  --color-brand-100: #e7e5e4;
+  --color-brand-600: #1c1917;
+  --color-brand-700: #0c0a09;
+  --color-brand-900: #1c1917;
 }
 
 @layer base {
@@ -55,6 +56,6 @@
     @apply border-b border-stone-100 px-3 py-2 align-middle;
   }
   .link {
-    @apply font-medium text-brand-700 hover:underline;
+    @apply font-medium text-stone-900 underline decoration-stone-300 underline-offset-2 hover:decoration-stone-900;
   }
 }

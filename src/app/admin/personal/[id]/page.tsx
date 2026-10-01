@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { privacySignature } from "@/lib/privacy";
+import { incompleteWorkers } from "@/lib/completeness";
 import { notFound } from "next/navigation";
 import {
   addLoan,
@@ -46,6 +47,7 @@ export default async function WorkerDetail({ params }: { params: Promise<{ id: s
   });
   if (!worker) notFound();
   const privacy = await privacySignature(worker.id);
+  const missing = worker.active ? ((await incompleteWorkers([worker.id]))[0]?.missing ?? []) : [];
 
   const instructions = [
     `Hola ${worker.name.split(" ")[0]}, ya tienes acceso a la app de Artigot para ver convocatorias, confirmar, fichar y hablar en el chat de cada evento.`,
@@ -199,6 +201,7 @@ export default async function WorkerDetail({ params }: { params: Promise<{ id: s
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="card space-y-3">
           <h2>Datos laborales</h2>
+          {missing.length > 0 && <p className="rounded bg-amber-50 p-2 text-sm text-amber-900">Falta: {missing.join(", ")}. Se le recuerda automáticamente.</p>}
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
             <dt className="text-stone-500">Protección de datos</dt>
             <dd>

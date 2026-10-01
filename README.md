@@ -50,6 +50,13 @@ Aplicación para que RRHH gestione de forma rápida el personal de **bodas y eve
 - **Sondeos de disponibilidad**: RRHH pregunta qué días puede trabajar el personal (por fechas, días de la semana y puesto). «No puedo» marca el día como no disponible; «Puedo» pone a esa persona primero al convocar y en «Autocompletar». Resultados por día, recordatorio a quien falta y cierre.
 - **Registro de cambios**: quién cambió qué y cuándo (horas con el antes y el después, netos, remesas, fechas de pago, altas y bajas, datos del personal con el IBAN enmascarado, eventos, convocatorias, transporte, sondeos, usuarios, accesos fallidos y ajustes). Filtros, búsqueda, exportación a Excel e historial desde la ficha de cada persona.
 
+**Documentos, copias y bienvenida**
+- **Bandeja de documentos** (menú «Documentos», con contador): los subidos por el personal y sin revisar, agrupados por persona y con vista previa. **✓ Correcto**, **Todos correctos** o **Rechazar** con un motivo (ilegible, caducado, no es el documento…): el documento se borra y la persona recibe un aviso para subirlo de nuevo. Pestaña con los caducados o a punto de caducar.
+- **Datos incompletos**: el panel y Personal (filtro «Datos incompletos») muestran quién no ha firmado la protección de datos o le falta DNI, Seguridad Social, IBAN o sus documentos, destacando a quien tiene un servicio en los próximos 7 días. Se le recuerda solo (ver tabla de recordatorios).
+- **Bienvenida guiada**: la primera vez, la app del personal muestra tres pasos con barra de progreso: firmar la protección de datos, completar datos y documentos, y activar los avisos. Desaparece al terminar.
+- **Archivos fuera de la base de datos y copias de seguridad** (Ajustes → Copias de seguridad): con un almacén compatible con S3 configurado, documentos, firmas, fotos y CV se guardan allí **cifrados** (AES-256-GCM) y la base de datos queda ligera. Cada noche se hace una **copia completa** de la base de datos, comprimida y cifrada, en el mismo almacén: se conservan 30 diarias y una por mes durante 12 meses. Desde Ajustes se puede pasar los archivos existentes al almacén, hacer una copia al momento y descargar cualquiera.
+- **Colores de marca**: negro y piedra, como el logo. Icono y pantalla de inicio de las apps con el logo en blanco sobre negro.
+
 **Personal (app)**
 - Entra una sola vez con su **teléfono y el código de 6 cifras** que le da RRHH.
 - Acepta o rechaza convocatorias, ficha entrada y salida y marca los días que no puede trabajar.
@@ -87,6 +94,9 @@ Aplicación para que RRHH gestione de forma rápida el personal de **bodas y eve
 | 10 min después de la citación sin haber fichado | Al trabajador, al maître o responsable y a RRHH |
 | La mañana siguiente (10:00), si faltan valoraciones | Al maître o responsable |
 | 30 días antes de que caduque un documento y el día que caduca | Al trabajador y a RRHH |
+| Datos o documentos sin completar (11:00): cada día si tiene un servicio en los próximos 7 días, si no cada 3 días | Al trabajador, con lo que le falta |
+| Documentos por revisar (09:00) | A RRHH, un resumen |
+| Copia de seguridad nocturna (03:00), si falla | A RRHH |
 
   Los tiempos están en `REMINDERS` (`src/lib/reminders.ts`). Con `REMINDERS=off` se desactivan.
 - **Panel en directo** para el maître o camarero responsable (en la app) y para RRHH (botón «🔴 En directo» del evento). Muestra quién trabaja, quién no ha fichado (en rojo, con botón para llamar) y quién ha salido, y se actualiza cada 30 s. El responsable puede **marcar la llegada** de alguien que no puede fichar, por ejemplo si se ha quedado sin batería; queda como fichaje manual con su nombre.
@@ -149,8 +159,16 @@ Sin ubicación fijada, el evento muestra un aviso y el personal no puede fichar.
    | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | ejecuta `npm run vapid` en tu ordenador y copia las dos claves |
    | `VAPID_SUBJECT` | `mailto:` + un email de contacto de la empresa |
 
+   | `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | almacén de archivos y copias (ver abajo) |
+   | `S3_ENDPOINT`, `S3_REGION` | URL del almacén (vacío para Amazon S3) y región (`auto` en R2) |
+   | `FILES_ENCRYPTION_KEY` | clave de cifrado de archivos y copias: `openssl rand -base64 32`. **Guárdala aparte**: sin ella no se pueden leer las copias |
+
 5. **Settings → Networking → Generate Domain** para obtener la URL pública, o conecta un dominio propio. Pon esa URL en `APP_URL`.
 6. Al desplegar se aplican las migraciones solas y se crean las tarifas por defecto. Entra en `/login`: la primera vez pide la clave de instalación para crear tu usuario. Después da de alta al resto de RRHH en Ajustes → Usuarios, importa al personal y dales su teléfono y código (botón **Copiar instrucciones de acceso** en cada ficha o **Exportar códigos**).
+
+**Almacén de archivos y copias de seguridad.** Sin las variables `S3_*` todo funciona, pero los archivos se guardan en la base de datos y no hay copias automáticas. Sirve cualquier almacén compatible con S3: un *Bucket* de Railway (**New → Bucket**, y copia sus credenciales), Cloudflare R2 o Backblaze B2. Tras configurarlo, entra en Ajustes → Copias de seguridad y pulsa «Pasar archivos al almacén» (también se hace solo cada noche).
+
+**Restaurar una copia** (borra los datos actuales): con las mismas variables `DATABASE_URL`, `S3_*` y `FILES_ENCRYPTION_KEY`, ejecuta `npx tsx scripts/restore.ts --latest --yes`, o pasa el nombre de la copia o un fichero descargado en lugar de `--latest`.
 
 Con esto ya funcionan la web de RRHH, la web app del personal y los **avisos en navegador y en la web app**. En iPhone, los avisos web exigen iOS 16.4 o superior y añadir la web a la pantalla de inicio.
 

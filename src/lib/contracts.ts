@@ -5,6 +5,7 @@ import { after } from "next/server";
 import { db } from "./db";
 import { callTime, euro, formatDate, ROLE_LABEL, type Role } from "./domain";
 import { notify } from "./push";
+import { readStoredFile } from "./files";
 import type { RecordData } from "./timeRecord";
 
 /**
@@ -141,7 +142,7 @@ function wrap(text: string, font: { widthOfTextAtSize(t: string, s: number): num
 export async function contractPdf(contractId: string) {
   const c = await db.contract.findUniqueOrThrow({
     where: { id: contractId },
-    include: { worker: { select: { name: true, dni: true } }, signature: { select: { data: true } } },
+    include: { worker: { select: { name: true, dni: true } }, signature: { select: { data: true, storageKey: true } } },
   });
   const company = await getCompany();
   const pdf = await PDFDocument.create();
@@ -222,7 +223,7 @@ export async function contractPdf(contractId: string) {
   page.drawText("Firma de la persona trabajadora:", { x: M, y, size: 10, font: bold });
   y -= 8;
   if (c.signature && c.signedAt) {
-    const img = await pdf.embedPng(c.signature.data);
+    const img = await pdf.embedPng(await readStoredFile(c.signature));
     const scale = Math.min(200 / img.width, 80 / img.height);
     page.drawImage(img, { x: M, y: y - img.height * scale, width: img.width * scale, height: img.height * scale });
     y -= img.height * scale + 16;

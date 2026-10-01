@@ -112,7 +112,7 @@ export default async function MyPay({ searchParams }: { searchParams: Promise<{ 
       {record && (
         <Link href={`/app/firmar/${record.id}`} className="card flex items-center justify-between text-sm">
           <span>🕒 Registro de jornada de {MONTHS[mm - 1]}</span>
-          <span className={record.signedAt ? "text-emerald-700" : "font-medium text-violet-700"}>{record.signedAt ? "✓ Firmado" : "Firmar ›"}</span>
+          <span className={record.signedAt ? "text-emerald-700" : "font-medium text-stone-900 underline"}>{record.signedAt ? "✓ Firmado" : "Firmar ›"}</span>
         </Link>
       )}
 

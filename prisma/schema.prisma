@@ -240,7 +240,9 @@ model StoredFile {
   scope      String
   mime       String
   size       Int
-  data       Bytes
+  // Contenido: en el almacén de archivos (storageKey, cifrado) o, si no hay almacén configurado, aquí
+  data       Bytes?
+  storageKey String?
   createdAt  DateTime @default(now())
   event      Event?   @relation(fields: [eventId], references: [id], onDelete: Cascade)
   incidentId String?

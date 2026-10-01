@@ -75,8 +75,8 @@ export function LocationPicker({
       layers.current.marker.setLatLng([p.lat, p.lng]);
       layers.current.circle.setLatLng([p.lat, p.lng]);
     } else {
-      const circle = L.circle([p.lat, p.lng], { radius, color: "#5b3fd6", weight: 2, fillOpacity: 0.12 }).addTo(m);
-      const marker = L.circleMarker([p.lat, p.lng], { radius: 7, color: "#fff", weight: 2, fillColor: "#5b3fd6", fillOpacity: 1 }).addTo(m);
+      const circle = L.circle([p.lat, p.lng], { radius, color: "#1c1917", weight: 2, fillOpacity: 0.12 }).addTo(m);
+      const marker = L.circleMarker([p.lat, p.lng], { radius: 7, color: "#fff", weight: 2, fillColor: "#1c1917", fillOpacity: 1 }).addTo(m);
       layers.current = { marker, circle };
     }
   }

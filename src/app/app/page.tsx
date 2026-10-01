@@ -11,7 +11,11 @@ import { pendingReviews } from "@/lib/reviews";
 import { addDays, callTime, isLeadRole, formatDate, num, ROLE_LABEL, today, workedHours, type Role } from "@/lib/domain";
 import { Checklist } from "@/components/StaffForms";
 import { checklistFor, getUniform, lines } from "@/lib/staff";
-import { answerMySwap, respond, toggleUnavailable } from "./actions";
+import { answerMySwap, respond, startPrivacySignature, toggleUnavailable } from "./actions";
+import { Onboarding } from "@/components/Onboarding";
+import { incompleteWorkers } from "@/lib/completeness";
+import { privacySignature } from "@/lib/privacy";
+import { pushConfig } from "@/lib/push";
 
 const DAYS_AHEAD = 56;
 
@@ -62,6 +66,18 @@ export default async function WorkerHome() {
     openPollsFor(worker),
   ]);
   const toReview = worker.assignments.some((a) => isLeadRole(a.role)) ? await pendingReviews(me.id) : [];
+  // Bienvenida guiada: protección de datos, datos y documentos, avisos
+  const [privacy, incomplete, devices] = await Promise.all([
+    privacySignature(me.id),
+    incompleteWorkers([me.id]),
+    db.device.count({ where: { workerId: me.id } }),
+  ]);
+  const dataMissing = (incomplete[0]?.missing ?? []).filter((m) => m !== "firma de protección de datos");
+  const steps = [
+    { key: "rgpd", title: "Firma la información de protección de datos", text: "Lee qué datos tratamos y para qué, y fírmalo con el dedo.", done: !!privacy },
+    { key: "datos", title: "Completa tus datos y documentos", text: `Necesitamos tu DNI, Seguridad Social e IBAN con sus documentos para darte de alta y pagarte.${dataMissing.length ? ` Te falta: ${dataMissing.join(", ")}.` : ""}`, done: !!privacy && dataMissing.length === 0 },
+    { key: "avisos", title: "Activa los avisos", text: "Así te enteras al momento de convocatorias, cambios y mensajes del chat.", done: devices > 0 },
+  ];
   const blocked = toReview.some((p) => p.overdue);
 
   const unavailable = new Set(worker.unavailabilities.map((u) => u.date));
@@ -86,10 +102,12 @@ export default async function WorkerHome() {
         <h1>Hola, {worker.name.split(" ")[0]}</h1>
       </header>
 
+      {steps.some((st) => !st.done) && <Onboarding name={worker.name.split(" ")[0]} steps={steps} push={pushConfig()} signAction={startPrivacySignature} />}
+
       {polls.map((p) => <PollCard key={p.id} poll={p} busy={busy} />)}
 
       {toSign.length > 0 && (
-        <section className="card space-y-2 border-violet-300 bg-violet-50">
+        <section className="card space-y-2 border-stone-300 bg-stone-100">
           <h2>✍️ Documentos para firmar</h2>
           {toSign.map((c) => (
             <Link key={c.id} href={`/app/firmar/${c.id}`} className="btn w-full justify-between">

@@ -9,7 +9,7 @@ type Item = { href: string; label: string };
 const GROUPS: { title?: string; items: Item[] }[] = [
   { items: [{ href: "/admin", label: "Panel" }, { href: "/admin/calendario", label: "Calendario" }] },
   { title: "Eventos", items: [{ href: "/admin/eventos", label: "Eventos" }, { href: "/admin/chats", label: "Chats" }, { href: "/admin/incidencias", label: "Incidencias" }] },
-  { title: "Personal", items: [{ href: "/admin/personal", label: "Personal" }, { href: "/admin/sondeos", label: "Sondeos" }, { href: "/admin/candidatos", label: "Candidatos" }, { href: "/admin/altas", label: "Altas y bajas" }] },
+  { title: "Personal", items: [{ href: "/admin/personal", label: "Personal" }, { href: "/admin/documentos", label: "Documentos" }, { href: "/admin/sondeos", label: "Sondeos" }, { href: "/admin/candidatos", label: "Candidatos" }, { href: "/admin/altas", label: "Altas y bajas" }] },
   { title: "Nóminas", items: [{ href: "/admin/liquidacion", label: "Liquidación" }, { href: "/admin/pagos", label: "Pagos" }, { href: "/admin/jornada", label: "Registro de jornada" }, { href: "/admin/informes", label: "Informes" }] },
   { items: [{ href: "/admin/registro", label: "Registro de cambios" }, { href: "/admin/ajustes", label: "Ajustes" }] },
 ];
@@ -23,7 +23,7 @@ function isActive(path: string, href: string) {
   return path === href || path.startsWith(`${href}/`);
 }
 
-function Links({ path, onNavigate }: { path: string; onNavigate?: () => void }) {
+function Links({ path, onNavigate, badges }: { path: string; onNavigate?: () => void; badges: Record<string, number> }) {
   return (
     <nav className="space-y-5 text-sm">
       {GROUPS.map((g, i) => (
@@ -40,7 +40,10 @@ function Links({ path, onNavigate }: { path: string; onNavigate?: () => void }) 
                     onClick={onNavigate}
                     className={`block rounded-md px-3 py-1.5 ${active ? "bg-stone-900 font-medium text-white" : "text-stone-700 hover:bg-stone-100"}`}
                   >
-                    {n.label}
+                    <span className="flex items-center justify-between gap-2">
+                      {n.label}
+                      {!!badges[n.href] && <span className={`rounded-full px-1.5 text-[11px] font-semibold ${active ? "bg-white text-stone-900" : "bg-amber-100 text-amber-900"}`}>{badges[n.href]}</span>}
+                    </span>
                   </Link>
                 </li>
               );
@@ -61,7 +64,7 @@ function Account({ name, logout }: { name: string; logout: () => Promise<void> }
   );
 }
 
-export function AdminNav({ name, logout }: { name: string; logout: () => Promise<void> }) {
+export function AdminNav({ name, logout, badges = {} }: { name: string; logout: () => Promise<void>; badges?: Record<string, number> }) {
   const path = usePathname();
   const [open, setOpen] = useState(false);
   useEffect(() => {
@@ -76,7 +79,7 @@ export function AdminNav({ name, logout }: { name: string; logout: () => Promise
       {/* Ordenador: barra lateral fija */}
       <aside className="sticky top-0 hidden h-dvh w-56 shrink-0 flex-col gap-6 overflow-y-auto border-r border-stone-200 bg-white px-3 py-5 lg:flex">
         <Link href="/admin" className="px-3" aria-label="Panel"><Logo height={44} /></Link>
-        <div className="flex-1"><Links path={path} /></div>
+        <div className="flex-1"><Links path={path} badges={badges} /></div>
         <Account name={name} logout={logout} />
       </aside>
 
@@ -96,7 +99,7 @@ export function AdminNav({ name, logout }: { name: string; logout: () => Promise
               <Logo height={30} />
               <button className="text-2xl leading-none text-stone-500" aria-label="Cerrar menú" onClick={() => setOpen(false)}>×</button>
             </div>
-            <div className="flex-1"><Links path={path} onNavigate={() => setOpen(false)} /></div>
+            <div className="flex-1"><Links path={path} onNavigate={() => setOpen(false)} badges={badges} /></div>
             <Account name={name} logout={logout} />
           </div>
         </div>
