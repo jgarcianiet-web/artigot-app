@@ -5,6 +5,8 @@ import { MAX_FILE_BYTES, storeDocument } from "./files";
  * DNI, nº de la Seguridad Social e IBAN van siempre acompañados de su documento:
  * foto o PDF del DNI/NIE, de la tarjeta de la Seguridad Social y del certificado de titularidad de la cuenta.
  * Si el dato se rellena o se cambia y aún no hay documento de ese tipo (o el dato ha cambiado), hay que adjuntarlo.
+ * Vale tanto el que se adjunta en el formulario como uno subido antes en «Mis documentos»: si el
+ * dato es nuevo, cualquiera de ese tipo; si cambia, uno que RRHH aún no haya revisado (el nuevo).
  */
 export const IDENTITY_DOCS = [
   { field: "dni", type: "DNI", input: "doc_dni", what: "la foto o PDF del DNI / NIE" },
@@ -21,9 +23,11 @@ const hasFile = (form: FormData, key: string) => {
 
 /** Error si falta algún documento obligatorio, o null. */
 export async function checkIdentityDocs(workerId: string | null, before: Values | null, after: Values, form: FormData) {
-  const have = new Set(
-    workerId ? (await db.workerDocument.findMany({ where: { workerId, type: { in: IDENTITY_DOCS.map((d) => d.type) } }, select: { type: true } })).map((d) => d.type) : [],
-  );
+  const docs = workerId
+    ? await db.workerDocument.findMany({ where: { workerId, type: { in: IDENTITY_DOCS.map((d) => d.type) } }, select: { type: true, verified: true } })
+    : [];
+  const have = new Set(docs.map((d) => d.type));
+  const pending = new Set(docs.filter((d) => !d.verified).map((d) => d.type));
   for (const d of IDENTITY_DOCS) {
     const f = form.get(d.input);
     if (f instanceof File && f.size > 0) {
@@ -34,8 +38,10 @@ export async function checkIdentityDocs(workerId: string | null, before: Values 
   for (const d of IDENTITY_DOCS) {
     const value = after[d.field];
     if (!value) continue;
-    const changed = (before?.[d.field] ?? null) !== value;
-    if ((changed || !have.has(d.type)) && !hasFile(form, d.input)) return `Adjunta ${d.what}.`;
+    if (hasFile(form, d.input)) continue;
+    const previous = before?.[d.field] ?? null;
+    const ok = previous === value || !previous ? have.has(d.type) : pending.has(d.type);
+    if (!ok) return `Adjunta ${d.what}.`;
   }
   return null;
 }

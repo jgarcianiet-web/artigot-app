@@ -1,5 +1,7 @@
 "use client";
 
+import { FileLink } from "./FileLink";
+
 /**
  * DNI, nº de la Seguridad Social e IBAN, cada uno con su documento adjunto (foto o PDF).
  * Se usa en la ficha de RRHH y en «Mis datos» de la app del personal.
@@ -38,7 +40,7 @@ export function IdentityFields({
               {d ? (
                 <span className="ml-1 text-emerald-700">
                   · ✓ ya adjuntado{d.verified ? " y revisado" : ""}
-                  {d.fileId && <> (<a href={`/api/files/${d.fileId}`} target="_blank" className="underline">ver</a>)</>}. Adjunta otro solo si cambia el dato.
+                  {d.fileId && <> (<FileLink href={`/api/files/${d.fileId}`} title={f.label} className="underline">ver</FileLink>)</>}. Adjunta otro solo si cambia el dato.
                 </span>
               ) : (
                 <span className="ml-1 font-medium text-red-700">· obligatorio</span>

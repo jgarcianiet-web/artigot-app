@@ -104,7 +104,7 @@ export default async function WorkerHome() {
         <h1>Hola, {worker.name.split(" ")[0]}</h1>
       </header>
 
-      {steps.some((st) => !st.done) && <Onboarding name={worker.name.split(" ")[0]} steps={steps} push={pushConfig()} signAction={startPrivacySignature} />}
+      {steps.some((st) => !st.done) && <Onboarding name={worker.name.split(" ")[0]} steps={steps} push={await pushConfig()} signAction={startPrivacySignature} />}
 
       {polls.map((p) => <PollCard key={p.id} poll={p} busy={busy} />)}
 

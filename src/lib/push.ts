@@ -8,15 +8,42 @@ import { db } from "./db";
  *  - web:  Web Push (navegadores y web app instalada en iPhone/Android) con claves VAPID
  *  - fcm:  app Android, vía Firebase Cloud Messaging (API HTTP v1)
  *  - apns: app iOS, directamente contra Apple Push Notification service
- * Cada canal se activa solo si sus variables de entorno están configuradas.
+ * Web Push funciona siempre (claves VAPID propias o generadas); FCM y APNs, si sus variables están configuradas.
  */
 
 type Push = { title: string; body: string; url: string; tag?: string };
 
-export const pushConfig = () => ({
-  webPublicKey: process.env.VAPID_PUBLIC_KEY ?? null,
+const apnsEnabled = () => !!(process.env.APNS_KEY && process.env.APNS_KEY_ID && process.env.APNS_TEAM_ID && process.env.APNS_BUNDLE_ID);
+
+type VapidKeys = { publicKey: string; privateKey: string };
+let vapid: Promise<VapidKeys> | null = null;
+
+/**
+ * Claves VAPID de Web Push: las de las variables VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY si están;
+ * si no, se generan la primera vez y se guardan en la base de datos, para que los avisos funcionen
+ * sin configurar nada (y las suscripciones sigan valiendo después de cada despliegue).
+ */
+export function vapidKeys(): Promise<VapidKeys> {
+  const { VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY } = process.env;
+  if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) return Promise.resolve({ publicKey: VAPID_PUBLIC_KEY, privateKey: VAPID_PRIVATE_KEY });
+  vapid ??= (async () => {
+    const saved = await db.setting.findUnique({ where: { key: "vapid" } });
+    if (saved) return saved.value as VapidKeys;
+    const keys = webpush.generateVAPIDKeys();
+    // Si dos peticiones llegan a la vez, se queda la primera que se guardó
+    await db.setting.createMany({ data: [{ key: "vapid", value: { publicKey: keys.publicKey, privateKey: keys.privateKey } }], skipDuplicates: true });
+    return (await db.setting.findUniqueOrThrow({ where: { key: "vapid" } })).value as VapidKeys;
+  })().catch((e) => {
+    vapid = null;
+    throw e;
+  });
+  return vapid;
+}
+
+export const pushConfig = async () => ({
+  webPublicKey: (await vapidKeys().catch(() => null))?.publicKey ?? null,
   fcm: !!process.env.FCM_SERVICE_ACCOUNT,
-  apns: !!(process.env.APNS_KEY && process.env.APNS_KEY_ID && process.env.APNS_TEAM_ID && process.env.APNS_BUNDLE_ID),
+  apns: apnsEnabled(),
 });
 
 export async function notify(opts: {
@@ -69,11 +96,10 @@ function send(d: { kind: string; token: string; keys: unknown }, p: Push): Promi
 // ---------- Web Push ----------
 
 async function sendWeb(endpoint: string, keys: { p256dh: string; auth: string }, p: Push): Promise<Result> {
-  const { VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT } = process.env;
-  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return "skipped";
+  const { publicKey, privateKey } = await vapidKeys();
   try {
     await webpush.sendNotification({ endpoint, keys }, JSON.stringify(p), {
-      vapidDetails: { subject: VAPID_SUBJECT || "mailto:rrhh@example.com", publicKey: VAPID_PUBLIC_KEY, privateKey: VAPID_PRIVATE_KEY },
+      vapidDetails: { subject: process.env.VAPID_SUBJECT || "mailto:rrhh@example.com", publicKey, privateKey },
       TTL: 60 * 60 * 24,
       urgency: "high",
       topic: p.tag?.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32),
@@ -160,7 +186,7 @@ function apnsToken() {
 }
 
 function sendApns(token: string, p: Push): Promise<Result> {
-  if (!pushConfig().apns) return Promise.resolve("skipped");
+  if (!apnsEnabled()) return Promise.resolve("skipped");
   // Las builds de TestFlight y App Store usan el entorno de producción de APNs
   const host = process.env.APNS_SANDBOX === "1" ? "https://api.sandbox.push.apple.com" : "https://api.push.apple.com";
   return new Promise((resolve, reject) => {

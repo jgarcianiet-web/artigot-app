@@ -1,3 +1,4 @@
+import { FileLink } from "./FileLink";
 import { INCIDENT_LABEL } from "@/lib/incidentTypes";
 
 type Incident = {
@@ -48,10 +49,10 @@ export function IncidentList({
           {i.photos.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {i.photos.map((p) => (
-                <a key={p.id} href={`/api/files/${p.id}`} target="_blank">
+                <FileLink key={p.id} href={`/api/files/${p.id}`} title="Foto de la incidencia">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={`/api/files/${p.id}`} alt="Foto de la incidencia" className="h-24 w-24 rounded-md object-cover" loading="lazy" />
-                </a>
+                </FileLink>
               ))}
             </div>
           )}

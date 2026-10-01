@@ -16,7 +16,7 @@ export default async function WorkerLayout({ children }: { children: React.React
         <Link href="/app" aria-label="Inicio"><Logo height={30} /></Link>
       </header>
       <main className="mx-auto w-full max-w-lg flex-1 space-y-4 p-4 pb-24">
-        <PushSetup config={pushConfig()} />
+        <PushSetup config={await pushConfig()} />
         <OfflineClockSync />
         {children}
       </main>

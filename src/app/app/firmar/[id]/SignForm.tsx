@@ -1,5 +1,6 @@
 "use client";
 
+import { FileLink } from "@/components/FileLink";
 import { useActionState } from "react";
 import { signContract } from "@/app/app/actions";
 import { ActionForm, SubmitButton } from "@/components/client";
@@ -11,7 +12,7 @@ export function SignForm({ id, kind }: { id: string; kind: string }) {
     return (
       <div className="card space-y-2 bg-emerald-50">
         <p className="text-emerald-900">{r.message}</p>
-        <a href={`/api/contracts/${id}/pdf`} target="_blank" className="btn">Descargar PDF firmado</a>
+        <FileLink href={`/api/contracts/${id}/pdf`} className="btn">Ver PDF firmado</FileLink>
       </div>
     );
   }
