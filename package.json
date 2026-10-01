@@ -15,6 +15,7 @@
     "cap:ios": "npx cap sync ios && npx cap open ios"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1144.0",
     "@capacitor/android": "^8.5.2",
     "@capacitor/core": "^8.5.2",
     "@capacitor/geolocation": "^8.2.2",

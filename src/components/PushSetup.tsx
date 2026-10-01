@@ -118,3 +118,44 @@ export function PushSetup({ config }: { config: PushConfig }) {
     </div>
   );
 }
+
+/** Botón «Activar avisos» para la bienvenida guiada (mismo proceso que el aviso de arriba). */
+export function EnablePushButton({ config, onDone }: { config: PushConfig; onDone?: () => void }) {
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="space-y-1">
+      <button
+        type="button"
+        className="btn btn-primary btn-sm"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setMsg(null);
+          try {
+            if (isNativeApp()) {
+              await setupNative(config);
+            } else {
+              const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+              if (!("PushManager" in window) || !("Notification" in window)) {
+                setMsg(ios ? "En iPhone: pulsa Compartir → «Añadir a pantalla de inicio», abre Artigot desde ese icono y vuelve aquí." : "Este navegador no permite avisos.");
+                return;
+              }
+              if (!config.webPublicKey) return setMsg("Los avisos aún no están configurados en el servidor.");
+              if ((await Notification.requestPermission()) !== "granted") return setMsg("Has bloqueado los avisos. Actívalos en los ajustes del navegador para este sitio.");
+              await subscribeWeb(config.webPublicKey);
+            }
+            setTimeout(() => onDone?.(), 800);
+          } catch {
+            setMsg("No se han podido activar. Inténtalo de nuevo.");
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {busy ? "Activando…" : "Activar avisos"}
+      </button>
+      {msg && <p className="text-xs text-stone-600">{msg}</p>}
+    </div>
+  );
+}

@@ -23,6 +23,7 @@ import { notify } from "@/lib/push";
 import { isEventLead, pendingReviews, reviewTeam, reviewWindowOpen } from "@/lib/reviews";
 import { CRITERIA } from "@/lib/scoring";
 import { audit, diff } from "@/lib/audit";
+import { deleteStoredFile } from "@/lib/files";
 
 export async function login(_prev: string | null, form: FormData) {
   const error = await workerLogin(String(form.get("phone") ?? ""), String(form.get("code") ?? ""));
@@ -326,7 +327,7 @@ export async function deleteMyDocument(id: string) {
   const d = await db.workerDocument.findUnique({ where: { id } });
   if (!d || d.workerId !== me.id || d.verified) return; // los revisados por RRHH solo los borra RRHH
   await db.workerDocument.delete({ where: { id } });
-  if (d.fileId) await db.storedFile.delete({ where: { id: d.fileId } }).catch(() => {});
+  if (d.fileId) await deleteStoredFile(d.fileId);
   revalidatePath("/app/perfil");
 }
 

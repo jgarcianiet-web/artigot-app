@@ -1,7 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  
-  <g transform="translate(205 205) scale(0.6)" fill="none" stroke="#fff" stroke-width="44" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M292 330h440a60 60 0 0 1 60 60v250a60 60 0 0 1-60 60H520l-150 110v-110h-78a60 60 0 0 1-60-60V390a60 60 0 0 1 60-60z"/>
+    <g transform="translate(512 512) scale(0.62) translate(-512 -512)" fill="none" stroke="#fff" stroke-linecap="square">
+    <rect x="252" y="292" width="520" height="440" stroke-width="22"/>
+    <path d="M412 640 L512 382 L612 640 M452 548 H572" stroke-width="30" stroke-linejoin="miter"/>
   </g>
-  <text transform="translate(205 205) scale(0.6)" x="512" y="600" font-family="Georgia, 'Times New Roman', serif" font-size="300" font-weight="700" text-anchor="middle" fill="#fff">A</text>
 </svg>

@@ -1,6 +1,8 @@
 import type { Viewer } from "./auth";
 import { canAccessChat } from "./chat";
+import { randomUUID } from "node:crypto";
 import { db } from "./db";
+import { deleteObject, getObject, listObjects, putObject, storageEnabled } from "./storage";
 import { isEventLead } from "./reviews";
 
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -29,23 +31,69 @@ export async function storeCandidateFile(file: File) {
 /** Imagen de la firma de un documento (PNG generado en el navegador). */
 export async function storeSignature(png: Buffer, workerId: string) {
   if (png.length === 0 || png.length > 500_000) throw new Error("Firma no válida.");
-  return db.storedFile.create({ data: { scope: "SIGNATURE", workerId, mime: "image/png", size: png.length, data: new Uint8Array(png) }, select: { id: true } });
+  return save(png, { scope: "SIGNATURE", workerId, mime: "image/png" });
 }
 
 async function store(file: File, opts: { eventId?: string; scope: Scope; incidentId?: string; workerId?: string }) {
   if (file.size === 0 || file.size > MAX_FILE_BYTES) throw new Error("El archivo es demasiado grande (máximo 5 MB).");
-  return db.storedFile.create({
-    data: {
-      eventId: opts.eventId,
-      scope: opts.scope,
-      incidentId: opts.incidentId,
-      workerId: opts.workerId,
-      mime: file.type,
-      size: file.size,
-      data: Buffer.from(await file.arrayBuffer()),
-    },
-    select: { id: true },
-  });
+  return save(Buffer.from(await file.arrayBuffer()), { ...opts, mime: file.type });
+}
+
+type SaveOpts = { eventId?: string; scope: Scope; incidentId?: string; workerId?: string; mime: string };
+
+/** Guarda el contenido en el almacén de archivos (cifrado) o, si no hay almacén, en la base de datos. */
+async function save(data: Buffer, opts: SaveOpts) {
+  const meta = { eventId: opts.eventId, scope: opts.scope, incidentId: opts.incidentId, workerId: opts.workerId, mime: opts.mime, size: data.length };
+  if (!storageEnabled()) return db.storedFile.create({ data: { ...meta, data: new Uint8Array(data) }, select: { id: true } });
+  const id = randomUUID().replace(/-/g, "");
+  const storageKey = `files/${id}`;
+  await putObject(storageKey, data, opts.mime);
+  try {
+    return await db.storedFile.create({ data: { id, ...meta, storageKey }, select: { id: true } });
+  } catch (e) {
+    await deleteObject(storageKey).catch(() => {});
+    throw e;
+  }
+}
+
+/** Contenido de un archivo, esté donde esté. */
+export async function readStoredFile(f: { data: Uint8Array | null; storageKey: string | null }) {
+  if (f.storageKey) return getObject(f.storageKey);
+  if (f.data) return Buffer.from(f.data);
+  throw new Error("Archivo sin contenido");
+}
+
+/** Pasa al almacén los archivos que aún están en la base de datos (por tandas). */
+export async function migrateFilesToStorage(batch = 50, maxMs = 20_000) {
+  if (!storageEnabled()) return { moved: 0, remaining: await db.storedFile.count({ where: { storageKey: null } }) };
+  const start = Date.now();
+  let moved = 0;
+  while (Date.now() - start < maxMs) {
+    const files = await db.storedFile.findMany({ where: { storageKey: null, data: { not: null } }, select: { id: true, data: true, mime: true }, take: batch });
+    if (!files.length) break;
+    for (const f of files) {
+      const storageKey = `files/${f.id}`;
+      await putObject(storageKey, Buffer.from(f.data!), f.mime);
+      await db.storedFile.update({ where: { id: f.id }, data: { storageKey, data: null } });
+      moved++;
+    }
+  }
+  return { moved, remaining: await db.storedFile.count({ where: { storageKey: null } }) };
+}
+
+/** Borra del almacén los archivos cuyo registro ya no existe (p. ej. al borrar un trabajador). */
+export async function sweepOrphanFiles() {
+  if (!storageEnabled()) return 0;
+  const objects = await listObjects("files/");
+  const ids = objects.map((o) => o.key.slice("files/".length));
+  const existing = new Set<string>();
+  for (let i = 0; i < ids.length; i += 1000) {
+    for (const f of await db.storedFile.findMany({ where: { id: { in: ids.slice(i, i + 1000) } }, select: { id: true } })) existing.add(f.id);
+  }
+  // Solo objetos con más de un día: evita borrar uno que se esté subiendo en este momento
+  const old = objects.filter((o) => !existing.has(o.key.slice(6)) && (!o.modified || Date.now() - o.modified.getTime() > 864e5));
+  for (const o of old) await deleteObject(o.key);
+  return old.length;
 }
 
 /**
@@ -62,4 +110,10 @@ export async function canReadFile(viewer: Viewer, file: { scope: string; eventId
   if (file.scope === "CHAT") return canAccessChat(viewer, file.eventId);
   if (file.scope === "INCIDENT") return isEventLead(file.eventId, viewer.id);
   return false;
+}
+
+/** Borra un archivo (registro y contenido en el almacén). */
+export async function deleteStoredFile(id: string) {
+  const f = await db.storedFile.delete({ where: { id }, select: { storageKey: true } }).catch(() => null);
+  if (f?.storageKey && storageEnabled()) await deleteObject(f.storageKey).catch((e) => console.error("borrar archivo", id, e));
 }

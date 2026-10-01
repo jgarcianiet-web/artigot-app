@@ -6,6 +6,7 @@ import { coverage } from "@/lib/staffing";
 import { SwapApprovals } from "@/components/SwapApprovals";
 import { DOC_LABEL, DOC_WARN_DAYS } from "@/lib/staff";
 import { missingAltas, unreported } from "@/lib/employment";
+import { incompleteWorkers } from "@/lib/completeness";
 
 export default async function Dashboard() {
   const t = today();
@@ -31,7 +32,13 @@ export default async function Dashboard() {
     }),
   ]);
 
-  const [noAlta, notReported] = await Promise.all([missingAltas(t, 7), unreported()]);
+  const [noAlta, notReported, incomplete, docsPending] = await Promise.all([
+    missingAltas(t, 7),
+    unreported(),
+    incompleteWorkers(),
+    db.workerDocument.count({ where: { verified: false, worker: { active: true } } }),
+  ]);
+  const incompleteSoon = incomplete.filter((w) => w.upcoming);
   const rows = events.map((e) => {
     const cov = coverage(e, e.assignments);
     const need = cov.reduce((s, c) => s + c.need, 0);
@@ -79,6 +86,24 @@ export default async function Dashboard() {
         <section className="space-y-2">
           <h2>🔁 Cambios de turno</h2>
           <SwapApprovals swaps={swaps} />
+        </section>
+      )}
+
+      {(incomplete.length > 0 || docsPending > 0) && (
+        <section className="space-y-2">
+          <h2>🪪 Datos y documentos</h2>
+          <div className={`card space-y-1 text-sm ${incompleteSoon.length ? "border-red-300 bg-red-50" : ""}`}>
+            {docsPending > 0 && (
+              <p><Link href="/admin/documentos" className="link font-medium">{docsPending} {docsPending === 1 ? "documento" : "documentos"} por revisar</Link>.</p>
+            )}
+            {incomplete.length > 0 && (
+              <p>
+                <Link href="/admin/personal?incompletos=1" className="link">{incomplete.length} {incomplete.length === 1 ? "persona" : "personas"} con datos o documentos incompletos</Link>
+                {incompleteSoon.length > 0 && <span className="font-medium text-red-700">, {incompleteSoon.length} con servicio en los próximos 7 días: {incompleteSoon.map((w) => w.name).join(", ")}</span>}
+                . Se les recuerda automáticamente.
+              </p>
+            )}
+          </div>
         </section>
       )}
 

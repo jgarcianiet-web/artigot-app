@@ -30,6 +30,7 @@ import { approveSwap, rejectSwap } from "@/lib/swaps";
 import { EVENT_TYPES, formatDate, isRole, LEAD_ROLES, ROLE_LABEL, ROLES, type Role } from "@/lib/domain";
 import { notify } from "@/lib/push";
 import { autoReplace, candidatesFor, fillGaps, notifyInvited } from "@/lib/staffing";
+import { deleteStoredFile } from "@/lib/files";
 const time = z.string().regex(/^\d{2}:\d{2}$/);
 const optTime = z.union([time, z.literal("")]).transform((v) => v || null);
 const optText = z.string().trim().transform((v) => v || null);
@@ -576,13 +577,43 @@ export async function verifyDocument(id: string) {
   const d = await db.workerDocument.update({ where: { id }, data: { verified: true }, include: { worker: { select: { name: true } } } });
   await auditAdmin(by, "Documento", "Revisado", `${d.worker.name}: documento ${d.type} revisado`, { entityId: d.workerId });
   revalidatePath(`/admin/personal/${d.workerId}`);
+  revalidatePath("/admin/documentos");
+}
+
+/** Marca como revisados todos los documentos pendientes de una persona. */
+export async function verifyAllDocuments(workerId: string) {
+  const by = await requireAdmin();
+  const r = await db.workerDocument.updateMany({ where: { workerId, verified: false }, data: { verified: true } });
+  const w = await db.worker.findUnique({ where: { id: workerId }, select: { name: true } });
+  if (r.count) await auditAdmin(by, "Documento", "Revisado", `${w?.name}: ${r.count} documentos revisados`, { entityId: workerId });
+  revalidatePath("/admin", "layout");
+}
+
+/** Rechaza un documento (borroso, caducado, no corresponde…): se borra y se avisa a la persona para que lo suba de nuevo. */
+export async function rejectDocument(id: string, form: FormData) {
+  const by = await requireAdmin();
+  const reason = String(form.get("reason") ?? "").trim().slice(0, 200) || "No es válido";
+  const d = await db.workerDocument.delete({ where: { id }, include: { worker: { select: { name: true } } } });
+  if (d.fileId) await deleteStoredFile(d.fileId);
+  const what = DOC_LABEL[d.type] ?? "Un documento";
+  await auditAdmin(by, "Documento", "Rechazado", `${d.worker.name}: ${what} rechazado (${reason})`, { entityId: d.workerId });
+  after(() =>
+    notify({
+      workerIds: [d.workerId],
+      workerUrl: "/app/perfil",
+      title: "Documento rechazado",
+      body: `${what}: ${reason}. Súbelo de nuevo desde tu perfil.`,
+      tag: `doc-${d.workerId}`,
+    }),
+  );
+  revalidatePath("/admin", "layout");
 }
 
 export async function deleteDocument(id: string) {
   const by = await requireAdmin();
   const d = await db.workerDocument.delete({ where: { id }, include: { worker: { select: { name: true } } } });
   await auditAdmin(by, "Documento", "Borrado", `${d.worker.name}: borrado documento ${d.type}`, { entityId: d.workerId });
-  if (d.fileId) await db.storedFile.delete({ where: { id: d.fileId } }).catch(() => {});
+  if (d.fileId) await deleteStoredFile(d.fileId);
   revalidatePath(`/admin/personal/${d.workerId}`);
 }
 
@@ -644,7 +675,7 @@ export async function deleteContract(id: string) {
   const by = await requireAdmin();
   const c = await db.contract.delete({ where: { id }, include: { worker: { select: { name: true } } } });
   await auditAdmin(by, "Documento", "Anulado", `Anulado «${c.title}» de ${c.worker.name}`, { entityId: c.workerId });
-  if (c.signatureFileId) await db.storedFile.delete({ where: { id: c.signatureFileId } }).catch(() => {});
+  if (c.signatureFileId) await deleteStoredFile(c.signatureFileId);
   revalidatePath(`/admin/eventos/${c.eventId}`);
 }
 
@@ -750,7 +781,7 @@ export async function hireCandidateAction(id: string, form: FormData) {
 export async function deleteCandidate(id: string) {
   await requireAdmin();
   const c = await db.candidate.delete({ where: { id } });
-  if (c.fileId) await db.storedFile.delete({ where: { id: c.fileId } }).catch(() => {});
+  if (c.fileId) await deleteStoredFile(c.fileId);
   revalidatePath("/admin/candidatos");
   redirect("/admin/candidatos");
 }

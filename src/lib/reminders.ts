@@ -6,6 +6,11 @@ import { notify } from "./push";
 import { REVIEW_DAYS } from "./reviews";
 import { DOC_LABEL, DOC_WARN_DAYS } from "./staff";
 import { generateTimeRecords, monthLabel, shiftMonth } from "./timeRecord";
+import { audit } from "./audit";
+import { incompleteWorkers, missingText } from "./completeness";
+import { backupNow } from "./backup";
+import { migrateFilesToStorage, sweepOrphanFiles } from "./files";
+import { storageEnabled } from "./storage";
 
 /**
  * Avisos automáticos. Se comprueban cada pocos minutos; cada aviso se registra en ReminderLog
@@ -22,6 +27,13 @@ export const REMINDERS = {
   LATE_AFTER_MIN: 10,
   /** Hora (Madrid) del día siguiente al evento para recordar las valoraciones pendientes */
   REVIEW_REMINDER_HOUR: "10:00",
+  /** Hora (Madrid) del recordatorio de datos incompletos y cada cuántos días se repite */
+  DATA_REMINDER_HOUR: "11:00",
+  DATA_EVERY_DAYS: 3,
+  /** Hora (Madrid) del resumen de documentos por revisar para RRHH */
+  DOCS_DIGEST_HOUR: "09:00",
+  /** Hora (Madrid) de la copia de seguridad nocturna */
+  BACKUP_HOUR: "03:00",
   INTERVAL_MS: 5 * 60_000,
 };
 
@@ -200,6 +212,52 @@ export async function runReminders(now = new Date()) {
         });
       }
       sent.push(`jornada:${prev}`);
+    }
+  }
+
+  // 8. Datos incompletos: recordatorio al trabajador cada 3 días (cada día si tiene servicio en la próxima semana)
+  if (now >= madridTime(today, REMINDERS.DATA_REMINDER_HOUR)) {
+    const dayNumber = Math.floor(new Date(`${today}T12:00:00Z`).getTime() / 864e5);
+    for (const w of await incompleteWorkers()) {
+      const key = w.upcoming ? `datos:${w.id}:${today}` : `datos:${w.id}:c${Math.floor(dayNumber / REMINDERS.DATA_EVERY_DAYS)}`;
+      if (!(await claim(key))) continue;
+      await notify({
+        workerIds: [w.id],
+        workerUrl: "/app/perfil",
+        title: w.upcoming ? "Completa tus datos antes del servicio" : "Completa tus datos",
+        body: `Te falta: ${missingText(w.missing)}. Sin ello no podemos darte de alta ni pagarte. Complétalo en tu perfil.`,
+        tag: "datos",
+      });
+      sent.push(key);
+    }
+  }
+
+  // 9. Resumen diario a RRHH de los documentos por revisar
+  if (now >= madridTime(today, REMINDERS.DOCS_DIGEST_HOUR)) {
+    const pendingDocs = await db.workerDocument.count({ where: { verified: false, worker: { active: true } } });
+    if (pendingDocs && (await claim(`docs-revisar:${today}`))) {
+      await notify({
+        admins: true,
+        adminUrl: "/admin/documentos",
+        title: "Documentos por revisar",
+        body: `Hay ${pendingDocs} ${pendingDocs === 1 ? "documento" : "documentos"} del personal pendientes de revisar.`,
+        tag: "docs-revisar",
+      });
+      sent.push(`docs-revisar:${today}`);
+    }
+  }
+
+  // 7. Mantenimiento nocturno (desde las 03:00): archivos al almacén, copia de seguridad y limpieza
+  if (now >= madridTime(today, REMINDERS.BACKUP_HOUR) && storageEnabled() && (await claim(`copia:${today}`))) {
+    try {
+      const m = await migrateFilesToStorage(50, 5 * 60_000);
+      const b = await backupNow();
+      const orphans = await sweepOrphanFiles();
+      await audit("Copia automática", "Sistema", "Copias", "Copia nocturna", `Copia de seguridad ${b.key} (${Math.round(b.size / 1024)} KB)${m.moved ? `; ${m.moved} archivos movidos al almacén` : ""}${orphans ? `; ${orphans} archivos huérfanos borrados` : ""}`);
+      sent.push(`copia:${b.key}`);
+    } catch (e) {
+      console.error("copia nocturna", e);
+      await notify({ admins: true, adminUrl: "/admin/ajustes/copias", title: "⚠️ Copia de seguridad fallida", body: `La copia de esta noche no se ha podido hacer: ${(e as Error).message}`, tag: "copia" });
     }
   }
 

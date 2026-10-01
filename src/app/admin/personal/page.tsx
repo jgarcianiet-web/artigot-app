@@ -3,13 +3,14 @@ import { Empty, RoleBadge, ScoreBadge } from "@/components/ui";
 import { db } from "@/lib/db";
 import { isRole, ROLE_PLURAL, ROLES, today } from "@/lib/domain";
 import { computeScores, explainScore } from "@/lib/scoring";
+import { incompleteWorkers } from "@/lib/completeness";
 
 export default async function StaffList({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; role?: string; inactivos?: string; orden?: string }>;
+  searchParams: Promise<{ q?: string; role?: string; inactivos?: string; orden?: string; incompletos?: string }>;
 }) {
-  const { q = "", role = "", inactivos, orden = "puntuacion" } = await searchParams;
+  const { q = "", role = "", inactivos, orden = "puntuacion", incompletos } = await searchParams;
   const t = today();
   const workers = await db.worker.findMany({
     where: {
@@ -28,6 +29,8 @@ export default async function StaffList({
     orderBy: [{ role: "asc" }, { name: "asc" }],
   });
 
+  const incomplete = new Map((await incompleteWorkers(workers.map((w) => w.id))).map((w) => [w.id, w.missing]));
+  if (incompletos) workers.splice(0, workers.length, ...workers.filter((w) => incomplete.has(w.id)));
   const scores = await computeScores(workers.map((w) => w.id), t);
   if (orden === "puntuacion") {
     workers.sort((a, b) => a.role.localeCompare(b.role) || scores.get(b.id)!.score - scores.get(a.id)!.score);
@@ -68,6 +71,9 @@ export default async function StaffList({
         <label className="flex items-center gap-1.5 text-sm">
           <input type="checkbox" name="inactivos" value="1" defaultChecked={!!inactivos} /> Incluir inactivos
         </label>
+        <label className="flex items-center gap-1.5 text-sm">
+          <input type="checkbox" name="incompletos" value="1" defaultChecked={!!incompletos} /> Solo datos incompletos
+        </label>
         <button className="btn">Filtrar</button>
       </form>
 
@@ -93,6 +99,9 @@ export default async function StaffList({
                     <Link href={`/admin/personal/${w.id}`} className="link">{w.name}</Link>
                     {w.unavailabilities.length > 0 && <span className="ml-2 text-xs text-red-600">No disponible hoy</span>}
                     {!w.active && <span className="ml-2 text-xs text-stone-500">Inactivo</span>}
+                    {incomplete.has(w.id) && (
+                      <span className="ml-2 rounded bg-amber-100 px-1.5 text-[11px] text-amber-900" title={`Falta: ${incomplete.get(w.id)!.join(", ")}`}>Datos incompletos</span>
+                    )}
                   </td>
                   <td><RoleBadge role={w.role} /></td>
                   <td><ScoreBadge score={scores.get(w.id)!.score} title={explainScore(scores.get(w.id)!)} /></td>

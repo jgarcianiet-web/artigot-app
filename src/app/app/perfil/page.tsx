@@ -37,7 +37,7 @@ export default async function MyProfile() {
       {privacy ? (
         <MyDataForm action={saveMyData} data={worker} docs={await identityDocStatus(me.id)} />
       ) : (
-        <section className="card space-y-2 border-violet-300 bg-violet-50">
+        <section className="card space-y-2 border-stone-300 bg-stone-100">
           <h2>🔒 Completa tus datos</h2>
           <p className="text-sm">
             Para darte de alta y pagarte necesitamos tu DNI, tu número de la Seguridad Social y tu IBAN, con sus documentos. Antes tienes que leer y firmar la
@@ -59,7 +59,7 @@ export default async function MyProfile() {
                 {c.signedAt ? (
                   <a href={`/api/contracts/${c.id}/pdf`} target="_blank" className="link shrink-0">✓ PDF</a>
                 ) : (
-                  <Link href={`/app/firmar/${c.id}`} className="shrink-0 font-medium text-violet-700">Firmar ›</Link>
+                  <Link href={`/app/firmar/${c.id}`} className="shrink-0 font-medium text-stone-900 underline">Firmar ›</Link>
                 )}
               </li>
             ))}
