@@ -1,11 +1,11 @@
 "use client";
 
-import { useActionState } from "react";
+import { Fragment, useActionState } from "react";
 import { saveWorker } from "@/app/actions";
 import { ActionForm, SubmitButton } from "@/components/client";
 import { IDENTITY_FILE_KEYS, IdentityFields } from "@/components/IdentityFields";
 import { shrinkFormImages } from "@/lib/image";
-import { EVENT_TYPE_LABEL, EVENT_TYPES, ROLE_LABEL, ROLES } from "@/lib/domain";
+import { EVENT_TYPE_LABEL, EVENT_TYPES, OWN_RATE_ROLES, ROLE_LABEL, ROLES } from "@/lib/domain";
 
 type Worker = {
   id: string;
@@ -99,22 +99,29 @@ export function WorkerForm({ worker, docs = {} }: { worker?: Worker; docs?: DocS
           <input id="a3Code" name="a3Code" className="input" defaultValue={worker?.a3Code ?? ""} />
           <div className="mt-3">
             <span className="label">Tarifa propia (€/hora, opcional)</span>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-[auto_1fr_1fr_1fr] items-center gap-x-3 gap-y-2 text-sm">
+              <span />
               {EVENT_TYPES.map((t) => (
-                <label key={t} className="flex flex-col gap-1 text-sm">
-                  <span className="text-stone-600">{EVENT_TYPE_LABEL[t]}</span>
-                  <input
-                    name={`own_${t}`}
-                    inputMode="decimal"
-                    className="input"
-                    placeholder="la del puesto"
-                    defaultValue={(worker?.customRates as Record<string, number> | null | undefined)?.[t] ?? ""}
-                    aria-label={`Tarifa propia en ${EVENT_TYPE_LABEL[t].toLowerCase()}`}
-                  />
-                </label>
+                <span key={t} className="text-stone-600">{EVENT_TYPE_LABEL[t]}</span>
+              ))}
+              {[{ prefix: "", label: "Camarero / mozo" }, ...OWN_RATE_ROLES.map((r) => ({ prefix: `${r}:`, label: ROLE_LABEL[r] }))].map((row) => (
+                <Fragment key={row.label}>
+                  <span className="text-stone-600">{row.label}</span>
+                  {EVENT_TYPES.map((t) => (
+                    <input
+                      key={t}
+                      name={`own_${row.prefix}${t}`}
+                      inputMode="decimal"
+                      className="input"
+                      placeholder="la del puesto"
+                      defaultValue={(worker?.customRates as Record<string, number> | null | undefined)?.[`${row.prefix}${t}`] ?? ""}
+                      aria-label={`Tarifa propia de ${row.label.toLowerCase()} en ${EVENT_TYPE_LABEL[t].toLowerCase()}`}
+                    />
+                  ))}
+                </Fragment>
               ))}
             </div>
-            <p className="mt-1 text-xs text-stone-500">Si cobra distinto que el resto de su puesto. Vacío = tarifa del puesto (Ajustes → Tarifas). El plus por evento y el mínimo de horas se mantienen.</p>
+            <p className="mt-1 text-xs text-stone-500">Si cobra distinto que el resto de su puesto. La de camarero vale también de responsable y de mozo; la de maître, cuando va de maître. Vacío = tarifa del puesto (Ajustes → Tarifas). El plus por evento y el mínimo de horas se mantienen.</p>
           </div>
         </fieldset>
         <div className="sm:col-span-2">

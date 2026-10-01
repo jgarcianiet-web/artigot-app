@@ -26,7 +26,7 @@ import { computeScores, CRITERIA, reviewAverage, SCORING } from "@/lib/scoring";
 import { DocumentUploadForm } from "@/components/StaffForms";
 import { DOC_LABEL, docState, formatIban } from "@/lib/staff";
 import { db } from "@/lib/db";
-import { EVENT_TYPE_LABEL, formatDate, num, today, workedHours } from "@/lib/domain";
+import { formatDate, num, ownRatesText, today, workedHours } from "@/lib/domain";
 
 const DEVICE_LABEL: Record<string, string> = { web: "Navegador / web app", fcm: "App Android", apns: "App iPhone" };
 
@@ -242,7 +242,7 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
             <dt className="text-stone-500">Código A3</dt><dd>{worker.a3Code ?? <Missing />}</dd>
             <dt className="text-stone-500">Tarifa propia</dt>
             <dd>
-              {Object.entries((worker.customRates ?? {}) as Record<string, number>).map(([t, v]) => `${EVENT_TYPE_LABEL[t] ?? t} ${String(v).replace(".", ",")} €/h`).join(" · ") || <span className="text-stone-400">la de su puesto</span>}
+              {ownRatesText(worker.customRates) || <span className="text-stone-400">la de su puesto</span>}
             </dd>
           </dl>
           <p className="pt-1 text-xs"><Link href={`/admin/registro?id=${worker.id}`} className="link">Historial de cambios de esta ficha</Link></p>
