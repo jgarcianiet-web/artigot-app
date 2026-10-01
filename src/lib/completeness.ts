@@ -5,13 +5,14 @@ import { getPrivacy } from "./privacy";
 
 /**
  * Qué le falta a cada persona para tener la ficha completa:
- * protección de datos firmada (versión vigente), DNI, nº de la Seguridad Social e IBAN, cada uno con su documento.
+ * protección de datos firmada (versión vigente), foto de perfil, teléfono, DNI, nº de la Seguridad Social e IBAN,
+ * cada uno con su documento.
  */
 
 const LABEL: Record<string, string> = { dni: "DNI", nss: "nº de la Seguridad Social", iban: "IBAN" };
 const DOC_NAME: Record<string, string> = { DNI: "foto del DNI", NSS: "tarjeta de la Seguridad Social", CUENTA: "certificado de la cuenta" };
 
-export type Incomplete = { id: string; name: string; phone: string; missing: string[]; upcoming: boolean };
+export type Incomplete = { id: string; name: string; phone: string | null; email: string | null; devices: number; missing: string[]; upcoming: boolean };
 
 export async function incompleteWorkers(workerIds?: string[]): Promise<Incomplete[]> {
   const t = today();
@@ -19,7 +20,8 @@ export async function incompleteWorkers(workerIds?: string[]): Promise<Incomplet
   const workers = await db.worker.findMany({
     where: { active: true, ...(workerIds && { id: { in: workerIds } }) },
     select: {
-      id: true, name: true, phone: true, dni: true, nss: true, iban: true,
+      id: true, name: true, phone: true, email: true, dni: true, nss: true, iban: true, photoStatus: true, photoFileId: true,
+      _count: { select: { devices: true } },
       documents: { where: { type: { in: IDENTITY_DOCS.map((d) => d.type) } }, select: { type: true } },
       contracts: { where: { kind: "RGPD", version, signedAt: { not: null } }, select: { id: true }, take: 1 },
       assignments: { where: { status: { in: ["CONVOCADO", "CONFIRMADO"] }, event: { date: { gte: t, lte: addDays(t, 7) } } }, select: { id: true }, take: 1 },
@@ -30,12 +32,15 @@ export async function incompleteWorkers(workerIds?: string[]): Promise<Incomplet
   for (const w of workers) {
     const missing: string[] = [];
     if (!w.contracts.length) missing.push("firma de protección de datos");
+    // La foto pendiente de revisar no cuenta como falta: ya la ha subido
+    if (!w.photoFileId || w.photoStatus === "RECHAZADA") missing.push("foto de perfil");
+    if (!w.phone) missing.push("teléfono");
     const docs = new Set(w.documents.map((d) => d.type));
     for (const d of IDENTITY_DOCS) {
       if (!w[d.field]) missing.push(LABEL[d.field]);
       else if (!docs.has(d.type)) missing.push(DOC_NAME[d.type]);
     }
-    if (missing.length) out.push({ id: w.id, name: w.name, phone: w.phone, missing, upcoming: w.assignments.length > 0 });
+    if (missing.length) out.push({ id: w.id, name: w.name, phone: w.phone, email: w.email, devices: w._count.devices, missing, upcoming: w.assignments.length > 0 });
   }
   return out;
 }

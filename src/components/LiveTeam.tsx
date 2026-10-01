@@ -41,7 +41,7 @@ export function LiveTeam({ live, markAction }: { live: Live; markAction?: (assig
               </div>
             </div>
             <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATE[r.state].cls}`}>{STATE[r.state].label}</span>
-            {(r.state === "retraso" || r.state === "esperando") && (
+            {(r.state === "retraso" || r.state === "esperando") && r.phone && (
               <a href={`tel:${r.phone}`} className="btn btn-sm">📞 Llamar</a>
             )}
             {markAction && !r.checkIn && !r.lead && (

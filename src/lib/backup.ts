@@ -13,9 +13,18 @@ const MODELS = Prisma.dmmf.datamodel.models;
 type Model = (typeof MODELS)[number];
 const delegate = (m: Model) => (db as unknown as Record<string, { findMany: (a: object) => Promise<Record<string, unknown>[]>; createMany: (a: object) => Promise<unknown>; update: (a: object) => Promise<unknown> }>)[m.name[0].toLowerCase() + m.name.slice(1)];
 
-/** Orden en que hay que insertar las tablas para respetar las relaciones. */
+/** Relaciones con clave en la propia tabla (las que apuntan a otra tabla con sus campos). */
+const ownRelations = (m: Model) => m.fields.filter((f) => f.kind === "object" && f.relationFromFields?.length);
+/** Una relación es obligatoria si alguno de sus campos lo es. */
+const requiredRelation = (m: Model, f: Model["fields"][number]) => f.relationFromFields!.some((k) => m.fields.find((x) => x.name === k)?.isRequired);
+
+/**
+ * Orden en que hay que insertar las tablas: solo cuentan las relaciones obligatorias. Las
+ * opcionales que apunten a una tabla aún no cargada (o a la propia) se dejan vacías al insertar y
+ * se rellenan al final; así se resuelven los ciclos (p. ej. trabajador ↔ foto de perfil).
+ */
 function insertOrder() {
-  const deps = new Map(MODELS.map((m) => [m.name, new Set(m.fields.filter((f) => f.kind === "object" && f.relationFromFields?.length && f.type !== m.name).map((f) => f.type))]));
+  const deps = new Map(MODELS.map((m) => [m.name, new Set(ownRelations(m).filter((f) => f.type !== m.name && requiredRelation(m, f)).map((f) => f.type))]));
   const out: Model[] = [];
   const done = new Set<string>();
   while (out.length < MODELS.length) {
@@ -69,9 +78,12 @@ export async function restoreDatabase(data: BackupData) {
   const names = MODELS.map((m) => `"${m.name}"`).join(", ");
   await db.$executeRawUnsafe(`TRUNCATE ${names} CASCADE`);
   const counts: Record<string, number> = {};
+  const loaded = new Set<string>();
+  const pending: { model: Model; rows: Record<string, unknown>[]; fields: string[] }[] = [];
   for (const m of order) {
     const rows = data.tables[m.name] ?? [];
-    const selfFks = m.fields.filter((f) => f.kind === "object" && f.type === m.name && f.relationFromFields?.length).flatMap((f) => f.relationFromFields!);
+    // Claves opcionales a tablas aún no cargadas (o a la propia): se rellenan al final
+    const deferred = ownRelations(m).filter((f) => f.type === m.name || !loaded.has(f.type)).flatMap((f) => f.relationFromFields!);
     const prepared = rows.map((r) => {
       const o: Record<string, unknown> = {};
       for (const f of m.fields) {
@@ -80,18 +92,22 @@ export async function restoreDatabase(data: BackupData) {
         if (v !== null && f.type === "DateTime") v = new Date(v as string);
         if (v !== null && f.type === "Bytes") v = Buffer.from(v as string, "base64");
         if (f.type === "Json" && v === null) v = Prisma.DbNull;
-        if (selfFks.includes(f.name)) v = null; // se rellenan después
+        if (deferred.includes(f.name)) v = null;
         o[f.name] = v;
       }
       return o;
     });
     for (let i = 0; i < prepared.length; i += 500) await delegate(m).createMany({ data: prepared.slice(i, i + 500) });
-    const id = idField(m);
-    for (const r of rows) {
-      const fix = Object.fromEntries(selfFks.filter((k) => r[k] != null).map((k) => [k, r[k]]));
-      if (Object.keys(fix).length) await delegate(m).update({ where: { [id]: r[id] }, data: fix });
-    }
+    if (deferred.length) pending.push({ model: m, rows, fields: deferred });
+    loaded.add(m.name);
     counts[m.name] = rows.length;
+  }
+  for (const { model, rows, fields } of pending) {
+    const id = idField(model);
+    for (const r of rows) {
+      const fix = Object.fromEntries(fields.filter((k) => r[k] != null).map((k) => [k, r[k]]));
+      if (Object.keys(fix).length) await delegate(model).update({ where: { [id]: r[id] }, data: fix });
+    }
   }
   return counts;
 }

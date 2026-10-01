@@ -162,9 +162,10 @@ export type ImportRow = {
   zone: string | null;
   rating: number | null;
   notes: string | null;
-  status: "nuevo" | "actualizar" | "existe" | "error";
+  status: "nuevo" | "actualizar" | "existe" | "omitido" | "error";
   message?: string;
   existingName?: string;
+  existingId?: string;
 };
 
 export type ImportPreview = {
@@ -197,14 +198,14 @@ export async function analyzeFile(
   let fields: (Field | null)[] = [];
   for (let i = 0; i < Math.min(10, table.length); i++) {
     const f = table[i].map(fieldFor);
-    if (f.includes("phone") && (f.includes("name") || f.includes("surname"))) {
+    if ((f.includes("phone") || f.includes("email")) && (f.includes("name") || f.includes("surname"))) {
       headerIdx = i;
       fields = f;
       break;
     }
   }
   if (headerIdx < 0) {
-    return { error: "No encuentro las columnas de nombre y teléfono. La primera fila debe tener cabeceras como «Nombre», «Teléfono» y «Puesto» (descarga la plantilla)." };
+    return { error: "No encuentro las columnas de nombre y teléfono (o email). La primera fila debe tener cabeceras como «Nombre», «Teléfono» y «Puesto» (descarga la plantilla)." };
   }
   const columns = table[headerIdx].map((header, i) => ({ header, field: fields[i] }));
   const col = (row: string[], field: Field) =>
@@ -213,8 +214,9 @@ export async function analyzeFile(
   const body = table.slice(headerIdx + 1);
   if (body.length > MAX_ROWS) return { error: `El archivo tiene demasiadas filas (máximo ${MAX_ROWS}).` };
 
-  const existing = await db.worker.findMany({ select: { id: true, name: true, phoneKey: true } });
-  const byPhone = new Map(existing.map((w) => [w.phoneKey, w]));
+  const existing = await db.worker.findMany({ select: { id: true, name: true, phoneKey: true, email: true } });
+  const byPhone = new Map(existing.filter((w) => w.phoneKey).map((w) => [w.phoneKey!, w]));
+  const byEmail = new Map(existing.filter((w) => w.email).map((w) => [w.email!.toLowerCase(), w]));
   const seen = new Map<string, number>();
   const rows: ImportRow[] = [];
 
@@ -237,23 +239,36 @@ export async function analyzeFile(
       notes: col(raw, "notes") || null,
       status: "nuevo",
     };
-    const key = phoneKey(phone);
+    let key = phone ? phoneKey(phone) : "";
+    let note: string | undefined;
+    // Teléfono mal escrito pero con email: se importa igualmente y entra con el email
+    if (phone && key.length < 9 && email) {
+      note = `Teléfono «${phone}» no válido: entrará con su email`;
+      row.phone = "";
+      key = "";
+    }
     const fail = (message: string) => rows.push({ ...row, status: "error", message });
     if (name.length < 2) return fail("Falta el nombre");
-    if (key.length < 9) return fail(phone ? "Teléfono no válido (menos de 9 cifras)" : "Falta el teléfono");
-    const match = byPhone.get(key);
+    // Usuarios de RRHH en listados exportados de otros programas: no son personal
+    if (/^(admin|administrador|administracion|rrhh|recursos humanos|gestor|oficina)$/.test(norm(roleRaw))) {
+      return rows.push({ ...row, status: "omitido", message: "Es de RRHH: no se importa como personal" });
+    }
+    if (key && key.length < 9) return fail("Teléfono no válido (menos de 9 cifras)");
+    if (!key && !email) return fail("Falta el teléfono o el email (para poder entrar en la app)");
+    const match = (key && byPhone.get(key)) || (email ? byEmail.get(email.toLowerCase()) : undefined);
     if (roleRaw && !parseRole(roleRaw)) return fail(`Puesto no reconocido: «${roleRaw}» (usa Camarero, Camarero responsable, Maître o Mozo)`);
     // A quien ya existe se le mantiene su puesto si el Excel no lo indica
     if (!row.role && !match) return fail("Falta el puesto (elige un puesto por defecto)");
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail("Email no válido");
-    if (seen.has(key)) return fail(`Teléfono repetido (ya está en la fila ${seen.get(key)})`);
-    seen.set(key, line);
+    const dupKey = key || `@${email!.toLowerCase()}`;
+    if (seen.has(dupKey)) return fail(`${key ? "Teléfono" : "Email"} repetido (ya está en la fila ${seen.get(dupKey)})`);
+    seen.set(dupKey, line);
     if (match) {
-      rows.push({ ...row, status: opts.updateExisting ? "actualizar" : "existe", existingName: match.name });
-    } else rows.push(row);
+      rows.push({ ...row, status: opts.updateExisting ? "actualizar" : "existe", existingName: match.name, existingId: match.id });
+    } else rows.push({ ...row, message: note ?? (key ? undefined : "Sin teléfono: entrará con su email") });
   });
 
-  const counts = { nuevo: 0, actualizar: 0, existe: 0, error: 0 };
+  const counts = { nuevo: 0, actualizar: 0, existe: 0, omitido: 0, error: 0 };
   rows.forEach((r) => counts[r.status]++);
   return { rows, columns, counts };
 }

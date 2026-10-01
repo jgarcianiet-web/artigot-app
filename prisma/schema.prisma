@@ -11,7 +11,8 @@ datasource db {
 model Worker {
   id              String           @id @default(cuid())
   name            String
-  phone           String
+  // Sin teléfono puede entrar con su email (p. ej. personal importado sin móvil)
+  phone           String?
   email           String?
   // Puesto principal y todos los puestos que puede desempeñar (incluye el principal).
   // El puesto en cada evento lo marca la convocatoria (Assignment.role)
@@ -28,6 +29,11 @@ model Worker {
   address         String?
   // Código del trabajador en A3Nom (para la exportación de horas)
   a3Code          String?
+  // Foto de perfil: la sube el trabajador y RRHH la acepta o la rechaza (PENDIENTE | ACEPTADA | RECHAZADA)
+  photoFileId     String?          @unique
+  photoStatus     String?
+  photoNote       String?
+  photo           StoredFile?      @relation("workerPhoto", fields: [photoFileId], references: [id], onDelete: SetNull)
   // Datos para el alta masiva en A3 (si faltan los apellidos se separan del nombre)
   firstName       String?
   surname1        String?
@@ -42,7 +48,7 @@ model Worker {
   carSeats        Int?
   active          Boolean          @default(true)
   // Acceso a la app: teléfono normalizado + código de 6 cifras que RRHH entrega al trabajador
-  phoneKey        String           @unique
+  phoneKey        String?          @unique
   accessCode      String
   sessionVersion  Int              @default(0)
   failedLogins    Int              @default(0)
@@ -59,7 +65,7 @@ model Worker {
   loans           Loan[]
   swapsFrom       SwapRequest[]    @relation("swapFrom")
   swapsTo         SwapRequest[]    @relation("swapTo")
-  files           StoredFile[]
+  files           StoredFile[]     @relation("workerFiles")
   incidentsAbout  Incident[]       @relation("incidentWorker")
   contracts       Contract[]
   candidate       Candidate?
@@ -262,7 +268,8 @@ model StoredFile {
   incident   Incident? @relation(fields: [incidentId], references: [id], onDelete: Cascade)
   // Documentos del trabajador (scope DOC): solo los ven RRHH y el propio trabajador
   workerId   String?
-  worker     Worker?  @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  worker     Worker?  @relation("workerFiles", fields: [workerId], references: [id], onDelete: Cascade)
+  photoOf    Worker?  @relation("workerPhoto")
   document   WorkerDocument?
   candidate  Candidate?
   signatureOf Contract?

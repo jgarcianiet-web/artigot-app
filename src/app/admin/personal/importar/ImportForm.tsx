@@ -22,6 +22,7 @@ const STATUS: Record<ImportRow["status"], { label: string; cls: string }> = {
   nuevo: { label: "Nuevo", cls: "bg-emerald-100 text-emerald-800" },
   actualizar: { label: "Se actualiza", cls: "bg-sky-100 text-sky-800" },
   existe: { label: "Ya existe", cls: "bg-stone-200 text-stone-600" },
+  omitido: { label: "No se importa", cls: "bg-stone-100 text-stone-500" },
   error: { label: "Error", cls: "bg-red-100 text-red-700" },
 };
 
@@ -43,6 +44,8 @@ export function ImportForm() {
           {state.updated > 0 && <li>🔄 {state.updated} actualizados</li>}
           {state.skipped > 0 && <li>⏭ {state.skipped} ya existían y no se han tocado</li>}
           {state.errors > 0 && <li className="text-red-700">⚠ {state.errors} filas con errores no se han importado</li>}
+          {state.emailed > 0 && <li>✉ Enviando el código de acceso por email a {state.emailed} (tarda unos minutos)</li>}
+          {state.emailError && <li className="text-amber-700">✉ {state.emailError}</li>}
         </ul>
         <div className="flex flex-wrap gap-2">
           <Link href="/admin/personal" className="btn btn-primary">Ver personal</Link>
@@ -108,7 +111,11 @@ export function ImportForm() {
           </div>
           <label className="flex items-center gap-2 self-end pb-2 text-sm">
             <input type="checkbox" name="updateExisting" value="1" className="size-4" />
-            Actualizar los datos de quien ya existe (mismo teléfono)
+            Actualizar los datos de quien ya existe (mismo teléfono o email)
+          </label>
+          <label className="flex items-center gap-2 text-sm sm:col-span-2">
+            <input type="checkbox" name="sendEmail" value="1" className="size-4" />
+            Enviar por email el código de acceso a los nuevos que tengan email
           </label>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -171,7 +178,7 @@ export function ImportForm() {
                     <td className="text-stone-500">{r.line}</td>
                     <td>
                       <span className={`rounded-full px-2 py-0.5 text-xs whitespace-nowrap ${STATUS[r.status].cls}`}>{STATUS[r.status].label}</span>
-                      {r.message && <div className="text-xs text-red-700">{r.message}</div>}
+                      {r.message && <div className={`text-xs ${r.status === "error" ? "text-red-700" : "text-stone-500"}`}>{r.message}</div>}
                       {r.existingName && <div className="text-xs text-stone-500">= {r.existingName}</div>}
                     </td>
                     <td>{r.name || <span className="text-stone-400">—</span>}</td>

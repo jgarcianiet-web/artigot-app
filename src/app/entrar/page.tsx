@@ -18,11 +18,11 @@ export default function WorkerLogin() {
         <div className="space-y-3 text-center">
           <Logo height={56} className="mx-auto" />
           <h1 className="text-base font-medium text-stone-600">Área del personal</h1>
-          <p className="text-sm text-stone-500">Entra con tu teléfono y el código de 6 cifras que te ha dado RRHH.</p>
+          <p className="text-sm text-stone-500">Entra con tu teléfono (o tu email) y el código de 6 cifras que te ha dado RRHH.</p>
         </div>
         <div>
-          <label className="label" htmlFor="phone">Teléfono</label>
-          <input id="phone" name="phone" type="tel" autoComplete="tel" className="input text-base" required />
+          <label className="label" htmlFor="phone">Teléfono o email</label>
+          <input id="phone" name="phone" type="text" inputMode="email" autoComplete="username" autoCapitalize="none" className="input text-base" required />
         </div>
         <div>
           <label className="label" htmlFor="code">Código de acceso</label>

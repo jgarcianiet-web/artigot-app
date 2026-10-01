@@ -41,6 +41,22 @@ Aplicación para que RRHH gestione de forma rápida el personal de **bodas y eve
 - **Remesa bancaria SEPA** (ISO 20022 pain.001.001.03, transferencias de nóminas): se genera desde la quincena y se sube en la banca online. Paga el neto definitivo (o el estimado) a quien tenga IBAN válido y avisa de quien no lo tiene. Al generarla, los importes quedan congelados. Después se marca como pagada y cada persona recibe un aviso con su importe. El IBAN de la empresa, el BIC (opcional) y el sufijo del ordenante se configuran en Ajustes → Pagos y remesas; la razón social y el CIF, en Empresa y contratos.
 - **Altas y bajas en la Seguridad Social** (sustituye al Excel): cada alta con tipo de contrato, categoría, jornada, fecha de baja, motivo y si ya se ha comunicado por RED. Hay vistas «De alta ahora», «Movimientos del mes», «Sin comunicar» e histórico. Se importa el Excel que ya teníais (con vista previa, sin duplicar al reimportar) y se exporta a Excel. El panel y cada evento avisan de quién está convocado sin alta, y «Registrar altas» crea en un clic el alta eventual del día para el equipo del evento.
 
+**Alta del personal, datos y foto**
+- **Importar el personal** (Personal → Importar) desde Excel o CSV, también listados exportados de otros programas (Nombre, Email, Teléfono, Rol…).
+  - Quien no tiene teléfono, o lo tiene mal escrito, se importa con su email y **entra en la app con su email** y su código.
+  - Las filas de RRHH («Admin») no se importan.
+  - Se puede **enviar por email el código de acceso** a todos los nuevos.
+- **Completar los datos que faltan con otro Excel** (Personal → Importar, o Ajustes → Nóminas A3 con la base de datos de A3).
+  - Busca a cada persona por DNI, teléfono, email o nombre.
+  - Rellena solo lo que falta: teléfono, DNI, NSS, IBAN, código y centro de A3, nacimiento, dirección, sexo, nacionalidad…
+  - No cambia nada que ya esté puesto.
+- **Lo que siga faltando se le pide al trabajador**: en la app (bienvenida y recordatorios) y, si aún no ha instalado la app, por email.
+- **Foto de perfil obligatoria**.
+  - El trabajador la hace o la sube desde su perfil; es el primer paso de la bienvenida.
+  - RRHH la **acepta o la rechaza con un motivo** en Documentos (con contador) o en la ficha, y se le avisa para que suba otra.
+  - RRHH también puede subirla directamente.
+- **Trabaja con nosotros → Crear usuario**: un botón crea la ficha con su código de acceso y se lo **envía por email**. Desde la ficha se puede reenviar.
+
 **Presupuesto y gasto de cada evento**
 - Cada evento tiene su **comercial** y un **presupuesto de personal**. Si RRHH no lo pone, se calcula con el personal necesario, la tarifa de cada puesto y el horario previsto (de la citación al fin, con el mínimo de horas).
 - Al cerrar las horas se compara con el **gasto real según los fichajes**: desviación en € y en % (rojo si está por encima, verde si está por debajo), con un comentario.
@@ -177,6 +193,7 @@ Sin ubicación fijada, el evento muestra un aviso y el personal no puede fichar.
    | `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | almacén de archivos y copias (ver abajo) |
    | `S3_ENDPOINT`, `S3_REGION` | URL del almacén (vacío para Amazon S3) y región (`auto` en R2) |
    | `FILES_ENCRYPTION_KEY` | clave de cifrado de archivos y copias: `openssl rand -base64 32`. **Guárdala aparte**: sin ella no se pueden leer las copias |
+   | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | envío de emails (códigos de acceso y recordatorios). Con Gmail o Google Workspace: `smtp.gmail.com`, `587` y una «contraseña de aplicación» |
 
 5. **Settings → Networking → Generate Domain** para obtener la URL pública, o conecta un dominio propio. Pon esa URL en `APP_URL`.
 6. Al desplegar se aplican las migraciones solas y se crean las tarifas por defecto. Entra en `/login`: la primera vez pide la clave de instalación para crear tu usuario. Después da de alta al resto de RRHH en Ajustes → Usuarios, importa al personal y dales su teléfono y código (botón **Copiar instrucciones de acceso** en cada ficha o **Exportar códigos**).

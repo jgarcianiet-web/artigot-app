@@ -22,7 +22,7 @@ function Message({ r }: { r: Result }) {
   return <p role="status" className={`rounded-lg p-2 text-sm ${r.ok ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>{r.message}</p>;
 }
 
-type Data = { dni: string | null; nss: string | null; iban: string | null; birthDate: string | null; address: string | null; email: string | null; sex?: string | null; nationality?: string | null };
+type Data = { dni: string | null; nss: string | null; iban: string | null; birthDate: string | null; address: string | null; email: string | null; sex?: string | null; nationality?: string | null; phone?: string | null };
 
 type DocStatus = Record<string, { fileId: string | null; verified: boolean }>;
 
@@ -34,6 +34,12 @@ export function MyDataForm({ action, data, docs }: { action: Action; data: Data;
       <p className="text-xs text-stone-500">Los necesita RRHH para darte de alta y pagarte. El DNI, la Seguridad Social y el IBAN son obligatorios y van con su documento. Solo los ve RRHH.</p>
       <div className="grid gap-3 sm:grid-cols-2">
         <IdentityFields values={{ dni: data.dni, nss: data.nss, iban: data.iban }} docs={docs} required inputClass="input mt-1 text-base" />
+        {!data.phone && (
+          <label className="text-sm sm:col-span-2">
+            Teléfono móvil <span className="text-red-600">(nos falta)</span>
+            <input name="phone" type="tel" autoComplete="tel" className="input mt-1 text-base" placeholder="600 123 456" />
+          </label>
+        )}
         <label className="text-sm">Fecha de nacimiento<input name="birthDate" type="date" className="input mt-1 text-base" defaultValue={data.birthDate ?? ""} /></label>
         <label className="text-sm">
           Sexo (para el alta)
@@ -50,6 +56,52 @@ export function MyDataForm({ action, data, docs }: { action: Action; data: Data;
       <Message r={r} />
       <SubmitButton>Guardar mis datos</SubmitButton>
     </ActionForm>
+  );
+}
+
+/** Foto de perfil: se reduce en el móvil y la revisa RRHH. */
+export function PhotoForm({ action, photoId, status, note }: { action: Action; photoId: string | null; status: string | null; note: string | null }) {
+  const [r, run, pending] = useActionState(action, null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const label = !photoId ? (status === "RECHAZADA" ? "Rechazada" : "Falta") : status === "ACEPTADA" ? "Aceptada" : "Pendiente de revisar";
+  const cls = !photoId ? "bg-red-100 text-red-700" : status === "ACEPTADA" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900";
+  return (
+    <form
+      id="foto"
+      className="card flex flex-wrap items-center gap-4"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const form = new FormData(e.currentTarget);
+        const file = form.get("photo");
+        if (file instanceof File && file.size) form.set("photo", await shrinkImage(file, 900, 0.85));
+        startTransition(() => run(form));
+      }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {preview || photoId ? <img src={preview ?? `/api/files/${photoId}`} alt="Tu foto de perfil" className="size-24 rounded-full object-cover" /> : <div className="flex size-24 items-center justify-center rounded-full bg-stone-200 text-3xl">👤</div>}
+      <div className="min-w-0 flex-1 space-y-2">
+        <div className="flex items-center gap-2">
+          <h2>Foto de perfil</h2>
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>{label}</span>
+        </div>
+        {status === "RECHAZADA" && note && <p className="text-sm text-red-700">Motivo: {note}. Sube otra.</p>}
+        <p className="text-xs text-stone-500">Obligatoria. De frente, con la cara bien visible, sin gafas de sol ni filtros. RRHH la revisa.</p>
+        <input
+          type="file"
+          name="photo"
+          accept="image/*"
+          capture="user"
+          required
+          className="block w-full text-sm"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            setPreview(f ? URL.createObjectURL(f) : null);
+          }}
+        />
+        <Message r={r} />
+        <button className="btn btn-primary btn-sm" disabled={pending}>{pending ? "Subiendo…" : photoId ? "Cambiar foto" : "Subir foto"}</button>
+      </div>
+    </form>
   );
 }
 

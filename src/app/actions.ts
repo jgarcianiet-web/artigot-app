@@ -21,6 +21,8 @@ import { db } from "@/lib/db";
 import { forgetDevice } from "@/lib/devices";
 import { hireCandidate } from "@/lib/candidates";
 import { DEFAULT_TEMPLATE, getCompany } from "@/lib/contracts";
+import { sendAccessEmail } from "@/lib/mail";
+import { reviewPhoto, uploadPhoto } from "@/lib/photo";
 import { DEFAULT_PRIVACY_TEMPLATE, ensurePrivacyDoc, getPrivacy } from "@/lib/privacy";
 import { addDocument } from "@/lib/documents";
 import { createIncident, type IncidentResult } from "@/lib/incidents";
@@ -147,7 +149,7 @@ export async function logout() {
 
 const workerSchema = z.object({
   name: z.string().trim().min(2, "Nombre obligatorio"),
-  phone: z.string().trim().min(6, "Teléfono obligatorio"),
+  phone: optText,
   email: optText,
   role: z.enum(ROLES),
   rating: z.coerce.number().int().min(1).max(5),
@@ -171,14 +173,16 @@ export async function saveWorker(_prev: string | null, form: FormData) {
   const parsed = workerSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return parsed.error.issues[0].message;
   const id = form.get("id") ? String(form.get("id")) : null;
-  const key = phoneKey(parsed.data.phone);
-  if (key.length < 9) return "El teléfono debe tener al menos 9 cifras";
+  const key = parsed.data.phone ? phoneKey(parsed.data.phone) : null;
+  if (key !== null && key.length < 9) return "El teléfono debe tener al menos 9 cifras";
+  if (!key && !parsed.data.email) return "Pon el teléfono o, si no tiene, el email (para que pueda entrar en la app)";
+  if (parsed.data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(parsed.data.email)) return "El email no es válido";
   if (parsed.data.dni) parsed.data.dni = parsed.data.dni.toUpperCase().replace(/[\s-]/g, "");
   if (parsed.data.iban) parsed.data.iban = parsed.data.iban.toUpperCase().replace(/\s/g, "");
   if (parsed.data.nss) parsed.data.nss = parsed.data.nss.replace(/\D/g, "");
   if (parsed.data.dni && !validDniNie(parsed.data.dni)) return "El DNI/NIE no es correcto (revisa la letra)";
   if (parsed.data.iban && !validIban(parsed.data.iban)) return "El IBAN no es correcto";
-  const clash = await db.worker.findUnique({ where: { phoneKey: key } });
+  const clash = key ? await db.worker.findUnique({ where: { phoneKey: key } }) : null;
   if (clash && clash.id !== id) return `Ese teléfono ya es de ${clash.name}`;
   // Puestos que puede desempeñar: los marcados más el principal
   const roles = [...new Set([parsed.data.role, ...form.getAll("roles").map(String).filter(isRole)])];
@@ -213,6 +217,37 @@ export async function toggleWorkerActive(id: string) {
 }
 
 /** Nuevo código de acceso: cierra la sesión en todos sus dispositivos. */
+/** Envía por email el código de acceso del trabajador. */
+export async function emailAccessCode(id: string, _prev: string | null): Promise<string | null> {
+  const by = await requireAdmin();
+  const w = await db.worker.findUniqueOrThrow({ where: { id } });
+  const err = await sendAccessEmail(w);
+  if (err) return err;
+  await auditAdmin(by, "Trabajador", "Código por email", `Código de acceso enviado a ${w.email}`, { entityId: id });
+  return `Enviado a ${w.email}.`;
+}
+
+// ---------- Foto de perfil ----------
+
+export async function reviewPhotoAction(workerId: string, accept: boolean, form: FormData) {
+  const by = await requireAdmin();
+  await reviewPhoto(workerId, accept, accept ? null : String(form.get("reason") ?? ""), by);
+  revalidatePath("/admin", "layout");
+}
+
+export async function adminUploadPhoto(workerId: string, _prev: string | null, form: FormData): Promise<string | null> {
+  const by = await requireAdmin();
+  const file = form.get("photo");
+  if (!(file instanceof File) || !file.size) return "Elige una foto.";
+  try {
+    await uploadPhoto(workerId, file, { name: by, admin: true });
+  } catch (e) {
+    return (e as Error).message;
+  }
+  revalidatePath(`/admin/personal/${workerId}`);
+  return "Foto guardada.";
+}
+
 export async function regenerateAccessCode(id: string) {
   const by = await requireAdmin();
   const w = await db.worker.update({
@@ -763,8 +798,14 @@ export async function hireCandidateAction(id: string, form: FormData) {
   if (!isRole(role)) return;
   const worker = await hireCandidate(id, role);
   await auditAdmin(by, "Trabajador", "Alta desde candidatos", `${worker.name} dado de alta desde Candidatos`, { entityId: worker.id });
+  let email = "";
+  if (form.get("sendEmail") === "1") {
+    const err = await sendAccessEmail(worker);
+    if (!err) await auditAdmin(by, "Trabajador", "Código por email", `Código de acceso enviado a ${worker.email}`, { entityId: worker.id });
+    email = err ? `?email=${encodeURIComponent(err)}` : "?email=ok";
+  }
   revalidatePath("/admin", "layout");
-  redirect(`/admin/personal/${worker.id}`);
+  redirect(`/admin/personal/${worker.id}${email}`);
 }
 
 export async function deleteCandidate(id: string) {

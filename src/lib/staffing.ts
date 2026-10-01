@@ -10,7 +10,7 @@ export const ACTIVE_STATUSES = ["CONVOCADO", "CONFIRMADO"];
 export type Candidate = {
   id: string;
   name: string;
-  phone: string;
+  phone: string | null;
   role: string;
   mainRole: string;
   rating: number;

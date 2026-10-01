@@ -58,7 +58,7 @@ export async function Transport({ assignmentId, eventId, meetingPoint, meetingTi
             {myCar.passengers.length === 0 ? <p className="text-stone-500">Aún nadie.</p> : (
               <ul className="divide-y">
                 {myCar.passengers.map((p) => (
-                  <li key={p.id} className="flex justify-between py-1.5"><span>{p.worker.name}{p.worker.zone && <span className="text-stone-400"> · {p.worker.zone}</span>}</span><a href={`tel:${p.worker.phone}`} className="link">{p.worker.phone}</a></li>
+                  <li key={p.id} className="flex justify-between py-1.5"><span>{p.worker.name}{p.worker.zone && <span className="text-stone-400"> · {p.worker.zone}</span>}</span>{p.worker.phone && <a href={`tel:${p.worker.phone}`} className="link">{p.worker.phone}</a>}</li>
                 ))}
               </ul>
             )}
@@ -67,7 +67,7 @@ export async function Transport({ assignmentId, eventId, meetingPoint, meetingTi
 
         {me.transport === "NECESITO" && riding && (
           <div className="flex items-center justify-between gap-2 rounded-lg bg-emerald-50 p-2">
-            <span>Vas en el coche de <b>{riding.driver.worker.name}</b> · <a href={`tel:${riding.driver.worker.phone}`} className="link">{riding.driver.worker.phone}</a></span>
+            <span>Vas en el coche de <b>{riding.driver.worker.name}</b>{riding.driver.worker.phone && <> · <a href={`tel:${riding.driver.worker.phone}`} className="link">{riding.driver.worker.phone}</a></>}</span>
             {editable && <form action={leaveRide.bind(null, assignmentId)}><button className="text-xs text-red-700 underline">Salir</button></form>}
           </div>
         )}

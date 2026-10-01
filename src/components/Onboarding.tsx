@@ -45,6 +45,7 @@ export function Onboarding({ name, steps, push, signAction }: { name: string; st
                 <>
                   <p className="text-xs text-stone-600">{s.text}</p>
                   {s.key === "rgpd" && <form action={signAction}><button className="btn btn-primary btn-sm">Leer y firmar</button></form>}
+                  {s.key === "foto" && <Link href="/app/perfil#foto" className="btn btn-primary btn-sm">Subir mi foto</Link>}
                   {s.key === "datos" && <Link href="/app/perfil" className="btn btn-primary btn-sm">Completar mis datos</Link>}
                   {s.key === "avisos" && (
                     <div className="flex flex-wrap items-start gap-3">
