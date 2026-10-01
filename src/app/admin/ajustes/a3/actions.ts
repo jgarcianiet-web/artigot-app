@@ -11,7 +11,7 @@ export async function importA3DatabaseAction(_prev: A3ImportResult | null, form:
   const by = await requireAdmin();
   const file = form.get("file");
   if (!(file instanceof File)) return { ok: false, message: "Selecciona un archivo." };
-  const res = await importA3Database(file, by);
+  const res = await importA3Database(file, by, { replaceRates: form.get("replaceRates") === "1" });
   revalidatePath("/admin/ajustes/a3");
   revalidatePath("/admin/personal", "layout");
   return res;

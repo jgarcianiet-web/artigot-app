@@ -23,7 +23,7 @@ Aplicación para que RRHH gestione de forma rápida el personal de **bodas y eve
 - **Tarifas** (Ajustes → Tarifas):
   - €/hora general de cada puesto y, si es distinto, el de **boda**, **evento** u **otro**;
   - mínimo de horas y **plus por evento** (los camareros responsables cobran +10 € por servicio).
-- **Tarifa propia por persona** (en su ficha, por tipo de evento): manda sobre la del puesto.
+- **Tarifa propia por persona** (en su ficha, por tipo de evento): manda sobre la del puesto. También se importa con «Completar los datos que faltan con otro Excel» (columnas «Tarifa boda», «Tarifa evento», «Tarifa otro» o «Tarifa» para todos; opción para sustituir las que ya haya).
   - Todo se tiene en cuenta en la nómina, la remesa, el coste y el presupuesto de cada evento y la exportación a A3.
   - En A3 va una línea por precio y el plus en una línea aparte (concepto configurable).
 - **Buscar al convocar**: en cada evento, buscador en la lista de disponibles (por nombre, zona o teléfono, sin importar tildes) para marcar a quien quieras y convocarlo.
