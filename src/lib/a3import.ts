@@ -14,17 +14,21 @@ import { validDniNie, validIban } from "./staff";
  * trabajador en la app (recordatorio automático de datos incompletos).
  */
 
-type Col = "dni" | "name" | "surname" | "phone" | "email" | "code" | "nss" | "center" | "iban" | "birth" | "address" | "sex" | "nationality" | "zone" | "rateBODA" | "rateEVENTO" | "rateOTRO" | "rateAll";
+type Col = "dni" | "name" | "surname" | "phone" | "email" | "code" | "nss" | "center" | "iban" | "birth" | "address" | "sex" | "nationality" | "zone" | "rateBODA" | "rateEVENTO" | "rateOTRO" | "rateAll" | "rateMAITRE:BODA" | "rateMAITRE:EVENTO" | "rateMAITRE:OTRO" | "rateMAITRE:ALL";
 
 function colFor(header: string): Col | null {
   const h = norm(header);
   if (!h) return null;
   if (/^(dni|nie|nif|dni nie|nif nie|documento|n documento|num documento)$/.test(h)) return "dni";
-  // Tarifa propia (€/hora): «Tarifa boda», «Precio hora evento», «€/h otro» o «Tarifa» para todos
-  if (/\b(tarifa|precio|eur|euros)\b/.test(h) && !/\b(total|importe)\b/.test(h)) {
-    if (/\bboda/.test(h)) return "rateBODA";
-    if (/\bevento/.test(h)) return "rateEVENTO";
-    if (/\botro/.test(h)) return "rateOTRO";
+  // Tarifa propia (€/hora): «Tarifa boda», «Precio hora evento», «Maître boda», «Tarifa maître» o
+  // «Tarifa» para todos. Las columnas que se llaman solo «Boda» o «Evento» también valen.
+  const bare = /^(boda|bodas|evento|eventos|otro|otros|maitre|maitres)( (boda|bodas|evento|eventos|otro|otros|maitre|maitres))?$/.test(h);
+  if ((bare || /\b(tarifa|precio|eur|euros)\b/.test(h)) && !/\b(total|importe)\b/.test(h)) {
+    const pre = /\bmaitres?\b/.test(h) ? "rateMAITRE:" : "rate";
+    if (/\bbodas?\b/.test(h)) return `${pre}BODA` as Col;
+    if (/\beventos?\b/.test(h)) return `${pre}EVENTO` as Col;
+    if (/\botros?\b/.test(h)) return `${pre}OTRO` as Col;
+    if (pre !== "rate") return "rateMAITRE:ALL";
     if (/^(tarifa|tarifa hora|tarifa propia|precio|precio hora|eur hora|euros hora|eur h)$/.test(h)) return "rateAll";
   }
   if (/^(codigo|cod|cod trabajador|codigo trabajador|codigo a3|cod a3)$/.test(h)) return "code";
@@ -143,10 +147,14 @@ export async function completeFromFile(file: File, by: string, opts: { replaceRa
     const rates = { ...current };
     let ratesChanged = false;
     for (const t of ["BODA", "EVENTO", "OTRO"] as const) {
-      const v = rateValue(at(raw, `rate${t}` as Col)) ?? rateValue(at(raw, "rateAll"));
-      if (v != null && (opts.replaceRates || current[t] == null) && current[t] !== v) {
-        rates[t] = v;
-        ratesChanged = true;
+      for (const [k, v] of [
+        [t, rateValue(at(raw, `rate${t}` as Col)) ?? rateValue(at(raw, "rateAll"))],
+        [`MAITRE:${t}`, rateValue(at(raw, `rateMAITRE:${t}` as Col)) ?? rateValue(at(raw, "rateMAITRE:ALL"))],
+      ] as const) {
+        if (v != null && (opts.replaceRates || current[k] == null) && current[k] !== v) {
+          rates[k] = v;
+          ratesChanged = true;
+        }
       }
     }
     if (ratesChanged) data.customRates = rates;

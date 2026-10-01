@@ -112,15 +112,32 @@ export function workedHours(a: {
 type RateRow = { role: string; hourlyRate: number; minHours: number; eventBonus: number; typeRates: unknown };
 const num_ = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : null);
 
+/** Puestos con tarifa propia aparte: cuando la persona va de maître cobra su tarifa de maître. */
+export const OWN_RATE_ROLES = ["MAITRE"] as const;
+/** Clave de la tarifa propia: «BODA» (camarero, responsable o mozo) o «MAITRE:BODA». */
+export const ownRateKey = (role: string, eventType: string) => ((OWN_RATE_ROLES as readonly string[]).includes(role) ? `${role}:${eventType}` : eventType);
+
+/** «Boda 14 €/h · Maître boda 18 €/h» */
+export function ownRatesText(workerRates: unknown) {
+  return Object.entries((workerRates ?? {}) as Record<string, number>)
+    .map(([k, v]) => {
+      const [a, b] = k.split(":");
+      const label = b ? `${ROLE_LABEL[a as Role] ?? a} ${(EVENT_TYPE_LABEL[b] ?? b).toLowerCase()}` : (EVENT_TYPE_LABEL[a] ?? a);
+      return `${label} ${String(v).replace(".", ",")} €/h`;
+    })
+    .join(" · ");
+}
+
 /**
- * Tarifa de un servicio: el €/hora es el propio de la persona para ese tipo de evento si lo tiene;
- * si no, el del puesto para ese tipo de evento (boda, evento…); y si no, el general del puesto.
+ * Tarifa de un servicio: el €/hora es el propio de la persona para ese puesto y tipo de evento si lo
+ * tiene (de maître, su tarifa de maître; en el resto de puestos, su tarifa general); si no, el del
+ * puesto para ese tipo de evento (boda, evento…); y si no, el general del puesto.
  * El mínimo de horas y el plus por evento son siempre los del puesto.
  */
 export function rateFor(rates: RateRow[], role: string, eventType: string, workerRates?: unknown) {
   const r = rates.find((x) => x.role === role);
   if (!r) return undefined;
-  const own = num_((workerRates as Record<string, unknown> | null | undefined)?.[eventType]);
+  const own = num_((workerRates as Record<string, unknown> | null | undefined)?.[ownRateKey(role, eventType)]);
   const byType = num_((r.typeRates as Record<string, unknown> | null)?.[eventType]);
   return { hourlyRate: own ?? byType ?? r.hourlyRate, minHours: r.minHours, eventBonus: r.eventBonus, custom: own != null };
 }

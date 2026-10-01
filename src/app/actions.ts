@@ -29,7 +29,7 @@ import { addDocument } from "@/lib/documents";
 import { createIncident, type IncidentResult } from "@/lib/incidents";
 import { DOC_LABEL, lines, validDniNie, validIban } from "@/lib/staff";
 import { checkIdentityDocs, storeIdentityDocs } from "@/lib/identityDocs";
-import { EVENT_TYPE_LABEL, EVENT_TYPES, formatDate, isRole, LEAD_ROLES, ROLE_LABEL, ROLES, type Role } from "@/lib/domain";
+import { EVENT_TYPE_LABEL, EVENT_TYPES, formatDate, isRole, LEAD_ROLES, OWN_RATE_ROLES, ROLE_LABEL, ROLES, type Role } from "@/lib/domain";
 import { notify } from "@/lib/push";
 import { autoReplace, candidatesFor, fillGaps, notifyInvited } from "@/lib/staffing";
 import { deleteStoredFile } from "@/lib/files";
@@ -187,7 +187,7 @@ export async function saveWorker(_prev: string | null, form: FormData) {
   if (clash && clash.id !== id) return `Ese teléfono ya es de ${clash.name}`;
   // Puestos que puede desempeñar: los marcados más el principal
   const roles = [...new Set([parsed.data.role, ...form.getAll("roles").map(String).filter(isRole)])];
-  const customRates = rateMap(form, "own_");
+  const customRates = rateMap(form, "own_", OWN_RATE_ROLES);
   const data = { ...parsed.data, roles, phoneKey: key, customRates: customRates ?? Prisma.DbNull };
   const before = id ? await db.worker.findUnique({ where: { id } }) : null;
   const docError = await checkIdentityDocs(id, before, parsed.data, form);
@@ -916,11 +916,12 @@ export async function saveTimesheet(eventId: string, form: FormData) {
 // ---------- Tarifas ----------
 
 /** €/hora por tipo de evento leídos de un formulario (campos «prefijo + BODA»…); null si no hay ninguno. */
-function rateMap(form: FormData, prefix: string) {
+function rateMap(form: FormData, prefix: string, roles: readonly string[] = []) {
   const out: Record<string, number> = {};
-  for (const t of EVENT_TYPES) {
-    const v = Number(String(form.get(`${prefix}${t}`) ?? "").trim().replace(",", "."));
-    if (String(form.get(`${prefix}${t}`) ?? "").trim() && Number.isFinite(v) && v > 0) out[t] = Math.round(v * 1000) / 1000;
+  for (const k of [...EVENT_TYPES, ...roles.flatMap((r) => EVENT_TYPES.map((t) => `${r}:${t}`))]) {
+    const raw = String(form.get(`${prefix}${k}`) ?? "").trim();
+    const v = Number(raw.replace(",", "."));
+    if (raw && Number.isFinite(v) && v > 0) out[k] = Math.round(v * 1000) / 1000;
   }
   return Object.keys(out).length ? out : null;
 }
