@@ -2,12 +2,17 @@ import Link from "next/link";
 import { saveA3Codes } from "@/app/actions";
 import { SubmitButton } from "@/components/client";
 import { getA3 } from "@/lib/a3";
+import { getA3Alta, nextA3Code, templateLists } from "@/lib/a3alta";
 import { db } from "@/lib/db";
 import { A3Form } from "./A3Form";
+import { A3AltaForm, A3ImportForm } from "./AltaForms";
 
 export default async function A3Settings() {
-  const [cfg, workers] = await Promise.all([
+  const [cfg, alta, lists, next, workers] = await Promise.all([
     getA3(),
+    getA3Alta(),
+    templateLists(),
+    nextA3Code(),
     db.worker.findMany({ where: { active: true, a3Code: null }, orderBy: { name: "asc" }, select: { id: true, name: true, dni: true } }),
   ]);
   return (
@@ -21,6 +26,11 @@ export default async function A3Settings() {
         </p>
       </div>
       <A3Form cfg={cfg} />
+      <A3ImportForm />
+      <p className="max-w-3xl text-sm">
+        Para dar de alta en A3 a los nuevos: <Link href="/admin/altas/a3" className="link">Altas y bajas → Alta en A3</Link> genera el Excel de alta masiva con estos valores.
+      </p>
+      <A3AltaForm cfg={alta} lists={lists} next={next} />
       <div className="card max-w-3xl space-y-3">
         <h2>Personal activo sin código de A3 ({workers.length})</h2>
         {workers.length === 0 ? (

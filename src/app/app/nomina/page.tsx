@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireWorker } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { euro, formatDate, num, ROLE_LABEL, today, type Role } from "@/lib/domain";
-import { getPaySettings, halfFromKey, halfLabel, netOf, payPeriod } from "@/lib/pay";
+import { deductions, getPaySettings, halfFromKey, halfLabel, netOf, payPeriod } from "@/lib/pay";
 import { workerMonth } from "@/lib/staff";
 import { monthRecordDocs } from "@/lib/timeRecord";
 
@@ -26,7 +26,7 @@ export default async function MyPay({ searchParams }: { searchParams: Promise<{ 
   const record = (await monthRecordDocs(month, me.id))[0];
   const halves = await Promise.all([1, 2].map((n) => payPeriod(halfFromKey(`${month}-${n}`)!, { workerId: me.id })));
   const [y, mm] = month.split("-").map(Number);
-  const irpfPct = s.irpfPct;
+  const { ssPct, irpfPct } = deductions(s);
   const monthNet = halves.reduce((t, p) => t + (p.rows[0]?.net ?? 0), 0);
 
   return (
@@ -67,7 +67,7 @@ export default async function MyPay({ searchParams }: { searchParams: Promise<{ 
               {row && (row.gross > 0 || row.final) ? (
                 <div className="text-right">
                   <div className="text-xl font-semibold tabular-nums">{euro(row.net)}</div>
-                  <div className="text-xs text-stone-500">{row.final || !perEvent ? "neto" : "neto estimado"}</div>
+                  <div className="text-xs text-stone-500">{row.final || !perEvent || s.ratesAreNet ? "neto" : "neto estimado"}</div>
                 </div>
               ) : row ? (
                 <div className="text-right text-xs text-stone-400">pendiente de horas</div>
@@ -89,7 +89,7 @@ export default async function MyPay({ searchParams }: { searchParams: Promise<{ 
                     <span className="shrink-0 text-right tabular-nums">
                       {r.billedHours != null ? (
                         <>
-                          {perEvent && <span className="block">{euro(netOf(r.amount, s.ssPct, irpfPct).net)}</span>}
+                          {perEvent && <span className="block">{euro(netOf(r.amount, ssPct, irpfPct).net)}</span>}
                           <span className={perEvent ? "text-xs text-stone-500" : ""}>{num(r.billedHours)} h</span>
                         </>
                       ) : (
@@ -123,7 +123,9 @@ export default async function MyPay({ searchParams }: { searchParams: Promise<{ 
       )}
       <p className="text-xs text-stone-500">
         Pagamos a quincena vencida: del 1 al 15, hacia el día {s.firstHalfDay}; del 16 a fin de mes, la primera semana del mes siguiente.
-        El neto estimado descuenta la Seguridad Social ({num(s.ssPct)} %) y la retención de IRPF ({num(irpfPct)} %). El importe definitivo es el de tu nómina.
+        {s.ratesAreNet
+          ? "Los importes son lo que cobras por cada servicio."
+          : `El neto estimado descuenta la Seguridad Social (${num(ssPct)} %) y la retención de IRPF (${num(irpfPct)} %). El importe definitivo es el de tu nómina.`}
       </p>
     </div>
   );

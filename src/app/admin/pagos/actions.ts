@@ -9,7 +9,7 @@ import { euro, formatDate, today } from "@/lib/domain";
 import { norm, readTable } from "@/lib/importStaff";
 import { closePeriod, getPaySettings, halfFromKey, halfLabel, payPeriod, type Half } from "@/lib/pay";
 import { notify } from "@/lib/push";
-import { buildPain001, checkDebtor } from "@/lib/sepa";
+import { buildPain001, checkDebtor, paymentRef, parseAddress, sepaStamp } from "@/lib/sepa";
 import { validIban } from "@/lib/staff";
 import { auditAdmin, diff } from "@/lib/audit";
 
@@ -178,13 +178,20 @@ export async function generateRemittance(key: string, _prev: PayResult, form: Fo
   const skipped = rows.filter((r) => r.net > 0 && !(r.iban && validIban(r.iban))).map((r) => r.name);
   if (!payable.length) return { ok: false, message: "No hay nadie con importe y un IBAN válido en esta quincena." };
   const execDate = payDate > today() ? payDate : today();
-  const msgId = `NOM${h.from.replace(/-/g, "")}${h.to.slice(8)}-${Date.now().toString(36).toUpperCase()}`;
+  const createdAt = new Date();
+  const stamp = sepaStamp(createdAt);
+  const msgId = `${company.cif.toUpperCase()}${stamp}`;
+  const addresses = new Map(
+    (await db.worker.findMany({ where: { id: { in: payable.map((r) => r.workerId) } }, select: { id: true, address: true } })).map((w) => [w.id, parseAddress(w.address)]),
+  );
+  // «ABONO NOMINA 01-15/09/2026», como el concepto que ya usáis en las remesas
+  const concept = `Abono nomina ${h.from.slice(8)}-${h.to.slice(8)}/${h.from.slice(5, 7)}/${h.from.slice(0, 4)}`;
   const xml = buildPain001({
     msgId,
-    createdAt: new Date(),
+    createdAt,
     execDate,
     debtor,
-    payments: payable.map((r, i) => ({ id: `${msgId}-${i + 1}`, name: r.name, iban: r.iban!, amount: r.net, concept: `Nomina ${halfLabel(h)}` })),
+    payments: payable.map((r, i) => ({ id: paymentRef(r.dni, stamp, i + 1), name: r.name, iban: r.iban!, amount: r.net, concept, ...addresses.get(r.workerId) })),
   });
   const total = Math.round(payable.reduce((t, r) => t + r.net, 0) * 100) / 100;
   const rem = await db.remittance.create({
@@ -238,6 +245,7 @@ export async function savePaySettings(_prev: string | null, form: FormData) {
   const value = {
     ssPct: pct("ssPct"),
     irpfPct: pct("irpfPct"),
+    ratesAreNet: form.get("ratesAreNet") === "on",
     firstHalfDay: Number(get("firstHalfDay")),
     secondHalfDay: Number(get("secondHalfDay")),
     debtorIban: get("debtorIban").toUpperCase().replace(/\s/g, ""),
@@ -251,9 +259,10 @@ export async function savePaySettings(_prev: string | null, form: FormData) {
   if (!/^[A-Z0-9]{3}$/.test(value.sepaSuffix)) return "El sufijo tiene que tener 3 caracteres (normalmente 000).";
   const before = await getPaySettings();
   await db.setting.upsert({ where: { key: "pagos" }, create: { key: "pagos", value }, update: { value } });
-  const d = diff(before, value, { ssPct: "% Seg. Social", irpfPct: "% IRPF", firstHalfDay: "Día de pago 1ª quincena", secondHalfDay: "Día de pago 2ª quincena", debtorIban: "IBAN empresa", debtorBic: "BIC", sepaSuffix: "Sufijo" });
+  const d = diff(before, value, { ssPct: "% Seg. Social", irpfPct: "% IRPF", ratesAreNet: "Tarifas netas", firstHalfDay: "Día de pago 1ª quincena", secondHalfDay: "Día de pago 2ª quincena", debtorIban: "IBAN empresa", debtorBic: "BIC", sepaSuffix: "Sufijo" });
   if (d.changed) await auditAdmin(by, "Ajustes", "Pagos", d.text, { data: d.data });
   revalidatePath("/admin/ajustes/pagos");
   revalidatePath("/app/nomina");
+  revalidatePath("/admin/pagos");
   return "Guardado.";
 }

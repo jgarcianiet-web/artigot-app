@@ -266,6 +266,8 @@ export async function saveMyData(_prev: FormResult, form: FormData): Promise<For
   const birthDate = String(form.get("birthDate") ?? "");
   const address = String(form.get("address") ?? "").trim().slice(0, 200);
   const email = String(form.get("email") ?? "").trim();
+  const sex = String(form.get("sex") ?? "");
+  const nationality = String(form.get("nationality") ?? "").trim().toLocaleUpperCase("es-ES").slice(0, 60);
   if (!(await privacySignature(me.id))) return { ok: false, message: "Antes de completar tus datos tienes que firmar la cláusula de protección de datos." };
   if (!dni) return { ok: false, message: "Escribe tu DNI / NIE." };
   if (!nss) return { ok: false, message: "Escribe tu número de la Seguridad Social." };
@@ -280,9 +282,12 @@ export async function saveMyData(_prev: FormResult, form: FormData): Promise<For
   if (docError) return { ok: false, message: docError };
   const after_ = await db.worker.update({
     where: { id: me.id },
-    data: { dni: dni || null, iban: iban || null, nss: nss || null, birthDate: birthDate || null, address: address || null, email: email || null },
+    data: { dni: dni || null, iban: iban || null, nss: nss || null, birthDate: birthDate || null, address: address || null, email: email || null,
+      ...(form.has("sex") && { sex: sex === "Hombre" || sex === "Mujer" ? sex : null }),
+      ...(form.has("nationality") && { nationality: nationality || null }),
+    },
   });
-  const d = diff(before, after_, { dni: "DNI", nss: "NSS", iban: "IBAN", birthDate: "Nacimiento", address: "Dirección", email: "Email" });
+  const d = diff(before, after_, { dni: "DNI", nss: "NSS", iban: "IBAN", birthDate: "Nacimiento", address: "Dirección", email: "Email", sex: "Sexo", nationality: "Nacionalidad" });
   if (d.changed) await audit(me.name, "Trabajador", "Trabajador", "Datos (desde la app)", `${me.name}: ${d.text}`, { entityId: me.id, data: d.data });
   let stored: string[];
   try {

@@ -13,6 +13,13 @@ export function PaySettingsForm({ s }: { s: PaySettings }) {
     <ActionForm action={run} className="card max-w-3xl space-y-5">
       <fieldset className="grid gap-4 sm:grid-cols-2">
         <legend className="mb-2 font-semibold">Neto que ve el personal</legend>
+        <label className="flex items-start gap-2 text-sm sm:col-span-2">
+          <input type="checkbox" name="ratesAreNet" defaultChecked={s.ratesAreNet} className="mt-0.5" />
+          <span>
+            <b>Las tarifas ya son netas</b> (lo que cobra el trabajador): no se descuenta Seguridad Social ni IRPF y la remesa paga el importe de los servicios tal cual,
+            como en vuestro Excel de extras.
+          </span>
+        </label>
         <label className="text-sm">Seguridad Social a cargo del trabajador (%)<input name="ssPct" inputMode="decimal" className="input mt-1" defaultValue={dec(s.ssPct)} /></label>
         <label className="text-sm">IRPF general (%)<input name="irpfPct" inputMode="decimal" className="input mt-1" defaultValue={dec(s.irpfPct)} /></label>
         <p className="text-xs text-stone-500 sm:col-span-2">

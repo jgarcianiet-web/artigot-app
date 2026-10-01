@@ -22,7 +22,7 @@ function Message({ r }: { r: Result }) {
   return <p role="status" className={`rounded-lg p-2 text-sm ${r.ok ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>{r.message}</p>;
 }
 
-type Data = { dni: string | null; nss: string | null; iban: string | null; birthDate: string | null; address: string | null; email: string | null };
+type Data = { dni: string | null; nss: string | null; iban: string | null; birthDate: string | null; address: string | null; email: string | null; sex?: string | null; nationality?: string | null };
 
 type DocStatus = Record<string, { fileId: string | null; verified: boolean }>;
 
@@ -35,6 +35,15 @@ export function MyDataForm({ action, data, docs }: { action: Action; data: Data;
       <div className="grid gap-3 sm:grid-cols-2">
         <IdentityFields values={{ dni: data.dni, nss: data.nss, iban: data.iban }} docs={docs} required inputClass="input mt-1 text-base" />
         <label className="text-sm">Fecha de nacimiento<input name="birthDate" type="date" className="input mt-1 text-base" defaultValue={data.birthDate ?? ""} /></label>
+        <label className="text-sm">
+          Sexo (para el alta)
+          <select name="sex" className="input mt-1 text-base" defaultValue={data.sex ?? ""}>
+            <option value="">—</option>
+            <option>Hombre</option>
+            <option>Mujer</option>
+          </select>
+        </label>
+        <label className="text-sm">Nacionalidad<input name="nationality" className="input mt-1 text-base" defaultValue={data.nationality ?? ""} placeholder="España" /></label>
         <label className="text-sm">Email<input name="email" type="email" className="input mt-1 text-base" defaultValue={data.email ?? ""} /></label>
         <label className="text-sm sm:col-span-2">Dirección<input name="address" className="input mt-1 text-base" defaultValue={data.address ?? ""} /></label>
       </div>
