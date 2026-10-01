@@ -32,7 +32,10 @@ export default async function Payments({ searchParams }: { searchParams: Promise
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1>Pagos</h1>
-        <Link href="/admin/ajustes/pagos" className="text-sm text-stone-500 hover:underline">Ajustes de pagos y remesas</Link>
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <a href={`/admin/pagos/relacion?q=${h.key}`} className="btn">⬇ Excel de extras</a>
+          <Link href="/admin/ajustes/pagos" className="text-stone-500 hover:underline">Ajustes de pagos y remesas</Link>
+        </div>
       </div>
       <div className="flex items-center gap-2">
         <Link href={`/admin/pagos?q=${shiftHalf(h, -1).key}`} className="btn" aria-label="Quincena anterior">‹</Link>
@@ -52,7 +55,11 @@ export default async function Payments({ searchParams }: { searchParams: Promise
         <PayDateForm k={h.key} payDate={p.payDate} disabled={p.status === "PAGADA"} />
         <div className="text-sm text-stone-600">
           <p>El personal ve esta fecha y su neto en la app (Nómina).</p>
-          <p className="mt-1">Neto estimado = bruto − Seguridad Social ({num(p.settings.ssPct)} %) − IRPF ({num(p.settings.irpfPct)} %). Pon o importa el neto real de A3 para que la remesa pague lo exacto.</p>
+          <p className="mt-1">
+            {p.settings.ratesAreNet
+              ? "Las tarifas son netas: se paga el importe de los servicios tal cual. Puedes cambiar el importe de alguien escribiéndolo en «Neto a pagar»."
+              : `Neto estimado = bruto − Seguridad Social (${num(p.settings.ssPct)} %) − IRPF (${num(p.settings.irpfPct)} %). Pon o importa el neto real de A3 para que la remesa pague lo exacto.`}
+          </p>
         </div>
       </section>
 

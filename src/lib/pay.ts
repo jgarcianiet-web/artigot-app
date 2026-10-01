@@ -16,6 +16,8 @@ export type PaySettings = {
   ssPct: number;
   /** % de IRPF para el neto estimado (el real lo da la nómina de A3) */
   irpfPct: number;
+  /** Las tarifas ya son el importe que cobra el trabajador: no se descuenta nada */
+  ratesAreNet: boolean;
   /** Día de pago de la primera quincena (del mismo mes) */
   firstHalfDay: number;
   /** Día de pago de la segunda quincena (del mes siguiente) */
@@ -32,6 +34,7 @@ export const PAY_DEFAULTS: PaySettings = {
   ssPct: 6.55,
   // Mínimo legal para contratos de duración inferior a un año
   irpfPct: 2,
+  ratesAreNet: false,
   firstHalfDay: 22,
   secondHalfDay: 7,
   debtorIban: "",
@@ -46,6 +49,10 @@ export async function getPaySettings(): Promise<PaySettings> {
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Porcentajes que se descuentan de verdad (ninguno si las tarifas ya son netas). */
+export const deductions = (s: Pick<PaySettings, "ssPct" | "irpfPct" | "ratesAreNet">) =>
+  s.ratesAreNet ? { ssPct: 0, irpfPct: 0 } : { ssPct: s.ssPct, irpfPct: s.irpfPct };
 
 export function netOf(gross: number, ssPct: number, irpfPct: number) {
   const ss = round2((gross * ssPct) / 100);
@@ -130,12 +137,13 @@ export type PayRow = {
 /** Importes en vivo a partir de los servicios confirmados de la quincena. */
 async function liveRows(h: Half, s: PaySettings, workerId?: string): Promise<Omit<PayRow, "net" | "final">[]> {
   const lines = (await payrollLines(h.from, h.to)).filter((l) => !workerId || l.a.workerId === workerId);
+  const pct = deductions(s);
   const by = new Map<string, Omit<PayRow, "net" | "final">>();
   for (const l of lines) {
     const w = l.a.worker;
     const r = by.get(w.id) ?? {
       workerId: w.id, name: w.name, dni: w.dni, a3Code: w.a3Code, iban: w.iban,
-      services: 0, hours: 0, gross: 0, ss: 0, irpf: 0, irpfPct: s.irpfPct, netEstimate: 0, pending: 0,
+      services: 0, hours: 0, gross: 0, ss: 0, irpf: 0, irpfPct: pct.irpfPct, netEstimate: 0, pending: 0,
     };
     r.services++;
     r.hours += l.billedHours ?? 0;
@@ -144,7 +152,7 @@ async function liveRows(h: Half, s: PaySettings, workerId?: string): Promise<Omi
     by.set(w.id, r);
   }
   return [...by.values()].map((r) => {
-    const n = netOf(r.gross, s.ssPct, r.irpfPct);
+    const n = netOf(r.gross, pct.ssPct, r.irpfPct);
     return { ...r, hours: round2(r.hours), ss: n.ss, irpf: n.irpf, netEstimate: n.net };
   });
 }

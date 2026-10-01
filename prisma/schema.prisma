@@ -28,6 +28,14 @@ model Worker {
   address         String?
   // Código del trabajador en A3Nom (para la exportación de horas)
   a3Code          String?
+  // Datos para el alta masiva en A3 (si faltan los apellidos se separan del nombre)
+  firstName       String?
+  surname1        String?
+  surname2        String?
+  sex             String?
+  nationality     String?
+  education       String?
+  a3Center        String?
   // % de retención de IRPF propio (si es null se usa el general de Ajustes → Pagos)
   irpf            Float?
   // Plazas libres en su coche (null o 0 = no suele llevar coche)

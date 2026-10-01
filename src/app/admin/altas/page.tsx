@@ -57,6 +57,7 @@ export default async function Employments({ searchParams }: { searchParams: Prom
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1>Altas y bajas</h1>
         <div className="flex gap-2">
+          <Link href="/admin/altas/a3" className="btn">Alta en A3</Link>
           <Link href="/admin/altas/importar" className="btn">Importar Excel</Link>
           <a href={`/admin/altas/exportar?ver=${view}&mes=${month}`} className="btn">Exportar Excel</a>
         </div>
