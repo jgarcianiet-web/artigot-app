@@ -18,11 +18,14 @@ export type A3Config = {
   bonusConcept: string;
 };
 
+export const A3_COMPANY = "29";
+
 export async function getA3(): Promise<A3Config> {
   const row = await db.setting.findUnique({ where: { key: "a3" } });
   const v = (row?.value ?? {}) as Partial<A3Config>;
   return {
-    companyCode: v.companyCode ?? "",
+    // Artigot es la empresa 29 en A3: vale aunque no se haya puesto en Ajustes
+    companyCode: v.companyCode || A3_COMPANY,
     hoursConcept: v.hoursConcept ?? "",
     hoursConceptName: v.hoursConceptName ?? "Horas eventos",
     roleConcepts: v.roleConcepts ?? {},

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { testPush } from "@/lib/push";
 import { uploadPhoto } from "@/lib/photo";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -482,4 +483,9 @@ export async function answerPollAction(pollId: string, date: string, available: 
     revalidatePath("/app");
     revalidatePath(`/admin/sondeos/${pollId}`);
   }
+}
+
+export async function testMyPush() {
+  const me = await requireWorker();
+  return testPush({ workerId: me.id });
 }

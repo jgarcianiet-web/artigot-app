@@ -7,7 +7,9 @@ import { formatDate, ROLE_LABEL, today, type Role } from "@/lib/domain";
 import { DOC_LABEL, docState } from "@/lib/staff";
 import { privacySignature } from "@/lib/privacy";
 import { identityDocStatus } from "@/lib/identityDocs";
-import { deleteMyDocument, logout, saveMyData, startPrivacySignature, uploadMyDocument, uploadMyPhoto } from "../actions";
+import { deleteMyDocument, logout, saveMyData, startPrivacySignature, testMyPush, uploadMyDocument, uploadMyPhoto } from "../actions";
+import { MyPush } from "@/components/PushTest";
+import { pushConfig } from "@/lib/push";
 
 const STATE = {
   "sin-caducidad": "",
@@ -34,6 +36,8 @@ export default async function MyProfile() {
         <p className="text-sm text-stone-500">{ROLE_LABEL[worker.role as Role]} · {worker.phone ?? worker.email}</p>
         <h1>{worker.name}</h1>
       </header>
+
+      <MyPush webKey={(await pushConfig()).webPublicKey} action={testMyPush} />
 
       <PhotoForm action={uploadMyPhoto} photoId={worker.photoFileId} status={worker.photoStatus} note={worker.photoNote} />
 

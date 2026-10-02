@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { waLink } from "@/lib/whatsapp";
 import { notFound } from "next/navigation";
 import {
   autoFill,
@@ -31,6 +32,8 @@ import {
   payable,
   rateFor,
   ROLE_LABEL,
+  appUrl,
+  type Role,
   ROLE_PLURAL,
   ROLES,
   costHours,
@@ -55,7 +58,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
   const adminName = await requireAdmin();
   const event = await db.event.findUnique({
     where: { id: (await params).id },
-    include: { assignments: { include: { worker: true }, orderBy: { worker: { name: "asc" } } } },
+    include: { assignments: { include: { worker: { include: { _count: { select: { devices: true } } } } }, orderBy: { worker: { name: "asc" } } } },
   });
   if (!event) notFound();
 
@@ -72,6 +75,9 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
   const totalMissing = ROLES.reduce((s, r) => s + missing[r], 0);
   const fillable = ROLES.reduce((s, r) => s + Math.min(missing[r], candidates[r].length), 0);
   const confirmed = event.assignments.filter((a) => a.status === "CONFIRMADO");
+  const inviteText = (name: string, role: string) =>
+    `Hola ${name.split(" ")[0]}, te convocamos para ${event.name} el ${formatDate(event.date, { long: true })} a las ${callTime(event, role)} en ${event.venue} (${ROLE_LABEL[role as Role]?.toLowerCase() ?? role}). Acepta o rechaza en la app: ${appUrl()}/app`;
+  const pendingNoPush = event.assignments.filter((a) => a.status === "CONVOCADO" && a.worker._count.devices === 0);
   const maitres = confirmed.filter((a) => isLeadRole(a.role)); // maître o camarero responsable
   const teamSize = confirmed.length - maitres.length;
   const pendingReviewCount = maitres.reduce(
@@ -164,6 +170,12 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
             </form>
           )}
         </div>
+        {pendingNoPush.length > 0 && (
+          <p className="rounded-lg bg-amber-50 p-2 text-sm text-amber-900">
+            🔕 {pendingNoPush.length} {pendingNoPush.length === 1 ? "convocado no tiene" : "convocados no tienen"} los avisos de la app activados y no se enteran de la convocatoria:{" "}
+            {pendingNoPush.map((a) => a.worker.name).join(", ")}. Usa el botón «WhatsApp» de cada uno (abajo) para mandársela.
+          </p>
+        )}
         <div className="grid gap-3 sm:grid-cols-3">
           {cov.map((c) => (
             <div key={c.role} className="space-y-1">
@@ -202,7 +214,18 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
               <ul className="divide-y divide-stone-100">
                 {assigned.map((a) => (
                   <li key={a.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
-                    <Link href={`/admin/personal/${a.workerId}`} className="link mr-auto">{a.worker.name}</Link>
+                    <span className="mr-auto">
+                      <Link href={`/admin/personal/${a.workerId}`} className="link">{a.worker.name}</Link>
+                      {a.worker._count.devices === 0 && (
+                        <span className="ml-1 text-xs text-amber-700" title="No ha activado los avisos de la app en ningún móvil: no le llegan las notificaciones">🔕 sin avisos</span>
+                      )}
+                    </span>
+                    {a.status === "CONVOCADO" && (() => {
+                      const wa = waLink(a.worker.phone, inviteText(a.worker.name, a.role));
+                      return wa && (
+                        <a href={wa} target="_blank" className="btn btn-sm border-emerald-300 text-emerald-800" title="Abre WhatsApp con la convocatoria ya escrita">WhatsApp</a>
+                      );
+                    })()}
                     <StatusBadge status={a.status} />
                     {a.status !== "CONFIRMADO" && (
                       <form action={setAssignmentStatus.bind(null, a.id, "CONFIRMADO")}>

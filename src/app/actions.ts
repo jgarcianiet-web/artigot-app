@@ -2,6 +2,7 @@
 
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { testPush } from "@/lib/push";
 import { mergeWorkers } from "@/lib/mergeWorkers";
 import { after } from "next/server";
 import { redirect } from "next/navigation";
@@ -472,6 +473,7 @@ export async function saveEvent(_prev: string | null, form: FormData) {
           title: `Cambios en ${event.name}`,
           body: `Nueva ${changes.join(", ")}`,
           tag: `upd-${event.id}`,
+          emailFallback: true,
         });
       });
     }
@@ -607,6 +609,7 @@ export async function deleteEvent(id: string) {
       title: "Evento cancelado",
       body: `${event.name} del ${formatDate(event.date)} se ha cancelado.`,
       tag: `del-${id}`,
+      emailFallback: true,
     }),
   );
   revalidatePath("/admin", "layout");
@@ -1074,4 +1077,11 @@ export async function confirmDraft(draftId: string, _prev: string | null): Promi
   notifyInvited(event, invited);
   revalidatePath("/admin", "layout");
   redirect(`/admin/eventos/${event.id}`);
+}
+
+// ---------- Avisos de prueba ----------
+
+export async function testWorkerPush(workerId: string) {
+  await requireAdmin();
+  return testPush({ workerId });
 }

@@ -19,7 +19,9 @@ import {
   regenerateAccessCode,
   removeUnavailability,
   toggleWorkerActive,
+  testWorkerPush,
 } from "@/app/actions";
+import { AdminPushTest } from "@/components/PushTest";
 import { ConfirmButton, CopyButton, SubmitButton } from "@/components/client";
 import { Empty, RoleBadge, ScoreBadge, Stars, StatusBadge } from "@/components/ui";
 import { computeScores, CRITERIA, reviewAverage, SCORING } from "@/lib/scoring";
@@ -38,9 +40,9 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
   const worker = await db.worker.findUnique({
     where: { id: (await params).id },
     include: {
+      devices: { orderBy: { createdAt: "desc" } },
       unavailabilities: { where: { date: { gte: t } }, orderBy: { date: "asc" } },
       assignments: { include: { event: true }, orderBy: { event: { date: "desc" } }, take: 50 },
-      devices: { select: { kind: true } },
       documents: { orderBy: { createdAt: "desc" } },
       employments: { orderBy: { startDate: "desc" }, take: 20 },
       loans: { orderBy: [{ returnedAt: "asc" }, { deliveredAt: "desc" }] },
@@ -239,6 +241,28 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
             <dt className="text-stone-500">IBAN</dt><dd className="font-mono text-xs">{worker.iban ? formatIban(worker.iban) : <Missing />}</dd>
             <dt className="text-stone-500">Nacimiento</dt><dd>{worker.birthDate ? formatDate(worker.birthDate, { long: true }) : <Missing />}</dd>
             <dt className="text-stone-500">Dirección</dt><dd>{worker.address ?? <Missing />}</dd>
+            <dt className="text-stone-500">Avisos</dt>
+            <dd className="space-y-1">
+              {worker.devices.length === 0 ? (
+                <span className="text-amber-700">🔕 Sin activar en ningún móvil: no le llegan las convocatorias</span>
+              ) : (
+                <ul className="text-xs">
+                  {worker.devices.map((d) => (
+                    <li key={d.id}>
+                      {d.label ?? (d.kind === "web" ? "Navegador" : d.kind)}
+                      {d.lastError ? (
+                        <span className="text-red-700"> · ✗ último aviso falló: {d.lastError}</span>
+                      ) : d.lastOkAt ? (
+                        <span className="text-emerald-700"> · ✓ último aviso enviado {formatDate(d.lastOkAt.toISOString().slice(0, 10))}</span>
+                      ) : (
+                        <span className="text-stone-500"> · activado, aún sin avisos</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <AdminPushTest action={testWorkerPush.bind(null, worker.id)} />
+            </dd>
             <dt className="text-stone-500">Contrato</dt>
             <dd>
               {CONTRACT_SHORT[worker.contractCode ?? "300"]}

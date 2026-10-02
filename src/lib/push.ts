@@ -2,6 +2,8 @@ import { createSign, type KeyObject, createPrivateKey } from "node:crypto";
 import http2 from "node:http2";
 import webpush from "web-push";
 import { db } from "./db";
+import { appUrl } from "./domain";
+import { mailEnabled, sendMail } from "./mail";
 
 /**
  * Envío de notificaciones push a los tres tipos de dispositivo:
@@ -40,6 +42,13 @@ export function vapidKeys(): Promise<VapidKeys> {
   return vapid;
 }
 
+/** Contacto que exige el estándar de avisos (Apple rechaza algunos genéricos): el de la variable o la web de la app. */
+function vapidSubject() {
+  if (process.env.VAPID_SUBJECT) return process.env.VAPID_SUBJECT;
+  const url = appUrl();
+  return url.startsWith("https://") ? url : "mailto:avisos@artigot.es";
+}
+
 export const pushConfig = async () => ({
   webPublicKey: (await vapidKeys().catch(() => null))?.publicKey ?? null,
   fcm: !!process.env.FCM_SERVICE_ACCOUNT,
@@ -57,7 +66,10 @@ export async function notify(opts: {
   title: string;
   body: string;
   tag?: string;
+  /** A quien no tiene ningún móvil con avisos activados se le manda por email (si hay SMTP) */
+  emailFallback?: boolean;
 }) {
+  if (opts.emailFallback && opts.workerIds?.length) await emailWithoutDevices(opts.workerIds, opts.title, opts.body, opts.workerUrl);
   const or = [];
   if (opts.workerIds?.length) or.push({ workerId: { in: opts.workerIds } });
   if (opts.admins) or.push({ workerId: null, adminName: { not: null } });
@@ -66,22 +78,58 @@ export async function notify(opts: {
   const devices = await db.device.findMany({ where: { OR: or } });
   const targets = devices.filter((d) => !(d.workerId === null && opts.excludeAdmin && d.adminName === opts.excludeAdmin));
 
-  const results = await Promise.allSettled(
-    targets.map((d) =>
-      send(d, {
-        title: opts.title,
-        body: opts.body,
-        tag: opts.tag,
-        url: (d.workerId ? opts.workerUrl : opts.adminUrl) ?? "/",
-      }),
-    ),
-  );
-  const gone = targets.filter((_, i) => {
+  await deliver(targets, (d) => ({ title: opts.title, body: opts.body, tag: opts.tag, url: (d.workerId ? opts.workerUrl : opts.adminUrl) ?? "/" }));
+}
+
+type Target = { id: string; kind: string; token: string; keys: unknown; workerId: string | null; label?: string | null };
+
+/** Envía a cada móvil y apunta el resultado (para ver en la ficha si los avisos llegan). */
+async function deliver(targets: Target[], payload: (d: Target) => Push) {
+  const results = await Promise.allSettled(targets.map((d) => send(d, payload(d))));
+  const now = new Date();
+  const out = targets.map((d, i) => {
     const r = results[i];
-    if (r.status === "rejected") console.error("push", targets[i].kind, r.reason);
-    return r.status === "fulfilled" && r.value === "gone";
+    const error =
+      r.status === "rejected"
+        ? pushError(r.reason)
+        : r.value === "skipped"
+          ? d.kind === "web" ? "Sin claves de avisos" : `Avisos de la app ${d.kind === "fcm" ? "Android" : "iPhone"} sin configurar en el servidor`
+          : r.value === "gone"
+            ? "El móvil ya no acepta avisos (se desactivaron o se borró la app)"
+            : null;
+    if (r.status === "rejected") console.error("push", d.kind, r.reason);
+    return { device: d, ok: !error, gone: r.status === "fulfilled" && r.value === "gone", error };
   });
-  if (gone.length) await db.device.deleteMany({ where: { id: { in: gone.map((d) => d.id) } } });
+  for (const o of out) {
+    if (o.gone) await db.device.delete({ where: { id: o.device.id } }).catch(() => {});
+    else await db.device.update({ where: { id: o.device.id }, data: { lastAt: now, ...(o.ok ? { lastOkAt: now, lastError: null } : { lastError: o.error!.slice(0, 300) }) } }).catch(() => {});
+  }
+  return out;
+}
+
+/** Mensaje entendible del error del servicio de avisos (Google, Apple, Mozilla…). */
+function pushError(e: unknown) {
+  const x = e as { statusCode?: number; body?: string; message?: string };
+  if (x.statusCode === 403 || x.statusCode === 401) return `Rechazado por el servicio de avisos (${x.statusCode}): la suscripción no coincide con la clave. Abre la app en ese móvil y vuelve a activar los avisos. ${x.body ?? ""}`.trim();
+  if (x.statusCode) return `Error ${x.statusCode} del servicio de avisos: ${x.body || x.message || ""}`.trim();
+  return x.message ?? String(e);
+}
+
+/** Aviso de prueba a una persona: devuelve qué ha pasado en cada uno de sus móviles. */
+export async function testPush(who: { workerId: string } | { adminName: string }) {
+  const devices = await db.device.findMany({ where: "workerId" in who ? { workerId: who.workerId } : { workerId: null, adminName: who.adminName } });
+  const out = await deliver(devices, () => ({ title: "Aviso de prueba", body: "Si ves esto, los avisos de Artigot funcionan en este móvil. ✓", tag: "prueba", url: "workerId" in who ? "/app" : "/admin" }));
+  return out.map((o) => ({ label: o.device.label ?? (o.device.kind === "web" ? "Navegador" : o.device.kind), ok: o.ok, error: o.error }));
+}
+
+/** Respaldo por email para quien no ha activado los avisos en ningún móvil. */
+async function emailWithoutDevices(workerIds: string[], title: string, body: string, url?: string) {
+  if (!mailEnabled()) return;
+  const workers = await db.worker.findMany({ where: { id: { in: workerIds }, active: true, email: { not: null }, devices: { none: {} } }, select: { name: true, email: true } });
+  for (const w of workers) {
+    const text = [`Hola ${w.name.split(" ")[0]},`, "", body, "", `Entra en la app para responder: ${appUrl()}${url ?? "/app"}`, "", "Activa los avisos en la app para enterarte al momento."].join("\n");
+    await sendMail(w.email!, title, text).catch((e) => console.error("email aviso", e));
+  }
 }
 
 type Result = "ok" | "gone" | "skipped";
@@ -99,7 +147,7 @@ async function sendWeb(endpoint: string, keys: { p256dh: string; auth: string },
   const { publicKey, privateKey } = await vapidKeys();
   try {
     await webpush.sendNotification({ endpoint, keys }, JSON.stringify(p), {
-      vapidDetails: { subject: process.env.VAPID_SUBJECT || "mailto:rrhh@example.com", publicKey, privateKey },
+      vapidDetails: { subject: vapidSubject(), publicKey, privateKey },
       TTL: 60 * 60 * 24,
       urgency: "high",
       topic: p.tag?.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32),

@@ -11,7 +11,7 @@ export function A3Form({ cfg }: { cfg: A3Config }) {
   return (
     <ActionForm action={run} className="card max-w-3xl space-y-4">
       <div className="grid gap-4 sm:grid-cols-3">
-        <label className="text-sm">Código de empresa en A3<input name="companyCode" className="input mt-1" defaultValue={cfg.companyCode} required /></label>
+        <label className="text-sm">Código de empresa en A3<input name="companyCode" className="input mt-1" defaultValue={cfg.companyCode || "29"} required /></label>
         <label className="text-sm">Código de concepto (horas)<input name="hoursConcept" className="input mt-1" defaultValue={cfg.hoursConcept} required /></label>
         <label className="text-sm">Nombre del concepto<input name="hoursConceptName" className="input mt-1" defaultValue={cfg.hoursConceptName} /></label>
       </div>
