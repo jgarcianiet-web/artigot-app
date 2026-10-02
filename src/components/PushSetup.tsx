@@ -18,13 +18,39 @@ function urlBase64ToUint8Array(base64: string) {
   return Uint8Array.from(atob(padded), (c) => c.charCodeAt(0));
 }
 
+/** «iPhone · app en la pantalla de inicio», «Android · Chrome»… para que RRHH sepa qué móvil es. */
+function deviceLabel() {
+  const ua = navigator.userAgent;
+  const os = /iPhone/.test(ua) ? "iPhone" : /iPad/.test(ua) ? "iPad" : /Android/.test(ua) ? "Android" : /Mac OS X/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows" : "Ordenador";
+  const standalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone;
+  const browser = /SamsungBrowser/.test(ua) ? "Samsung Internet" : /Edg\//.test(ua) ? "Edge" : /Firefox|FxiOS/.test(ua) ? "Firefox" : /CriOS|Chrome/.test(ua) ? "Chrome" : /Safari/.test(ua) ? "Safari" : "navegador";
+  return `${os} · ${standalone ? "app en la pantalla de inicio" : browser}`;
+}
+
+const sameKey = (sub: PushSubscription, key: string) => {
+  const current = sub.options?.applicationServerKey;
+  if (!current) return true; // el navegador no lo dice: se da por buena
+  const a = new Uint8Array(current);
+  const b = urlBase64ToUint8Array(key);
+  return a.length === b.length && a.every((x, i) => x === b[i]);
+};
+
+/**
+ * Suscribe este navegador a los avisos y lo registra en el servidor. Si ya estaba suscrito con
+ * otra clave (p. ej. porque cambió la del servidor), se vuelve a suscribir: si no, los avisos no
+ * llegarían nunca.
+ */
 async function subscribeWeb(key: string) {
   const reg = await navigator.serviceWorker.ready;
-  const sub =
-    (await reg.pushManager.getSubscription()) ??
-    (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(key) }));
+  let sub = await reg.pushManager.getSubscription();
+  if (sub && !sameKey(sub, key)) {
+    await sub.unsubscribe().catch(() => {});
+    sub = null;
+  }
+  sub ??= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(key) });
   const json = sub.toJSON();
-  await register({ kind: "web", token: json.endpoint, keys: json.keys });
+  const res = await register({ kind: "web", token: json.endpoint, keys: json.keys, label: deviceLabel() });
+  if (!res.ok) throw new Error(`registro ${res.status}`);
 }
 
 /** Dentro de la app nativa: los plugins se cargan bajo demanda (en el navegador no se descargan). */
@@ -34,7 +60,7 @@ async function setupNative(config: PushConfig) {
   if ((platform === "android" && !config.fcm) || (platform === "ios" && !config.apns)) return false;
   const { PushNotifications: push } = await import("@capacitor/push-notifications");
   await push.removeAllListeners();
-  await push.addListener("registration", (t) => register({ kind: platform === "ios" ? "apns" : "fcm", token: t.value }));
+  await push.addListener("registration", (t) => register({ kind: platform === "ios" ? "apns" : "fcm", token: t.value, label: platform === "ios" ? "iPhone · app" : "Android · app" }));
   await push.addListener("registrationError", (e) => console.error("push nativo", e.error));
   await push.addListener("pushNotificationActionPerformed", (a) => {
     const url = (a.notification.data as { url?: string } | undefined)?.url;
@@ -53,6 +79,8 @@ const isNativeApp = () =>
   !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
 
 type State = "hidden" | "ask" | "denied" | "ios-install";
+
+export { subscribeWeb };
 
 export function PushSetup({ config }: { config: PushConfig }) {
   const [state, setState] = useState<State>("hidden");

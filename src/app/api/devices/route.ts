@@ -11,8 +11,9 @@ const schema = z.discriminatedUnion("kind", [
     kind: z.literal("web"),
     token: z.string().url().max(1000),
     keys: z.object({ p256dh: z.string().max(200), auth: z.string().max(100) }),
+    label: z.string().max(60).optional(),
   }),
-  z.object({ kind: z.enum(["fcm", "apns"]), token: z.string().min(10).max(500) }),
+  z.object({ kind: z.enum(["fcm", "apns"]), token: z.string().min(10).max(500), label: z.string().max(60).optional() }),
 ]);
 
 /** Registra este dispositivo para recibir avisos a nombre de quien tiene la sesión. */
@@ -27,8 +28,8 @@ export async function POST(req: Request) {
   const keys = d.kind === "web" ? d.keys : undefined;
   const device = await db.device.upsert({
     where: { token: d.token },
-    create: { kind: d.kind, token: d.token, keys, ...owner },
-    update: { kind: d.kind, keys, ...owner },
+    create: { kind: d.kind, token: d.token, keys, label: d.label, ...owner },
+    update: { kind: d.kind, keys, label: d.label, ...owner },
   });
   (await cookies()).set(DEVICE_COOKIE, device.id, {
     httpOnly: true,

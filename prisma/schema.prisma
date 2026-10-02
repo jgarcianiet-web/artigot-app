@@ -237,6 +237,12 @@ model Device {
   keys      Json?
   workerId  String?
   adminName String?
+  // «iPhone · web app», «Android · Chrome»… para saber qué móvil es
+  label     String?
+  // Resultado del último aviso enviado (para ver si llegan)
+  lastOkAt  DateTime?
+  lastError String?
+  lastAt    DateTime?
   createdAt DateTime @default(now())
   worker    Worker?  @relation(fields: [workerId], references: [id], onDelete: Cascade)
 

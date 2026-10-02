@@ -2,6 +2,7 @@
 
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { testPush } from "@/lib/push";
 import { mergeWorkers } from "@/lib/mergeWorkers";
 import { after } from "next/server";
 import { redirect } from "next/navigation";
@@ -1076,4 +1077,11 @@ export async function confirmDraft(draftId: string, _prev: string | null): Promi
   notifyInvited(event, invited);
   revalidatePath("/admin", "layout");
   redirect(`/admin/eventos/${event.id}`);
+}
+
+// ---------- Avisos de prueba ----------
+
+export async function testWorkerPush(workerId: string) {
+  await requireAdmin();
+  return testPush({ workerId });
 }
