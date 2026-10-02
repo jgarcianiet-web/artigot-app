@@ -40,7 +40,8 @@ export async function saveA3AltaAction(_prev: string | null, form: FormData) {
     lastCode,
     bajaReason: get("bajaReason"),
     bajaInactivity: String(form.get("bajaInactivity") ?? "").trim(),
-    imputation: String(form.get("imputation") ?? "").trim().slice(0, 40),
+    imputation: get("imputation").slice(0, 40),
+    imputationMozo: get("imputationMozo").slice(0, 40),
     imputationPct: Math.min(100, Math.max(0, Number(String(form.get("imputationPct") ?? "100").replace(",", ".")) || 100)),
     ampExtra: form.get("ampExtra") === "1",
   };
@@ -49,7 +50,7 @@ export async function saveA3AltaAction(_prev: string | null, form: FormData) {
     center: "Centro", agreement: "Convenio", category: "Categoría", position: "Puesto", regime: "Régimen", tariffGroup: "Grupo de tarifa",
     paymentType: "Tipo de cobro", contractType: "Contrato", contributionType: "Cotización", grossType: "Bruto anual", occupation: "Ocupación",
     education: "Nivel formativo", nationality: "Nacionalidad", lastCode: "Último código", bajaReason: "Motivo de baja", bajaInactivity: "Inactividad",
-    imputation: "Imputación", imputationPct: "% imputación", ampExtra: "Camareros extras (AMP)",
+    imputation: "Imputación camareros", imputationMozo: "Imputación mozos", imputationPct: "% imputación", ampExtra: "Camareros extras (AMP)",
   });
   if (d.changed) await auditAdmin(by, "Ajustes", "Alta A3", d.text, { data: d.data });
   revalidatePath("/admin/ajustes/a3");
