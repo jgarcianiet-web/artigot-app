@@ -180,6 +180,10 @@ model Assignment {
   // El trabajador se retiró después de haber confirmado
   withdrew      Boolean   @default(false)
   notes         String?
+  // Resultado del aviso de la última convocatoria («✓ Android · app 12:03», el error o sin móvil)
+  notice        String?
+  noticeOk      Boolean?
+  noticeAt      DateTime?
   createdAt     DateTime  @default(now())
   event         Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
   worker        Worker    @relation(fields: [workerId], references: [id], onDelete: Cascade)

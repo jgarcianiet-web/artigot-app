@@ -69,16 +69,17 @@ export async function notify(opts: {
   /** A quien no tiene ningún móvil con avisos activados se le manda por email (si hay SMTP) */
   emailFallback?: boolean;
 }) {
-  if (opts.emailFallback && opts.workerIds?.length) await emailWithoutDevices(opts.workerIds, opts.title, opts.body, opts.workerUrl);
+  const emailed = opts.emailFallback && opts.workerIds?.length ? await emailWithoutDevices(opts.workerIds, opts.title, opts.body, opts.workerUrl) : [];
   const or = [];
   if (opts.workerIds?.length) or.push({ workerId: { in: opts.workerIds } });
   if (opts.admins) or.push({ workerId: null, adminName: { not: null } });
   if (opts.adminNames?.length) or.push({ workerId: null, adminName: { in: opts.adminNames } });
-  if (!or.length) return;
+  if (!or.length) return { sent: [], emailed };
   const devices = await db.device.findMany({ where: { OR: or } });
   const targets = devices.filter((d) => !(d.workerId === null && opts.excludeAdmin && d.adminName === opts.excludeAdmin));
 
-  await deliver(targets, (d) => ({ title: opts.title, body: opts.body, tag: opts.tag, url: (d.workerId ? opts.workerUrl : opts.adminUrl) ?? "/" }));
+  const sent = await deliver(targets, (d) => ({ title: opts.title, body: opts.body, tag: opts.tag, url: (d.workerId ? opts.workerUrl : opts.adminUrl) ?? "/" }));
+  return { sent, emailed };
 }
 
 type Target = { id: string; kind: string; token: string; keys: unknown; workerId: string | null; label?: string | null };
@@ -123,13 +124,15 @@ export async function testPush(who: { workerId: string } | { adminName: string }
 }
 
 /** Respaldo por email para quien no ha activado los avisos en ningún móvil. */
-async function emailWithoutDevices(workerIds: string[], title: string, body: string, url?: string) {
-  if (!mailEnabled()) return;
-  const workers = await db.worker.findMany({ where: { id: { in: workerIds }, active: true, email: { not: null }, devices: { none: {} } }, select: { name: true, email: true } });
+async function emailWithoutDevices(workerIds: string[], title: string, body: string, url?: string): Promise<string[]> {
+  if (!mailEnabled()) return [];
+  const workers = await db.worker.findMany({ where: { id: { in: workerIds }, active: true, email: { not: null }, devices: { none: {} } }, select: { id: true, name: true, email: true } });
+  const done: string[] = [];
   for (const w of workers) {
     const text = [`Hola ${w.name.split(" ")[0]},`, "", body, "", `Entra en la app para responder: ${appUrl()}${url ?? "/app"}`, "", "Activa los avisos en la app para enterarte al momento."].join("\n");
-    await sendMail(w.email!, title, text).catch((e) => console.error("email aviso", e));
+    await sendMail(w.email!, title, text).then(() => done.push(w.id)).catch((e) => console.error("email aviso", e));
   }
+  return done;
 }
 
 type Result = "ok" | "gone" | "skipped";
@@ -150,7 +153,8 @@ async function sendWeb(endpoint: string, keys: { p256dh: string; auth: string },
       vapidDetails: { subject: vapidSubject(), publicKey, privateKey },
       TTL: 60 * 60 * 24,
       urgency: "high",
-      topic: p.tag?.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32),
+      // Sin «Topic»: Apple rechaza algunos (BadWebPushTopic) y no hace falta; la notificación ya
+      // se agrupa en el móvil con su «tag»
     });
     return "ok";
   } catch (e) {
