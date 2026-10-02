@@ -1,6 +1,6 @@
 import { madridTime } from "./clockRules";
 import { db } from "./db";
-import { callTime, isLeadRole, ROLES } from "./domain";
+import { callTime, clocksIn, isLeadRole, ROLES } from "./domain";
 import { REMINDERS } from "./reminders";
 
 export type LiveState = "esperando" | "retraso" | "trabajando" | "terminado";
@@ -12,7 +12,7 @@ export async function liveTeam(eventId: string, now = new Date()) {
     include: {
       assignments: {
         where: { status: "CONFIRMADO" },
-        include: { worker: { select: { id: true, name: true, phone: true } } },
+        include: { worker: { select: { id: true, name: true, phone: true, contractCode: true, noClock: true } } },
         orderBy: { worker: { name: "asc" } },
       },
     },
@@ -25,7 +25,9 @@ export async function liveTeam(eventId: string, now = new Date()) {
       : a.checkIn
         ? "trabajando"
         : now.getTime() > lateFrom
-          ? "retraso"
+          ? clocksIn(a.worker)
+            ? "retraso"
+            : "trabajando" // quien no ficha no va con retraso
           : "esperando";
     return {
       id: a.id,

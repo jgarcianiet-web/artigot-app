@@ -33,7 +33,7 @@ import {
   ROLE_LABEL,
   ROLE_PLURAL,
   ROLES,
-  workedHours,
+  costHours,
 } from "@/lib/domain";
 import { REVIEW_DAYS, reviewWindowOpen } from "@/lib/reviews";
 import { CRITERIA, explainScore, reviewAverage } from "@/lib/scoring";
@@ -394,7 +394,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
               </thead>
               <tbody>
                 {confirmed.map((a) => {
-                  const h = workedHours(a);
+                  const h = costHours(a, a.worker, event);
                   const { billedHours, amount } = payable(h, rateFor(rates, a.role, event.type, a.worker.customRates));
                   totalHours += billedHours ?? 0;
                   totalCost += amount;

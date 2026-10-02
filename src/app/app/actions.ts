@@ -17,7 +17,7 @@ import { checkIdentityDocs, storeIdentityDocs } from "@/lib/identityDocs";
 import { eventTransport, isTransport, MAX_SEATS } from "@/lib/transport";
 import { answerPoll } from "@/lib/polls";
 import { DOC_LABEL, validDniNie, validIban } from "@/lib/staff";
-import { formatDate, isLeadRole, isRole, nowTime, type Role, today } from "@/lib/domain";
+import { clocksIn, formatDate, isLeadRole, isRole, nowTime, type Role, today } from "@/lib/domain";
 import { autoReplace } from "@/lib/staffing";
 import { notify } from "@/lib/push";
 import { isEventLead, pendingReviews, reviewTeam, reviewWindowOpen } from "@/lib/reviews";
@@ -39,7 +39,7 @@ export async function logout() {
 
 async function ownAssignment(assignmentId: string) {
   const worker = await requireWorker();
-  const a = await db.assignment.findUnique({ where: { id: assignmentId }, include: { event: true } });
+  const a = await db.assignment.findUnique({ where: { id: assignmentId }, include: { event: true, worker: { select: { contractCode: true, noClock: true } } } });
   if (!a || a.workerId !== worker.id) throw new Error("No autorizado");
   return { a, worker };
 }
@@ -82,6 +82,7 @@ export async function clock(
   position: { lat: number; lng: number; accuracy: number },
 ): Promise<ClockResult> {
   const { a } = await ownAssignment(assignmentId);
+  if (!clocksIn(a.worker)) return { ok: false, message: "No necesitas fichar: tus horas van en tu nómina." };
   if (a.status !== "CONFIRMADO") return { ok: false, message: "Solo puede fichar el personal confirmado." };
   if (kind === "in" && a.checkIn) return { ok: false, message: `Ya fichaste la entrada a las ${a.checkIn}.` };
   if (kind === "out" && !a.checkIn) return { ok: false, message: "Primero tienes que fichar la entrada." };

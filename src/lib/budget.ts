@@ -1,6 +1,6 @@
 import { PDFDocument, rgb, StandardFonts, type PDFFont } from "pdf-lib";
 import { db } from "./db";
-import { callTime, euro, formatDate, hoursBetween, isLeadRole, payable, rateFor, ROLES, workedHours, type Role } from "./domain";
+import { callTime, euro, formatDate, hoursBetween, costHours, isLeadRole, payable, rateFor, ROLES, type Role } from "./domain";
 import { getCompany } from "./contracts";
 
 /**
@@ -62,7 +62,7 @@ export async function budgetRows(filter: { from?: string; to?: string; salesRep?
         ...(filter.eventId ? { id: filter.eventId } : { date: { gte: filter.from, lte: filter.to } }),
         ...(filter.salesRep && { salesRep: filter.salesRep === "-" ? null : filter.salesRep }),
       },
-      include: { assignments: { where: { status: "CONFIRMADO" }, include: { worker: { select: { name: true, customRates: true } } } } },
+      include: { assignments: { where: { status: "CONFIRMADO" }, include: { worker: { select: { name: true, customRates: true, contractCode: true, noClock: true } } } } },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
     }),
     db.rate.findMany(),
@@ -71,7 +71,7 @@ export async function budgetRows(filter: { from?: string; to?: string; salesRep?
     let cost = 0;
     let pending = 0;
     for (const a of e.assignments) {
-      const h = workedHours(a);
+      const h = costHours(a, a.worker, e);
       if (h == null) pending++;
       cost += payable(h, rateFor(rates, a.role, e.type, a.worker.customRates)).amount;
     }

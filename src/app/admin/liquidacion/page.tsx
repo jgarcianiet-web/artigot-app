@@ -10,7 +10,7 @@ export default async function Payroll({ searchParams }: { searchParams: Promise<
   const def = monthRange(today());
   const from = isDate(sp.desde) ? sp.desde! : def.from;
   const to = isDate(sp.hasta) ? sp.hasta! : def.to;
-  const lines = await payrollLines(from, to);
+  const lines = await payrollLines(from, to, { extras: true });
   const rows = summarize(lines);
   const total = rows.reduce((s, r) => s + r.amount, 0);
   const totalHours = rows.reduce((s, r) => s + r.hours, 0);
@@ -20,6 +20,7 @@ export default async function Payroll({ searchParams }: { searchParams: Promise<
   return (
     <div className="space-y-4">
       <h1>Liquidación</h1>
+      <p className="text-sm text-stone-500">Personal extra (contrato 300), que cobra por horas. Los fijos van en su nómina: sus horas y lo que hacen de más están en la pestaña «Fijos».</p>
       <form className="flex flex-wrap items-end gap-2">
         <div>
           <label className="label">Desde</label>

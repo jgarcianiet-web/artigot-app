@@ -8,7 +8,7 @@ import { unreadCounts } from "@/lib/chat";
 import { CLOCK_RADIUS_M, clockWindow, hhmm } from "@/lib/clockRules";
 import { db } from "@/lib/db";
 import { pendingReviews } from "@/lib/reviews";
-import { addDays, callTime, isLeadRole, formatDate, num, ROLE_LABEL, today, workedHours, type Role } from "@/lib/domain";
+import { addDays, callTime, clocksIn, isLeadRole, formatDate, num, ROLE_LABEL, today, workedHours, type Role } from "@/lib/domain";
 import { Checklist } from "@/components/StaffForms";
 import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
 import { checklistFor, getUniform, lines } from "@/lib/staff";
@@ -38,8 +38,10 @@ export default async function WorkerHome() {
 
   // Tarjeta de fichaje: el día del evento y, si pasa de medianoche, hasta que cierra la ventana de fichaje
   const now = new Date();
+  // Los fijos que no fichan (p. ej. el maître fijo) no ven la tarjeta de fichaje
   const clockable = worker.assignments.filter(
     (a) =>
+      clocksIn(worker) &&
       a.status === "CONFIRMADO" &&
       (a.event.date === t || (a.event.date === addDays(t, -1) && now <= clockWindow(a.event, a.role).closesAt)),
   );

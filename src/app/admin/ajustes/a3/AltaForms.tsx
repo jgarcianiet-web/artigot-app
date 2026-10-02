@@ -59,6 +59,21 @@ export function A3AltaForm({ cfg, lists, next }: { cfg: A3AltaConfig; lists: Lis
         <Pick name="bajaReason" label="Motivo de baja" value={cfg.bajaReason} options={lists.bajaReasons} />
         <Pick name="bajaInactivity" label="Inactividad (opcional)" value={cfg.bajaInactivity} options={["", ...lists.bajaInactivity.filter((x) => x.trim())]} />
       </fieldset>
+      <fieldset className="grid gap-3 sm:grid-cols-3">
+        <legend className="label">Con cada alta nueva, además del alta masiva</legend>
+        <label className="text-sm sm:col-span-2">
+          Imputación (código del centro de coste en A3)
+          <input name="imputation" className="input mt-1" defaultValue={cfg.imputation} placeholder="Vacío = no se genera el Excel de imputación" />
+        </label>
+        <label className="text-sm">
+          Porcentaje
+          <input name="imputationPct" inputMode="decimal" className="input mt-1" defaultValue={cfg.imputationPct} />
+        </label>
+        <label className="flex items-start gap-2 text-sm sm:col-span-3">
+          <input type="checkbox" name="ampExtra" value="1" defaultChecked={cfg.ampExtra} className="mt-0.5 size-4 shrink-0" />
+          <span>Generar también el Excel «Camareros extras (AMP)» marcando a cada extra nuevo</span>
+        </label>
+      </fieldset>
       <label className="block max-w-xs text-sm">
         Último código de trabajador usado en A3
         <input name="lastCode" type="number" min={0} className="input mt-1" defaultValue={cfg.lastCode || ""} />

@@ -2,6 +2,7 @@
 
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { mergeWorkers } from "@/lib/mergeWorkers";
 import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -162,11 +163,14 @@ const workerSchema = z.object({
   birthDate: optText,
   address: optText,
   a3Code: optText,
+  contractCode: z.enum(["300", "100", "200"]).default("300"),
+  monthlySalary: z.preprocess((v) => (String(v ?? "").trim() === "" ? null : Number(String(v).replace(",", "."))), z.number().min(0, "Nómina no válida").max(20000, "Nómina no válida").nullable()),
 });
 
 const WORKER_LABELS = {
   name: "Nombre", phone: "Teléfono", email: "Email", role: "Puesto", roles: "Puestos", rating: "Valoración", zone: "Zona",
   dni: "DNI", nss: "NSS", iban: "IBAN", birthDate: "Nacimiento", address: "Dirección", a3Code: "Código A3", carSeats: "Plazas en coche", customRates: "Tarifa propia",
+  contractCode: "Contrato", noClock: "No ficha", monthlySalary: "Nómina mensual",
 };
 
 export async function saveWorker(_prev: string | null, form: FormData) {
@@ -185,10 +189,19 @@ export async function saveWorker(_prev: string | null, form: FormData) {
   if (parsed.data.iban && !validIban(parsed.data.iban)) return "El IBAN no es correcto";
   const clash = key ? await db.worker.findUnique({ where: { phoneKey: key } }) : null;
   if (clash && clash.id !== id) return `Ese teléfono ya es de ${clash.name}`;
+  const sameDni = parsed.data.dni ? await db.worker.findFirst({ where: { dni: parsed.data.dni, NOT: id ? { id } : undefined }, select: { name: true } }) : null;
+  if (sameDni) return `Ese DNI ya es de ${sameDni.name}. Si es la misma persona, únelas en Personal → Repetidos.`;
   // Puestos que puede desempeñar: los marcados más el principal
   const roles = [...new Set([parsed.data.role, ...form.getAll("roles").map(String).filter(isRole)])];
   const customRates = rateMap(form, "own_", OWN_RATE_ROLES);
-  const data = { ...parsed.data, roles, phoneKey: key, customRates: customRates ?? Prisma.DbNull };
+  const fixed = parsed.data.contractCode !== "300";
+  const data = {
+    ...parsed.data,
+    roles, phoneKey: key, customRates: customRates ?? Prisma.DbNull,
+    // «No ficha» y la nómina mensual solo tienen sentido en un fijo
+    noClock: fixed && form.get("noClock") === "1",
+    monthlySalary: fixed ? parsed.data.monthlySalary : null,
+  };
   const before = id ? await db.worker.findUnique({ where: { id } }) : null;
   const docError = await checkIdentityDocs(id, before, parsed.data, form);
   if (docError) return docError;
@@ -275,6 +288,19 @@ export async function bulkWorkers(_prev: string | null, form: FormData): Promise
   const ids = [...new Set(form.getAll("ids").map(String))].slice(0, 2000);
   const action = String(form.get("accion") ?? "");
   if (!ids.length) return "No has seleccionado a nadie.";
+  if (action.startsWith("contrato:")) {
+    // Fijo: se mantiene el 100 o 200 que ya tuviera (si no, 100); «sin fichaje» = no ficha
+    const kind = action.slice(9);
+    const workers = await db.worker.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, contractCode: true } });
+    for (const w of workers) {
+      const contractCode = kind === "300" ? "300" : w.contractCode === "200" ? "200" : "100";
+      await db.worker.update({ where: { id: w.id }, data: { contractCode, noClock: kind === "fijo-sin", ...(kind === "300" && { monthlySalary: null }) } });
+    }
+    const label = kind === "300" ? "extra (300)" : kind === "fijo" ? "fijo" : "fijo sin fichaje";
+    if (workers.length) await auditAdmin(by, "Trabajador", "Contrato", `Marcados como ${label} ${workers.length}: ${workers.map((w) => w.name).join(", ")}`.slice(0, 1000));
+    revalidatePath("/admin", "layout");
+    return `${workers.length} marcados como ${label}.`;
+  }
   if (action === "desactivar") {
     const workers = await db.worker.findMany({ where: { id: { in: ids }, active: true }, select: { id: true, name: true } });
     await db.worker.updateMany({ where: { id: { in: workers.map((w) => w.id) } }, data: { active: false } });
@@ -295,6 +321,26 @@ export async function bulkWorkers(_prev: string | null, form: FormData): Promise
   if (victims.length) await auditAdmin(by, "Trabajador", "Borrados", `Borradas ${victims.length} fichas: ${victims.map((w) => `${w.name}${w.dni ? ` (${w.dni})` : ""}`).join(", ")}`.slice(0, 1000));
   revalidatePath("/admin", "layout");
   return `${victims.length} borrados.${withPay.length ? ` No se han borrado (tienen pagos registrados; dalos de baja): ${withPay.map((w) => w.name).join(", ")}.` : ""}`;
+}
+
+export async function mergeWorkersAction(_prev: string | null, form: FormData): Promise<string | null> {
+  const by = await requireAdmin();
+  const keep = String(form.get("keep") ?? "");
+  const ids = form.getAll("ids").map(String).filter((id) => id && id !== keep);
+  if (!keep || !ids.length) return "Elige la ficha que se queda.";
+  const done: string[] = [];
+  let keepName = "";
+  try {
+    for (const id of ids) {
+      const r = await mergeWorkers(keep, id, by);
+      done.push(r.removed);
+      keepName = r.kept;
+    }
+  } catch (e) {
+    return (e as Error).message;
+  }
+  revalidatePath("/admin", "layout");
+  redirect(`/admin/personal/repetidos?ok=${encodeURIComponent(`Unidas: ${done.join(", ")} → ${keepName}.`)}`);
 }
 
 export async function addUnavailability(workerId: string, form: FormData) {

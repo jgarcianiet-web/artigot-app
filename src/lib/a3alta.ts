@@ -1,7 +1,7 @@
 import path from "node:path";
 import ExcelJS from "exceljs";
 import { db } from "./db";
-import type { Role } from "./domain";
+import { EXTRA_WHERE, type Role } from "./domain";
 
 /**
  * Alta masiva de trabajadores en A3 (plantilla «Formato Alta masiva de trabajadores (Avanzada)»).
@@ -29,6 +29,11 @@ export type A3AltaConfig = {
   /** Bajas (formato «MB - Baja»): motivo e inactividad */
   bajaReason: string;
   bajaInactivity: string;
+  /** «Imputación» (centro de coste) de cada alta nueva: código y porcentaje; vacío = no se genera */
+  imputation: string;
+  imputationPct: number;
+  /** «Camareros extras (AMP)»: campo de A3 que se marca a cada extra nuevo */
+  ampExtra: boolean;
 };
 
 // Los valores de la exportación de A3 que nos pasó RRHH
@@ -54,6 +59,9 @@ export const A3_ALTA_DEFAULTS: A3AltaConfig = {
   lastCode: 0,
   bajaReason: "Baja por pase a inactividad fijos discontinuos",
   bajaInactivity: "",
+  imputation: "",
+  imputationPct: 100,
+  ampExtra: true,
 };
 
 export async function getA3Alta(): Promise<A3AltaConfig> {
@@ -282,7 +290,7 @@ export const ALTA_SELECT = {
 /** Personal activo sin código de A3, con la fecha de su próximo servicio confirmado. */
 export async function pendingAltas(from: string) {
   const workers = await db.worker.findMany({
-    where: { active: true, a3Code: null },
+    where: { active: true, a3Code: null, ...EXTRA_WHERE },
     orderBy: { name: "asc" },
     select: {
       ...ALTA_SELECT,
@@ -374,3 +382,40 @@ export async function buildAltasSucesivasWorkbook(rows: AltaSucesivaRow[], compa
   });
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
+
+// ---------- Imputación y «Camareros extras (AMP)» de las altas nuevas ----------
+
+export const IMPUTACION_TEMPLATE = path.join(process.cwd(), "templates", "a3-imputacion.xlsx");
+export const AMP_TEMPLATE = path.join(process.cwd(), "templates", "a3-camareros-extras.xlsx");
+
+type NewHire = { code: string; startDate: string; worker: Parameters<typeof splitName>[0] };
+
+async function fillSimple(template: string, rows: NewHire[], companyCode: string, extra: (r: NewHire) => Record<string, ExcelJS.CellValue>) {
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.readFile(template);
+  const ws = wb.worksheets[0];
+  rows.forEach((r, i) => {
+    const row = ws.getRow(3 + i);
+    const values: Record<string, ExcelJS.CellValue> = {
+      A: /^\d+$/.test(companyCode) ? Number(companyCode) : companyCode,
+      B: r.code,
+      C: a3Name(r.worker),
+      ...extra(r),
+    };
+    for (const [c, v] of Object.entries(values)) {
+      const cell = row.getCell(c);
+      cell.value = v;
+      if (v instanceof Date) cell.numFmt = "dd/mm/yyyy";
+    }
+    row.commit();
+  });
+  return Buffer.from(await wb.xlsx.writeBuffer());
+}
+
+/** «Formato Imputación»: a qué centro de coste se imputa cada alta nueva, desde su fecha de alta. */
+export const buildImputacionWorkbook = (rows: NewHire[], companyCode: string, cfg: A3AltaConfig) =>
+  fillSimple(IMPUTACION_TEMPLATE, rows, companyCode, (r) => ({ D: "No", E: date(r.startDate), F: cfg.imputation, G: cfg.imputationPct }));
+
+/** «Formato Camareros extras (AMP)»: marca en A3 a cada extra nuevo, desde su fecha de alta. */
+export const buildAmpWorkbook = (rows: NewHire[], companyCode: string) =>
+  fillSimple(AMP_TEMPLATE, rows, companyCode, (r) => ({ D: "No", E: date(r.startDate), F: "Sí" }));

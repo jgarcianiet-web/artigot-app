@@ -2,6 +2,7 @@ import ExcelJS from "exceljs";
 import { phoneKey } from "./auth";
 import { db } from "./db";
 import { isRole, type Role } from "./domain";
+import { validDniNie } from "./staff";
 
 /**
  * Importación del personal desde Excel (.xlsx) o CSV.
@@ -12,7 +13,7 @@ import { isRole, type Role } from "./domain";
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_ROWS = 3000;
 
-type Field = "name" | "surname" | "phone" | "role" | "email" | "zone" | "rating" | "notes";
+type Field = "name" | "surname" | "phone" | "role" | "email" | "zone" | "rating" | "notes" | "dni";
 
 export const norm = (s: string) =>
   s
@@ -21,6 +22,8 @@ export const norm = (s: string) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
+
+const cleanDni = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
 const ALIASES: Record<Field, string[]> = {
   name: ["nombre", "nombre y apellidos", "nombre completo", "nombre apellidos", "trabajador", "empleado", "persona", "name"],
@@ -31,6 +34,7 @@ const ALIASES: Record<Field, string[]> = {
   zone: ["zona", "localidad", "poblacion", "ciudad", "municipio", "residencia", "provincia", "direccion"],
   rating: ["valoracion", "puntuacion", "nota", "estrellas", "rating", "nivel"],
   notes: ["notas", "observaciones", "comentarios", "obs"],
+  dni: ["dni", "nie", "nif", "dni nie", "nif nie", "dni nif", "documento", "n documento", "num documento", "documento identidad"],
 };
 
 function fieldFor(header: string): Field | null {
@@ -159,6 +163,8 @@ export type ImportRow = {
   role: Role | null;
   roleRaw: string;
   email: string | null;
+  /** DNI / NIE válido (si el archivo lo trae) */
+  dni: string | null;
   zone: string | null;
   rating: number | null;
   notes: string | null;
@@ -214,7 +220,9 @@ export async function analyzeFile(
   const body = table.slice(headerIdx + 1);
   if (body.length > MAX_ROWS) return { error: `El archivo tiene demasiadas filas (máximo ${MAX_ROWS}).` };
 
-  const existing = await db.worker.findMany({ select: { id: true, name: true, phoneKey: true, email: true } });
+  const existing = await db.worker.findMany({ select: { id: true, name: true, phoneKey: true, email: true, dni: true } });
+  // El DNI manda: si ya hay alguien con ese DNI es la misma persona aunque el nombre esté escrito distinto
+  const byDni = new Map(existing.filter((w) => w.dni).map((w) => [cleanDni(w.dni!), w]));
   const byPhone = new Map(existing.filter((w) => w.phoneKey).map((w) => [w.phoneKey!, w]));
   const byEmail = new Map(existing.filter((w) => w.email).map((w) => [w.email!.toLowerCase(), w]));
   const seen = new Map<string, number>();
@@ -227,6 +235,7 @@ export async function analyzeFile(
     const phone = col(raw, "phone");
     const roleRaw = col(raw, "role");
     const email = col(raw, "email") || null;
+    const dniRaw = cleanDni(col(raw, "dni"));
     const row: ImportRow = {
       line,
       name,
@@ -234,6 +243,7 @@ export async function analyzeFile(
       role: parseRole(roleRaw) ?? (roleRaw ? null : opts.defaultRole),
       roleRaw,
       email,
+      dni: dniRaw && validDniNie(dniRaw) ? dniRaw : null,
       zone: col(raw, "zone") || null,
       rating: parseRating(col(raw, "rating")),
       notes: col(raw, "notes") || null,
@@ -255,16 +265,20 @@ export async function analyzeFile(
     }
     if (key && key.length < 9) return fail("Teléfono no válido (menos de 9 cifras)");
     if (!key && !email) return fail("Falta el teléfono o el email (para poder entrar en la app)");
-    const match = (key && byPhone.get(key)) || (email ? byEmail.get(email.toLowerCase()) : undefined);
+    const match = (row.dni && byDni.get(row.dni)) || (key && byPhone.get(key)) || (email ? byEmail.get(email.toLowerCase()) : undefined);
     if (roleRaw && !parseRole(roleRaw)) return fail(`Puesto no reconocido: «${roleRaw}» (usa Camarero, Camarero responsable, Maître o Mozo)`);
     // A quien ya existe se le mantiene su puesto si el Excel no lo indica
     if (!row.role && !match) return fail("Falta el puesto (elige un puesto por defecto)");
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail("Email no válido");
+    if (row.dni && seen.has(`dni:${row.dni}`)) return fail(`DNI repetido (ya está en la fila ${seen.get(`dni:${row.dni}`)}): es la misma persona`);
     const dupKey = key || `@${email!.toLowerCase()}`;
     if (seen.has(dupKey)) return fail(`${key ? "Teléfono" : "Email"} repetido (ya está en la fila ${seen.get(dupKey)})`);
     seen.set(dupKey, line);
+    if (row.dni) seen.set(`dni:${row.dni}`, line);
+    if (dniRaw && !row.dni) note = `DNI «${col(raw, "dni")}» no válido: no se guarda`;
     if (match) {
-      rows.push({ ...row, status: opts.updateExisting ? "actualizar" : "existe", existingName: match.name, existingId: match.id });
+      const why = row.dni && match === byDni.get(row.dni) && norm(match.name) !== norm(name) ? `Mismo DNI que «${match.name}»` : undefined;
+      rows.push({ ...row, status: opts.updateExisting ? "actualizar" : "existe", existingName: match.name, existingId: match.id, message: why });
     } else rows.push({ ...row, message: note ?? (key ? undefined : "Sin teléfono: entrará con su email") });
   });
 

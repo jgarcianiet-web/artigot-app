@@ -108,7 +108,8 @@ export async function runReminders(now = new Date()) {
 
   // 3. Posible retraso: confirmado sin fichar pasados unos minutos de su citación
   const todays = await db.assignment.findMany({
-    where: { status: "CONFIRMADO", checkIn: null, event: { date: { in: [today, addDays(today, -1)] } } },
+    // Quien no ficha (fijo sin fichaje) no cuenta
+    where: { status: "CONFIRMADO", checkIn: null, event: { date: { in: [today, addDays(today, -1)] } }, NOT: { worker: { noClock: true, contractCode: { in: ["100", "200"] } } } },
     include: { event: true, worker: { select: { name: true, phone: true } } },
   });
   for (const a of todays) {

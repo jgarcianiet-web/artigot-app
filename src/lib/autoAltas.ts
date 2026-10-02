@@ -1,6 +1,6 @@
 import { auditAdmin } from "./audit";
 import { db } from "./db";
-import { addDays, ROLE_LABEL, today, type Role } from "./domain";
+import { addDays, EXTRA_WHERE, isFixed, ROLE_LABEL, today, type Role } from "./domain";
 
 /**
  * Altas y bajas automáticas en la Seguridad Social a partir del personal confirmado.
@@ -28,7 +28,8 @@ type Work = { date: string; overnight: boolean; role: string; event: string };
 /** Días que trabaja cada persona (servicios confirmados) en el periodo. */
 async function workDays(from: string, to: string, workerIds?: string[]) {
   const rows = await db.assignment.findMany({
-    where: { status: "CONFIRMADO", event: { date: { gte: from, lte: to } }, ...(workerIds && { workerId: { in: workerIds } }) },
+    // Solo el personal extra (contrato 300): los fijos tienen el alta todo el año
+    where: { status: "CONFIRMADO", event: { date: { gte: from, lte: to } }, worker: EXTRA_WHERE, ...(workerIds && { workerId: { in: workerIds } }) },
     select: { workerId: true, role: true, event: { select: { date: true, startTime: true, endTime: true, name: true } } },
   });
   const by = new Map<string, Map<string, Work>>();
@@ -68,7 +69,10 @@ export async function syncAutoEmployments(opts: { actor?: string } = {}) {
       // Una sola sincronización a la vez (página y recordatorios pueden coincidir)
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(724001)`;
       const work = await workDays(addDays(t, -LOOKBACK_DAYS), addDays(to, 1));
-      const employments = await tx.employment.findMany({ where: { OR: [{ endDate: null }, { endDate: { gte: from } }], startDate: { lte: addDays(to, 1) } } });
+      const employments = await tx.employment.findMany({
+        where: { OR: [{ endDate: null }, { endDate: { gte: from } }], startDate: { lte: addDays(to, 1) } },
+        include: { worker: { select: { contractCode: true } } },
+      });
       const byWorker = new Map<string, typeof employments>();
       for (const e of employments) byWorker.set(e.workerId, [...(byWorker.get(e.workerId) ?? []), e]);
 
@@ -131,8 +135,11 @@ export async function syncAutoEmployments(opts: { actor?: string } = {}) {
         if (!e.startReported && !e.endReported) {
           await tx.employment.delete({ where: { id: e.id } });
           removed++;
-        } else if (!e.warning?.startsWith("Ya no tiene servicios")) {
-          await tx.employment.update({ where: { id: e.id }, data: { warning: "Ya no tiene servicios en estas fechas: anula el alta en RED." } });
+        } else {
+          const warning = isFixed(e.worker)
+            ? "Ahora es fijo (no lleva altas por actividad): anula esta alta en RED si no corresponde."
+            : "Ya no tiene servicios en estas fechas: anula el alta en RED.";
+          if (e.warning !== warning) await tx.employment.update({ where: { id: e.id }, data: { warning } });
         }
       }
       if (created || updated || removed) {

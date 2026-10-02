@@ -25,6 +25,7 @@ export function AltaTable({ rows, next, countries }: { rows: Row[]; next: number
   const [selected, setSelected] = useState(() => new Set(rows.filter((r) => r.nextService && !r.problems.length).map((r) => r.id)));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [files, setFiles] = useState<{ name: string; label: string; url: string }[]>([]);
   // Códigos correlativos para los marcados, en el orden de la lista
   const codes = useMemo(() => {
     let n = next;
@@ -49,13 +50,23 @@ export function AltaTable({ rows, next, countries }: { rows: Row[]; next: number
         setMsg(((await res.json().catch(() => null)) as { error?: string } | null)?.error ?? "No se ha podido generar el Excel.");
         return;
       }
-      const url = URL.createObjectURL(await res.blob());
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? "alta_a3.xlsx";
-      a.click();
-      URL.revokeObjectURL(url);
-      setMsg(`Excel descargado con ${codes.size} altas. Ya tienen su código de A3; impórtalo en A3 (Alta masiva de trabajadores).`);
+      const data = (await res.json()) as { files: { name: string; label: string; base64: string }[]; missingImputation: boolean };
+      const list = data.files.map((f) => {
+        const bytes = Uint8Array.from(atob(f.base64), (c) => c.charCodeAt(0));
+        return { ...f, url: URL.createObjectURL(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })) };
+      });
+      setFiles(list);
+      for (const f of list) {
+        const a = document.createElement("a");
+        a.href = f.url;
+        a.download = f.name;
+        a.click();
+        await new Promise((r) => setTimeout(r, 400));
+      }
+      setMsg(
+        `${list.length === 1 ? "Excel descargado" : `${list.length} Excel descargados`} con ${codes.size} altas. Ya tienen su código de A3; impórtalos en A3 en este orden: ${list.map((f) => `«${f.label}»`).join(", ")}.` +
+          (data.missingImputation ? " (El de imputación no se genera hasta que pongas el código en Ajustes → A3.)" : ""),
+      );
       router.refresh();
     } finally {
       setBusy(false);
@@ -127,8 +138,15 @@ export function AltaTable({ rows, next, countries }: { rows: Row[]; next: number
         Los apellidos con borde ámbar se han separado del nombre automáticamente: compruébalos. Se marcan por defecto quienes tienen un servicio próximo y todos sus datos.
       </p>
       {msg && <p className="rounded-lg bg-stone-100 p-3 text-sm">{msg}</p>}
+      {files.length > 1 && (
+        <p className="flex flex-wrap gap-2 text-sm">
+          {files.map((f) => (
+            <a key={f.name} href={f.url} download={f.name} className="btn btn-sm">⬇ {f.label}</a>
+          ))}
+        </p>
+      )}
       <button className="btn btn-primary" disabled={busy || selected.size === 0}>
-        {busy ? "Generando…" : `⬇ Descargar Excel de alta (${selected.size})`}
+        {busy ? "Generando…" : `⬇ Descargar los Excel de alta para A3 (${selected.size})`}
       </button>
     </form>
   );

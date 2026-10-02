@@ -48,6 +48,14 @@ model Worker {
   irpf            Float?
   // Plazas libres en su coche (null o 0 = no suele llevar coche)
   carSeats        Int?
+  // Tipo de contrato en A3: 300 (o vacío) = extra fijo discontinuo, cobra por horas y lleva altas y
+  // bajas por actividad; 100 / 200 = fijo con nómina mensual (sus horas solo se controlan)
+  contractCode    String?
+  // Fijo que no ficha ni cuenta horas (p. ej. maître fijo)
+  noClock         Boolean          @default(false)
+  // Nómina mensual de un fijo (€): sus servicios valorados con su tarifa se comparan con ella y lo
+  // que pase de la nómina se le paga aparte
+  monthlySalary   Float?
   active          Boolean          @default(true)
   // Acceso a la app: teléfono normalizado + código de 6 cifras que RRHH entrega al trabajador
   phoneKey        String?          @unique

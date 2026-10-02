@@ -17,7 +17,7 @@ import { validIban } from "@/lib/staff";
 export async function GET(req: NextRequest) {
   if (!(await isAdmin())) return new NextResponse("No autorizado", { status: 401 });
   const h = halfFromKey(req.nextUrl.searchParams.get("q") ?? "") ?? shiftHalf(halfOf(today()), -1);
-  const [cfg, lines, period] = await Promise.all([getA3Alta(), payrollLines(h.from, addDays(h.to, 1)), payPeriod(h)]);
+  const [cfg, lines, period] = await Promise.all([getA3Alta(), payrollLines(h.from, addDays(h.to, 1), { extras: true }), payPeriod(h)]);
   const employments = await db.employment.findMany({
     where: { workerId: { in: [...new Set(lines.map((l) => l.a.workerId))] } },
     select: { workerId: true, startDate: true, endDate: true, startReported: true, endReported: true },

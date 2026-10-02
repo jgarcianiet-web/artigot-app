@@ -136,7 +136,7 @@ export type PayRow = {
 
 /** Importes en vivo a partir de los servicios confirmados de la quincena. */
 async function liveRows(h: Half, s: PaySettings, workerId?: string): Promise<Omit<PayRow, "net" | "final">[]> {
-  const lines = (await payrollLines(h.from, h.to)).filter((l) => !workerId || l.a.workerId === workerId);
+  const lines = (await payrollLines(h.from, h.to, { extras: true })).filter((l) => !workerId || l.a.workerId === workerId);
   const pct = deductions(s);
   const by = new Map<string, Omit<PayRow, "net" | "final">>();
   for (const l of lines) {
