@@ -153,7 +153,8 @@ async function sendWeb(endpoint: string, keys: { p256dh: string; auth: string },
       vapidDetails: { subject: vapidSubject(), publicKey, privateKey },
       TTL: 60 * 60 * 24,
       urgency: "high",
-      topic: p.tag?.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32),
+      // Sin «Topic»: Apple rechaza algunos (BadWebPushTopic) y no hace falta; la notificación ya
+      // se agrupa en el móvil con su «tag»
     });
     return "ok";
   } catch (e) {
