@@ -254,7 +254,9 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
           <p className="pt-1 text-xs"><Link href={`/admin/registro?id=${worker.id}`} className="link">Historial de cambios de esta ficha</Link></p>
           <h3 className="pt-2 font-semibold">Altas y bajas</h3>
           {worker.employments.length === 0 ? (
-            <p className="text-sm text-stone-500">Sin altas registradas. <Link href="/admin/altas" className="link">Registrar</Link></p>
+            <p className="text-sm text-stone-500">
+              {isFixed(worker) ? "Fijo: tiene el alta todo el año, no lleva altas y bajas por actividad." : "Aún sin altas: se crean solas cuando confirma un servicio."}
+            </p>
           ) : (
             <ul className="divide-y divide-stone-100 text-sm">
               {worker.employments.map((e) => (

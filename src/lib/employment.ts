@@ -1,6 +1,6 @@
 import { phoneKey } from "./auth";
 import { db } from "./db";
-import { addDays, isRole, type Role } from "./domain";
+import { addDays, EXTRA_WHERE, isRole, type Role } from "./domain";
 import { norm, parseRole, readTable } from "./importStaff";
 import { validDniNie } from "./staff";
 
@@ -21,7 +21,8 @@ export const covers = (e: EmploymentLike, date: string) => e.startDate <= date &
 /** Personal confirmado en los próximos días que no tiene alta ese día. */
 export async function missingAltas(from: string, days: number) {
   const assignments = await db.assignment.findMany({
-    where: { status: "CONFIRMADO", event: { date: { gte: from, lte: addDays(from, days) }, status: { not: "CANCELADO" } } },
+    // Solo extras: los fijos tienen el alta todo el año
+    where: { status: "CONFIRMADO", worker: EXTRA_WHERE, event: { date: { gte: from, lte: addDays(from, days) }, status: { not: "CANCELADO" } } },
     include: { event: { select: { id: true, name: true, date: true } }, worker: { select: { id: true, name: true, employments: { select: { startDate: true, endDate: true } } } } },
     orderBy: { event: { date: "asc" } },
   });
