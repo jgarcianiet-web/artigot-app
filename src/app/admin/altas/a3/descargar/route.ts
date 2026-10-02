@@ -51,12 +51,13 @@ export async function POST(req: NextRequest) {
   const [a3, cfg] = await Promise.all([getA3(), getA3Alta()]);
   const day = today();
   const files = [{ name: `alta_a3_${day}.xlsx`, label: "Alta masiva de trabajadores", data: await buildAltaWorkbook(rows, a3.companyCode, cfg) }];
-  if (cfg.imputation) files.push({ name: `imputacion_a3_${day}.xlsx`, label: "Imputación", data: await buildImputacionWorkbook(rows, a3.companyCode, cfg) });
-  if (cfg.ampExtra) files.push({ name: `camareros_extras_a3_${day}.xlsx`, label: "Camareros extras (AMP)", data: await buildAmpWorkbook(rows, a3.companyCode) });
+  const waiters = rows.filter((r) => r.worker.role !== "MOZO");
+  if (cfg.imputation || cfg.imputationMozo) files.push({ name: `imputacion_a3_${day}.xlsx`, label: "Imputación", data: await buildImputacionWorkbook(rows, a3.companyCode, cfg) });
+  if (cfg.ampExtra && waiters.length) files.push({ name: `camareros_extras_a3_${day}.xlsx`, label: "Camareros extras (AMP)", data: await buildAmpWorkbook(waiters, a3.companyCode) });
   await bumpLastCode(Math.max(...codes.map(Number)));
   await auditAdmin(by, "A3", "Alta masiva", `Excel de alta en A3 (${files.map((f) => f.label).join(", ")}) de ${rows.length}: ${rows.map((r) => `${r.worker.name} (${r.code})`).join(", ")}`);
   return NextResponse.json(
-    { files: files.map((f) => ({ name: f.name, label: f.label, base64: f.data.toString("base64") })), missingImputation: !cfg.imputation },
+    { files: files.map((f) => ({ name: f.name, label: f.label, base64: f.data.toString("base64") })), missingImputation: !cfg.imputation && !cfg.imputationMozo },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

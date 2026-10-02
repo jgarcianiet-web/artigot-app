@@ -61,9 +61,14 @@ export function A3AltaForm({ cfg, lists, next }: { cfg: A3AltaConfig; lists: Lis
       </fieldset>
       <fieldset className="grid gap-3 sm:grid-cols-3">
         <legend className="label">Con cada alta nueva, además del alta masiva</legend>
-        <label className="text-sm sm:col-span-2">
-          Imputación (código del centro de coste en A3)
-          <input name="imputation" className="input mt-1" defaultValue={cfg.imputation} placeholder="Vacío = no se genera el Excel de imputación" />
+        <p className="text-xs text-stone-500 sm:col-span-3">En el Excel de imputación va el código (p. ej. «07»).</p>
+        <label className="text-sm">
+          Imputación camareros, responsables y maîtres
+          <input name="imputation" className="input mt-1" defaultValue={cfg.imputation} />
+        </label>
+        <label className="text-sm">
+          Imputación mozos
+          <input name="imputationMozo" className="input mt-1" defaultValue={cfg.imputationMozo} />
         </label>
         <label className="text-sm">
           Porcentaje
@@ -71,7 +76,7 @@ export function A3AltaForm({ cfg, lists, next }: { cfg: A3AltaConfig; lists: Lis
         </label>
         <label className="flex items-start gap-2 text-sm sm:col-span-3">
           <input type="checkbox" name="ampExtra" value="1" defaultChecked={cfg.ampExtra} className="mt-0.5 size-4 shrink-0" />
-          <span>Generar también el Excel «Camareros extras (AMP)» marcando a cada extra nuevo</span>
+          <span>Generar también el Excel «Camareros extras (AMP)» marcando a cada camarero extra nuevo (los mozos no van)</span>
         </label>
       </fieldset>
       <label className="block max-w-xs text-sm">

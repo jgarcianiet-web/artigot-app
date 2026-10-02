@@ -29,8 +29,9 @@ export type A3AltaConfig = {
   /** Bajas (formato «MB - Baja»): motivo e inactividad */
   bajaReason: string;
   bajaInactivity: string;
-  /** «Imputación» (centro de coste) de cada alta nueva: código y porcentaje; vacío = no se genera */
+  /** «Imputación» (centro de coste) de cada alta nueva: camareros (y responsables y maîtres) y mozos */
   imputation: string;
+  imputationMozo: string;
   imputationPct: number;
   /** «Camareros extras (AMP)»: campo de A3 que se marca a cada extra nuevo */
   ampExtra: boolean;
@@ -59,7 +60,8 @@ export const A3_ALTA_DEFAULTS: A3AltaConfig = {
   lastCode: 0,
   bajaReason: "Baja por pase a inactividad fijos discontinuos",
   bajaInactivity: "",
-  imputation: "",
+  imputation: "07 CAMAREROS EXTRAS",
+  imputationMozo: "14 ALMACEN EVENTOS",
   imputationPct: 100,
   ampExtra: true,
 };
@@ -67,7 +69,14 @@ export const A3_ALTA_DEFAULTS: A3AltaConfig = {
 export async function getA3Alta(): Promise<A3AltaConfig> {
   const row = await db.setting.findUnique({ where: { key: "a3alta" } });
   const v = (row?.value ?? {}) as Partial<A3AltaConfig>;
-  return { ...A3_ALTA_DEFAULTS, ...v, occupation: { ...A3_ALTA_DEFAULTS.occupation, ...(v.occupation ?? {}) } };
+  return {
+    ...A3_ALTA_DEFAULTS,
+    ...v,
+    // Antes de tener los códigos de imputación podían haberse guardado vacíos
+    imputation: v.imputation || A3_ALTA_DEFAULTS.imputation,
+    imputationMozo: v.imputationMozo || A3_ALTA_DEFAULTS.imputationMozo,
+    occupation: { ...A3_ALTA_DEFAULTS.occupation, ...(v.occupation ?? {}) },
+  };
 }
 
 export async function saveA3Alta(value: A3AltaConfig) {
@@ -388,7 +397,12 @@ export async function buildAltasSucesivasWorkbook(rows: AltaSucesivaRow[], compa
 export const IMPUTACION_TEMPLATE = path.join(process.cwd(), "templates", "a3-imputacion.xlsx");
 export const AMP_TEMPLATE = path.join(process.cwd(), "templates", "a3-camareros-extras.xlsx");
 
-type NewHire = { code: string; startDate: string; worker: Parameters<typeof splitName>[0] };
+type NewHire = { code: string; startDate: string; worker: Parameters<typeof splitName>[0] & { role: string } };
+
+/** Código de imputación de A3 («07 CAMAREROS EXTRAS» → «07»). */
+export const imputationCode = (v: string) => v.trim().match(/^(\d+)/)?.[1] ?? v.trim();
+/** Imputación según el puesto: los mozos van a almacén; el resto, a camareros extras. */
+export const imputationFor = (role: string, cfg: A3AltaConfig) => (role === "MOZO" ? cfg.imputationMozo : cfg.imputation);
 
 async function fillSimple(template: string, rows: NewHire[], companyCode: string, extra: (r: NewHire) => Record<string, ExcelJS.CellValue>) {
   const wb = new ExcelJS.Workbook();
@@ -414,8 +428,8 @@ async function fillSimple(template: string, rows: NewHire[], companyCode: string
 
 /** «Formato Imputación»: a qué centro de coste se imputa cada alta nueva, desde su fecha de alta. */
 export const buildImputacionWorkbook = (rows: NewHire[], companyCode: string, cfg: A3AltaConfig) =>
-  fillSimple(IMPUTACION_TEMPLATE, rows, companyCode, (r) => ({ D: "No", E: date(r.startDate), F: cfg.imputation, G: cfg.imputationPct }));
+  fillSimple(IMPUTACION_TEMPLATE, rows, companyCode, (r) => ({ D: "No", E: date(r.startDate), F: imputationCode(imputationFor(r.worker.role, cfg)), G: cfg.imputationPct }));
 
-/** «Formato Camareros extras (AMP)»: marca en A3 a cada extra nuevo, desde su fecha de alta. */
+/** «Formato Camareros extras (AMP)»: marca en A3 a cada camarero extra nuevo (los mozos no), desde su fecha de alta. */
 export const buildAmpWorkbook = (rows: NewHire[], companyCode: string) =>
   fillSimple(AMP_TEMPLATE, rows, companyCode, (r) => ({ D: "No", E: date(r.startDate), F: "Sí" }));
