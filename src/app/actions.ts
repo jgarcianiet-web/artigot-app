@@ -2,6 +2,7 @@
 
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { mergeWorkers } from "@/lib/mergeWorkers";
 import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -320,6 +321,26 @@ export async function bulkWorkers(_prev: string | null, form: FormData): Promise
   if (victims.length) await auditAdmin(by, "Trabajador", "Borrados", `Borradas ${victims.length} fichas: ${victims.map((w) => `${w.name}${w.dni ? ` (${w.dni})` : ""}`).join(", ")}`.slice(0, 1000));
   revalidatePath("/admin", "layout");
   return `${victims.length} borrados.${withPay.length ? ` No se han borrado (tienen pagos registrados; dalos de baja): ${withPay.map((w) => w.name).join(", ")}.` : ""}`;
+}
+
+export async function mergeWorkersAction(_prev: string | null, form: FormData): Promise<string | null> {
+  const by = await requireAdmin();
+  const keep = String(form.get("keep") ?? "");
+  const ids = form.getAll("ids").map(String).filter((id) => id && id !== keep);
+  if (!keep || !ids.length) return "Elige la ficha que se queda.";
+  const done: string[] = [];
+  let keepName = "";
+  try {
+    for (const id of ids) {
+      const r = await mergeWorkers(keep, id, by);
+      done.push(r.removed);
+      keepName = r.kept;
+    }
+  } catch (e) {
+    return (e as Error).message;
+  }
+  revalidatePath("/admin", "layout");
+  redirect(`/admin/personal/repetidos?ok=${encodeURIComponent(`Unidas: ${done.join(", ")} → ${keepName}.`)}`);
 }
 
 export async function addUnavailability(workerId: string, form: FormData) {

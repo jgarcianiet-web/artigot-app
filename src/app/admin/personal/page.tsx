@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Empty, RoleBadge, ScoreBadge } from "@/components/ui";
 import { db } from "@/lib/db";
+import { duplicateGroups } from "@/lib/mergeWorkers";
 import { isFixed, isRole, ROLE_PLURAL, ROLES, today } from "@/lib/domain";
 import { computeScores, explainScore } from "@/lib/scoring";
 import { incompleteWorkers } from "@/lib/completeness";
@@ -20,6 +21,7 @@ export default async function StaffList({
       OR: q ? [
             { name: { contains: q, mode: "insensitive" } },
             { phone: { contains: q } },
+            { dni: { contains: q.toUpperCase().replace(/[\s-]/g, "") } },
             { zone: { contains: q, mode: "insensitive" } },
           ] : undefined,
     },
@@ -37,12 +39,14 @@ export default async function StaffList({
     workers.sort((a, b) => a.role.localeCompare(b.role) || scores.get(b.id)!.score - scores.get(a.id)!.score);
   }
   const counts = await db.worker.groupBy({ by: ["role"], where: { active: true }, _count: true });
+  const repeated = (await duplicateGroups()).length;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1>Personal</h1>
         <div className="flex flex-wrap gap-2">
+          {repeated > 0 && <Link href="/admin/personal/repetidos" className="btn border-amber-300 bg-amber-50 text-amber-900">⚠ {repeated} {repeated === 1 ? "persona repetida" : "personas repetidas"}</Link>}
           <Link href="/admin/personal/importar" className="btn">Importar Excel</Link>
           <a href="/admin/personal/exportar" className="btn">Exportar códigos</a>
           <Link href="/admin/personal/nuevo" className="btn btn-primary">+ Nuevo trabajador</Link>
@@ -58,7 +62,7 @@ export default async function StaffList({
       </div>
 
       <form className="flex flex-wrap items-end gap-2">
-        <input name="q" defaultValue={q} placeholder="Buscar nombre, teléfono o zona…" className="input max-w-xs" />
+        <input name="q" defaultValue={q} placeholder="Buscar nombre, DNI, teléfono o zona…" className="input max-w-xs" />
         <select name="role" defaultValue={role} className="input w-auto">
           <option value="">Todos los puestos</option>
           {ROLES.map((r) => (

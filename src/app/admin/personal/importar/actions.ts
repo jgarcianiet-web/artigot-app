@@ -50,6 +50,7 @@ export async function commitImport(_prev: ImportState, form: FormData): Promise<
               role: r.role!,
               roles: [r.role!],
               email: r.email,
+              dni: r.dni,
               zone: r.zone,
               rating: r.rating ?? 3,
               notes: r.notes,
@@ -60,12 +61,16 @@ export async function commitImport(_prev: ImportState, form: FormData): Promise<
           created++;
         } else if (r.status === "actualizar") {
           // Solo se sobrescriben los datos que vienen rellenos en el Excel; el puesto se añade a los que ya puede hacer
-          const current = await tx.worker.findUniqueOrThrow({ where: { id: r.existingId }, select: { roles: true } });
+          const current = await tx.worker.findUniqueOrThrow({ where: { id: r.existingId }, select: { roles: true, dni: true } });
+          // El teléfono solo se cambia si no es de otra persona (al encontrarla por el DNI puede traer otro)
+          const key = r.phone ? phoneKey(r.phone) : null;
+          const owner = key ? await tx.worker.findUnique({ where: { phoneKey: key }, select: { id: true } }) : null;
           await tx.worker.update({
             where: { id: r.existingId },
             data: {
               name: r.name,
-              ...(r.phone && { phone: r.phone, phoneKey: phoneKey(r.phone) }),
+              ...(key && (!owner || owner.id === r.existingId) && { phone: r.phone, phoneKey: key }),
+              ...(r.dni && !current.dni && { dni: r.dni }),
               ...(r.roleRaw && r.role && { role: r.role, roles: [...new Set([r.role, ...current.roles])] }),
               ...(r.email && { email: r.email }),
               ...(r.zone && { zone: r.zone }),
