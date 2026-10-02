@@ -8,7 +8,7 @@ import { Logo } from "./Logo";
 type Item = { href: string; label: string };
 const GROUPS: { title?: string; items: Item[] }[] = [
   { items: [{ href: "/admin", label: "Panel" }, { href: "/admin/calendario", label: "Calendario" }, { href: "/admin/mensajes", label: "Mensajes" }] },
-  { title: "Eventos", items: [{ href: "/admin/eventos", label: "Eventos" }, { href: "/admin/chats", label: "Chats" }, { href: "/admin/incidencias", label: "Incidencias" }, { href: "/admin/sondeos", label: "Sondeos" }] },
+  { title: "Eventos", items: [{ href: "/admin/eventos", label: "Eventos" }, { href: "/admin/cuadrante", label: "Cuadrante" }, { href: "/admin/chats", label: "Chats" }, { href: "/admin/incidencias", label: "Incidencias" }, { href: "/admin/sondeos", label: "Sondeos" }] },
   { title: "Personal", items: [{ href: "/admin/personal", label: "Personal" }, { href: "/admin/documentos", label: "Documentos" }, { href: "/admin/candidatos", label: "Candidatos" }, { href: "/admin/altas", label: "Altas y bajas" }] },
   { title: "Nóminas", items: [{ href: "/admin/liquidacion", label: "Horas y pagos" }, { href: "/admin/informes", label: "Informes" }] },
   { items: [{ href: "/admin/ajustes", label: "Ajustes" }] },
@@ -17,7 +17,7 @@ const GROUPS: { title?: string; items: Item[] }[] = [
 // Rutas que viven bajo Ajustes aunque no empiecen por /admin/ajustes
 const SETTINGS = ["/admin/fincas", "/admin/clientes", "/admin/plantillas", "/admin/tarifas", "/admin/usuarios", "/admin/registro"];
 // «Horas y pagos» agrupa liquidación, pagos y registro de jornada
-const PAY = ["/admin/pagos", "/admin/jornada"];
+const PAY = ["/admin/pagos", "/admin/jornada", "/admin/fijos"];
 
 function isActive(path: string, href: string) {
   if (href === "/admin") return path === "/admin";

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getA3 } from "@/lib/a3";
-import { ALTA_SELECT, buildAltaWorkbook, bumpLastCode, getA3Alta, type AltaRow } from "@/lib/a3alta";
+import { ALTA_SELECT, buildAltaWorkbook, buildAmpWorkbook, buildImputacionWorkbook, bumpLastCode, getA3Alta, type AltaRow } from "@/lib/a3alta";
 import { auditAdmin } from "@/lib/audit";
 import { adminName } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -10,7 +10,8 @@ const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * Guarda los datos revisados de cada alta (apellidos, sexo, nacimiento, nacionalidad y el código
- * asignado) y devuelve el Excel de alta masiva de A3.
+ * asignado) y devuelve los Excel para importar en A3: el alta masiva y, según Ajustes → A3, la
+ * imputación y «Camareros extras (AMP)». Van en JSON (base64) para descargar los tres de una vez.
  */
 export async function POST(req: NextRequest) {
   const by = await adminName();
@@ -48,14 +49,14 @@ export async function POST(req: NextRequest) {
     rows.push({ code: get(id, "code"), startDate, worker });
   }
   const [a3, cfg] = await Promise.all([getA3(), getA3Alta()]);
-  const buffer = await buildAltaWorkbook(rows, a3.companyCode, cfg);
+  const day = today();
+  const files = [{ name: `alta_a3_${day}.xlsx`, label: "Alta masiva de trabajadores", data: await buildAltaWorkbook(rows, a3.companyCode, cfg) }];
+  if (cfg.imputation) files.push({ name: `imputacion_a3_${day}.xlsx`, label: "Imputación", data: await buildImputacionWorkbook(rows, a3.companyCode, cfg) });
+  if (cfg.ampExtra) files.push({ name: `camareros_extras_a3_${day}.xlsx`, label: "Camareros extras (AMP)", data: await buildAmpWorkbook(rows, a3.companyCode) });
   await bumpLastCode(Math.max(...codes.map(Number)));
-  await auditAdmin(by, "A3", "Alta masiva", `Excel de alta en A3 de ${rows.length}: ${rows.map((r) => `${r.worker.name} (${r.code})`).join(", ")}`);
-  return new NextResponse(buffer as unknown as ArrayBuffer, {
-    headers: {
-      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="alta_a3_${today()}.xlsx"`,
-      "Cache-Control": "no-store",
-    },
-  });
+  await auditAdmin(by, "A3", "Alta masiva", `Excel de alta en A3 (${files.map((f) => f.label).join(", ")}) de ${rows.length}: ${rows.map((r) => `${r.worker.name} (${r.code})`).join(", ")}`);
+  return NextResponse.json(
+    { files: files.map((f) => ({ name: f.name, label: f.label, base64: f.data.toString("base64") })), missingImputation: !cfg.imputation },
+    { headers: { "Cache-Control": "no-store" } },
+  );
 }
