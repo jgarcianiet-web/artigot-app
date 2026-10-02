@@ -111,6 +111,7 @@ export function notifyInvited(event: EventInfo, invited: { workerId: string; rol
         title: "Nueva convocatoria",
         body: `${event.name} · ${formatDate(event.date)} a las ${callTime(event, role)} (${ROLE_LABEL[role].toLowerCase()}). Toca para aceptar o rechazar.`,
         tag: `inv-${event.id}`,
+        emailFallback: true,
       });
     }
   });

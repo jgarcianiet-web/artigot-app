@@ -2,6 +2,8 @@ import { createSign, type KeyObject, createPrivateKey } from "node:crypto";
 import http2 from "node:http2";
 import webpush from "web-push";
 import { db } from "./db";
+import { appUrl } from "./domain";
+import { mailEnabled, sendMail } from "./mail";
 
 /**
  * Envío de notificaciones push a los tres tipos de dispositivo:
@@ -57,7 +59,10 @@ export async function notify(opts: {
   title: string;
   body: string;
   tag?: string;
+  /** A quien no tiene ningún móvil con avisos activados se le manda por email (si hay SMTP) */
+  emailFallback?: boolean;
 }) {
+  if (opts.emailFallback && opts.workerIds?.length) await emailWithoutDevices(opts.workerIds, opts.title, opts.body, opts.workerUrl);
   const or = [];
   if (opts.workerIds?.length) or.push({ workerId: { in: opts.workerIds } });
   if (opts.admins) or.push({ workerId: null, adminName: { not: null } });
@@ -82,6 +87,16 @@ export async function notify(opts: {
     return r.status === "fulfilled" && r.value === "gone";
   });
   if (gone.length) await db.device.deleteMany({ where: { id: { in: gone.map((d) => d.id) } } });
+}
+
+/** Respaldo por email para quien no ha activado los avisos en ningún móvil. */
+async function emailWithoutDevices(workerIds: string[], title: string, body: string, url?: string) {
+  if (!mailEnabled()) return;
+  const workers = await db.worker.findMany({ where: { id: { in: workerIds }, active: true, email: { not: null }, devices: { none: {} } }, select: { name: true, email: true } });
+  for (const w of workers) {
+    const text = [`Hola ${w.name.split(" ")[0]},`, "", body, "", `Entra en la app para responder: ${appUrl()}${url ?? "/app"}`, "", "Activa los avisos en la app para enterarte al momento."].join("\n");
+    await sendMail(w.email!, title, text).catch((e) => console.error("email aviso", e));
+  }
 }
 
 type Result = "ok" | "gone" | "skipped";

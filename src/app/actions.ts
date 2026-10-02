@@ -472,6 +472,7 @@ export async function saveEvent(_prev: string | null, form: FormData) {
           title: `Cambios en ${event.name}`,
           body: `Nueva ${changes.join(", ")}`,
           tag: `upd-${event.id}`,
+          emailFallback: true,
         });
       });
     }
@@ -607,6 +608,7 @@ export async function deleteEvent(id: string) {
       title: "Evento cancelado",
       body: `${event.name} del ${formatDate(event.date)} se ha cancelado.`,
       tag: `del-${id}`,
+      emailFallback: true,
     }),
   );
   revalidatePath("/admin", "layout");
