@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireWorker } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { euro, formatDate, num, ROLE_LABEL, today, type Role } from "@/lib/domain";
+import { clocksIn, euro, formatDate, isFixed, num, ROLE_LABEL, today, type Role } from "@/lib/domain";
 import { deductions, getPaySettings, halfFromKey, halfLabel, netOf, payPeriod } from "@/lib/pay";
 import { workerMonth } from "@/lib/staff";
 import { monthRecordDocs } from "@/lib/timeRecord";
@@ -21,8 +21,9 @@ export default async function MyPay({ searchParams }: { searchParams: Promise<{ 
   const [m, s, worker] = await Promise.all([
     workerMonth(me.id, month),
     getPaySettings(),
-    db.worker.findUniqueOrThrow({ where: { id: me.id }, select: { iban: true } }),
+    db.worker.findUniqueOrThrow({ where: { id: me.id }, select: { iban: true, contractCode: true, noClock: true } }),
   ]);
+  if (isFixed(worker)) return <FixedMonth month={month} current={current} m={m} noClock={!clocksIn(worker)} />;
   const record = (await monthRecordDocs(month, me.id))[0];
   const halves = await Promise.all([1, 2].map((n) => payPeriod(halfFromKey(`${month}-${n}`)!, { workerId: me.id })));
   const [y, mm] = month.split("-").map(Number);
@@ -127,6 +128,39 @@ export default async function MyPay({ searchParams }: { searchParams: Promise<{ 
           ? "Los importes son lo que cobras por cada servicio."
           : `El neto estimado descuenta la Seguridad Social (${num(ssPct)} %) y la retención de IRPF (${num(irpfPct)} %). El importe definitivo es el de tu nómina.`}
       </p>
+    </div>
+  );
+}
+
+/** Fijos: su nómina es mensual; aquí solo ven sus servicios y sus horas. */
+function FixedMonth({ month, current, m, noClock }: { month: string; current: string; m: Awaited<ReturnType<typeof workerMonth>>; noClock: boolean }) {
+  const [y, mm] = month.split("-").map(Number);
+  return (
+    <div className="space-y-4">
+      <h1>Mis horas</h1>
+      <div className="flex items-center justify-between">
+        <Link href={`/app/nomina?mes=${shift(month, -1)}`} className="btn" aria-label="Mes anterior">‹</Link>
+        <span className="font-semibold first-letter:uppercase">{MONTHS[mm - 1]} {y}</span>
+        {month < current ? <Link href={`/app/nomina?mes=${shift(month, 1)}`} className="btn" aria-label="Mes siguiente">›</Link> : <span className="w-10" />}
+      </div>
+      <div className={`grid gap-2 text-center ${noClock ? "grid-cols-1" : "grid-cols-2"}`}>
+        <div className="card p-3"><div className="text-2xl font-semibold tabular-nums">{m.services}</div><div className="text-xs text-stone-500">Servicios</div></div>
+        {!noClock && <div className="card p-3"><div className="text-2xl font-semibold tabular-nums">{num(m.hours)}</div><div className="text-xs text-stone-500">Horas</div></div>}
+      </div>
+      <p className="text-sm text-stone-600">Cobras tu nómina mensual. Si un mes trabajas más de lo que cubre tu nómina, la diferencia se te paga aparte.</p>
+      {m.rows.length > 0 && (
+        <ul className="card divide-y divide-stone-100 p-0 text-sm">
+          {m.rows.map((r) => (
+            <li key={r.id} className="flex justify-between gap-2 px-3 py-2">
+              <span className="min-w-0">
+                <span className="block truncate font-medium">{r.event.name}</span>
+                <span className="text-xs text-stone-500">{formatDate(r.event.date)} · {ROLE_LABEL[r.role as Role] ?? r.role}</span>
+              </span>
+              {!noClock && <span className="shrink-0 tabular-nums">{r.hours != null ? `${num(r.hours)} h` : <span className="text-amber-700">sin fichar</span>}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
     return new NextResponse("Fechas no válidas", { status: 400 });
   }
-  const lines = await payrollLines(from, to);
+  const lines = await payrollLines(from, to, { extras: true });
   const detail = sp.get("detalle") === "1";
   const role = (r: string) => ROLE_LABEL[r as Role] ?? r;
 

@@ -44,6 +44,7 @@ export function BulkBar() {
       className={`sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border p-2 text-sm ${n ? "border-stone-300 bg-white shadow-sm" : "border-transparent"}`}
       onSubmit={(e) => {
         const action = (e.nativeEvent as SubmitEvent).submitter?.getAttribute("value");
+        if (action?.startsWith("contrato")) return;
         const text =
           action === "borrar"
             ? `¿Borrar definitivamente a ${n} ${n === 1 ? "persona" : "personas"}? Se borra su ficha, documentos e historial. Quien ya tenga pagos registrados no se borra (dalo de baja).`
@@ -51,9 +52,14 @@ export function BulkBar() {
         if (!confirm(text)) e.preventDefault();
       }}
     >
-      <span className="text-stone-600">{n ? `${n} seleccionados` : "Marca a varios para darlos de baja o borrarlos"}</span>
+      <span className="text-stone-600">{n ? `${n} seleccionados` : "Marca a varios para cambiarles el contrato, darlos de baja o borrarlos"}</span>
       {n > 0 && (
         <>
+          <span className="text-stone-400">Marcar como:</span>
+          <button name="accion" value="contrato:300" className="btn btn-sm" disabled={pending}>Extra</button>
+          <button name="accion" value="contrato:fijo" className="btn btn-sm" disabled={pending}>Fijo</button>
+          <button name="accion" value="contrato:fijo-sin" className="btn btn-sm" disabled={pending}>Fijo sin fichaje</button>
+          <span className="text-stone-300">|</span>
           <button name="accion" value="desactivar" className="btn btn-sm" disabled={pending}>Dar de baja</button>
           <button name="accion" value="borrar" className="btn btn-sm btn-danger" disabled={pending}>Borrar</button>
         </>

@@ -26,7 +26,7 @@ import { computeScores, CRITERIA, reviewAverage, SCORING } from "@/lib/scoring";
 import { DocumentUploadForm } from "@/components/StaffForms";
 import { DOC_LABEL, docState, formatIban } from "@/lib/staff";
 import { db } from "@/lib/db";
-import { formatDate, num, ownRatesText, today, workedHours } from "@/lib/domain";
+import { CONTRACT_SHORT, euro, formatDate, isFixed, num, ownRatesText, today, workedHours } from "@/lib/domain";
 
 const DEVICE_LABEL: Record<string, string> = { web: "Navegador / web app", fcm: "App Android", apns: "App iPhone" };
 
@@ -239,6 +239,12 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
             <dt className="text-stone-500">IBAN</dt><dd className="font-mono text-xs">{worker.iban ? formatIban(worker.iban) : <Missing />}</dd>
             <dt className="text-stone-500">Nacimiento</dt><dd>{worker.birthDate ? formatDate(worker.birthDate, { long: true }) : <Missing />}</dd>
             <dt className="text-stone-500">Dirección</dt><dd>{worker.address ?? <Missing />}</dd>
+            <dt className="text-stone-500">Contrato</dt>
+            <dd>
+              {CONTRACT_SHORT[worker.contractCode ?? "300"]}
+              {isFixed(worker) && (worker.noClock ? " · no ficha" : " · ficha")}
+              {isFixed(worker) && worker.monthlySalary != null && ` · nómina ${euro(worker.monthlySalary)}`}
+            </dd>
             <dt className="text-stone-500">Código A3</dt><dd>{worker.a3Code ?? <Missing />}</dd>
             <dt className="text-stone-500">Tarifa propia</dt>
             <dd>

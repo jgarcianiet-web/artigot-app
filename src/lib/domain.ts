@@ -158,3 +158,36 @@ export const num = (n: number) => new Intl.NumberFormat("es-ES", { maximumFracti
 export function appUrl() {
   return (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
 }
+
+// ---------- Tipo de contrato ----------
+
+/** Contratos de A3: 300 = extra (fijo discontinuo, por horas); 100 y 200 = fijos con nómina mensual. */
+export const CONTRACT_LABEL: Record<string, string> = {
+  "300": "Extra · 300 fijo discontinuo (por horas, altas y bajas por actividad)",
+  "100": "Fijo · 100 indefinido a tiempo completo (nómina mensual)",
+  "200": "Fijo · 200 indefinido a tiempo parcial (nómina mensual)",
+};
+export const CONTRACT_SHORT: Record<string, string> = { "300": "Extra", "100": "Fijo 100", "200": "Fijo 200" };
+type ContractInfo = { contractCode?: string | null; noClock?: boolean | null };
+/** Fijo con nómina mensual (contrato 100 o 200): no se le paga por horas ni lleva altas por actividad. */
+export const isFixed = (w: ContractInfo) => w.contractCode === "100" || w.contractCode === "200";
+/** Ficha en la app: todos menos los fijos marcados como «no ficha» (p. ej. el maître fijo). */
+export const clocksIn = (w: ContractInfo) => !(isFixed(w) && w.noClock);
+/** Filtro de Prisma: solo extras (contrato 300 o sin indicar). */
+export const EXTRA_WHERE = { OR: [{ contractCode: null }, { contractCode: { notIn: ["100", "200"] } }] };
+/** Código de contrato a partir de lo que pone A3 («300 - PARA LA REALIZACION…», «100», «Fijo discontinuo»…). */
+export function parseContract(v: string): string | null {
+  const s = v.trim();
+  const n = s.match(/^\s*(\d)\d\d/);
+  if (n) return n[1] === "1" ? "100" : n[1] === "2" ? "200" : n[1] === "3" ? "300" : null;
+  const t = s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  if (/discontinu|extra/.test(t)) return "300";
+  if (/parcial/.test(t)) return "200";
+  if (/indefinid|fijo/.test(t)) return "100";
+  return null;
+}
+/** Horas previstas del servicio (para el coste de quien no ficha). */
+export const plannedHours = (e: { startTime: string; endTime: string | null }) => hoursBetween(e.startTime, e.endTime);
+/** Horas para el coste: las fichadas o corregidas; si no ficha, las previstas del evento. */
+export const costHours = (a: Parameters<typeof workedHours>[0], w: ContractInfo, e: { startTime: string; endTime: string | null }) =>
+  workedHours(a) ?? (clocksIn(w) ? null : plannedHours(e));

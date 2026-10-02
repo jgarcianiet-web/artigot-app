@@ -4,6 +4,7 @@ import { phoneKey } from "./auth";
 import { incompleteWorkers } from "./completeness";
 import { db } from "./db";
 import { parseDate } from "./employment";
+import { parseContract } from "./domain";
 import { norm, readTable } from "./importStaff";
 import { validDniNie, validIban } from "./staff";
 
@@ -14,7 +15,7 @@ import { validDniNie, validIban } from "./staff";
  * trabajador en la app (recordatorio automático de datos incompletos).
  */
 
-type Col = "dni" | "name" | "surname" | "phone" | "email" | "code" | "nss" | "center" | "iban" | "birth" | "address" | "sex" | "nationality" | "zone" | "rateBODA" | "rateEVENTO" | "rateOTRO" | "rateAll" | "rateMAITRE:BODA" | "rateMAITRE:EVENTO" | "rateMAITRE:OTRO" | "rateMAITRE:ALL";
+type Col = "dni" | "name" | "surname" | "phone" | "email" | "code" | "nss" | "center" | "iban" | "birth" | "address" | "sex" | "nationality" | "zone" | "rateBODA" | "rateEVENTO" | "rateOTRO" | "rateAll" | "rateMAITRE:BODA" | "rateMAITRE:EVENTO" | "rateMAITRE:OTRO" | "rateMAITRE:ALL" | "contract";
 
 function colFor(header: string): Col | null {
   const h = norm(header);
@@ -31,6 +32,7 @@ function colFor(header: string): Col | null {
     if (pre !== "rate") return "rateMAITRE:ALL";
     if (/^(tarifa|tarifa hora|tarifa propia|precio|precio hora|eur hora|euros hora|eur h)$/.test(h)) return "rateAll";
   }
+  if (/^(tipo de contrato|tipo contrato|contrato|cod contrato|codigo contrato)$/.test(h)) return "contract";
   if (/^(codigo|cod|cod trabajador|codigo trabajador|codigo a3|cod a3)$/.test(h)) return "code";
   if (/^(nass|nss|naf|n ss|num ss|seguridad social|n seguridad social|numero seguridad social|n afiliacion|afiliacion)$/.test(h)) return "nss";
   if (/^(centro|cod centro|codigo centro)$/.test(h)) return "center";
@@ -54,6 +56,7 @@ const nameKey = (s: string) => norm(s.replace(",", " ")).split(" ").filter(Boole
 const FIELD_LABEL: Record<string, string> = {
   a3Code: "código A3", dni: "DNI", nss: "NSS", a3Center: "centro", iban: "IBAN", phone: "teléfono", email: "email",
   birthDate: "nacimiento", address: "dirección", sex: "sexo", nationality: "nacionalidad", zone: "zona", firstName: "apellidos", customRates: "tarifa propia",
+  contractCode: "tipo de contrato",
 };
 
 export type A3ImportResult = { ok: boolean; message: string; details?: string[] };
@@ -83,7 +86,7 @@ export async function completeFromFile(file: File, by: string, opts: { replaceRa
   const workers = await db.worker.findMany({
     select: {
       id: true, name: true, dni: true, nss: true, a3Code: true, a3Center: true, firstName: true, surname1: true, surname2: true, phone: true, phoneKey: true,
-      email: true, iban: true, birthDate: true, address: true, sex: true, nationality: true, zone: true, customRates: true,
+      email: true, iban: true, birthDate: true, address: true, sex: true, nationality: true, zone: true, customRates: true, contractCode: true,
     },
   });
   const byDni = new Map(workers.filter((w) => w.dni).map((w) => [cleanDni(w.dni!), w]));
@@ -142,6 +145,7 @@ export async function completeFromFile(file: File, by: string, opts: { replaceRa
     put("sex", /^(h|hombre|varon|m|masculino)$/.test(sex) ? "Hombre" : /^(mujer|f|femenino)$/.test(sex) ? "Mujer" : null);
     put("nationality", at(raw, "nationality").toLocaleUpperCase("es-ES"));
     put("zone", at(raw, "zone"));
+    put("contractCode", parseContract(at(raw, "contract")));
     // Tarifa propia por tipo de evento: se rellena la que falte (o se sustituye si se pide)
     const current = (w.customRates ?? {}) as Record<string, number>;
     const rates = { ...current };

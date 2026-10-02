@@ -34,7 +34,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export async function a3Lines(from: string, to: string) {
   const cfg = await getA3();
-  const lines = await payrollLines(from, to);
+  const lines = await payrollLines(from, to, { extras: true });
   const period = from.slice(0, 7) === to.slice(0, 7) ? from.slice(0, 7) : `${from}/${to}`;
   const groups = new Map<string, { worker: (typeof lines)[number]["a"]["worker"]; role: string; hours: number; amount: number; price: number; missing: number; bonusCount: number; bonus: number }>();
   for (const l of lines) {

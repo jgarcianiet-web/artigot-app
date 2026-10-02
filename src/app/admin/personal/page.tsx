@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Empty, RoleBadge, ScoreBadge } from "@/components/ui";
 import { db } from "@/lib/db";
-import { isRole, ROLE_PLURAL, ROLES, today } from "@/lib/domain";
+import { isFixed, isRole, ROLE_PLURAL, ROLES, today } from "@/lib/domain";
 import { computeScores, explainScore } from "@/lib/scoring";
 import { incompleteWorkers } from "@/lib/completeness";
 import { BulkBar, SelectAll } from "./BulkBar";
@@ -108,7 +108,7 @@ export default async function StaffList({
                       <span className="ml-2 rounded bg-amber-100 px-1.5 text-[11px] text-amber-900" title={`Falta: ${incomplete.get(w.id)!.join(", ")}`}>Datos incompletos</span>
                     )}
                   </td>
-                  <td><RoleBadge role={w.role} /></td>
+                  <td><RoleBadge role={w.role} />{isFixed(w) && <span className="ml-1 rounded-full bg-sky-100 px-1.5 py-0.5 text-[11px] text-sky-800" title={w.noClock ? "Fijo, no ficha" : "Fijo"}>Fijo{w.noClock ? " · sin fichaje" : ""}</span>}</td>
                   <td><ScoreBadge score={scores.get(w.id)!.score} title={explainScore(scores.get(w.id)!)} /></td>
                   <td className="whitespace-nowrap">{w.phone ? <a href={`tel:${w.phone}`}>{w.phone}</a> : <span className="text-stone-400">—</span>}</td>
                   <td className="hidden text-stone-500 md:table-cell">{w.zone}</td>

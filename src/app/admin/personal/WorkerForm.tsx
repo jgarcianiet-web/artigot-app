@@ -1,11 +1,11 @@
 "use client";
 
-import { Fragment, useActionState } from "react";
+import { Fragment, useActionState, useState } from "react";
 import { saveWorker } from "@/app/actions";
 import { ActionForm, SubmitButton } from "@/components/client";
 import { IDENTITY_FILE_KEYS, IdentityFields } from "@/components/IdentityFields";
 import { shrinkFormImages } from "@/lib/image";
-import { EVENT_TYPE_LABEL, EVENT_TYPES, OWN_RATE_ROLES, ROLE_LABEL, ROLES } from "@/lib/domain";
+import { CONTRACT_LABEL, EVENT_TYPE_LABEL, EVENT_TYPES, OWN_RATE_ROLES, ROLE_LABEL, ROLES } from "@/lib/domain";
 
 type Worker = {
   id: string;
@@ -24,7 +24,44 @@ type Worker = {
   address: string | null;
   a3Code: string | null;
   customRates?: unknown;
+  contractCode?: string | null;
+  noClock?: boolean;
+  monthlySalary?: number | null;
 };
+
+/** Tipo de contrato: extra (300) o fijo con nómina mensual (100 / 200), con o sin fichaje. */
+function ContractFields({ worker }: { worker?: Worker }) {
+  const [code, setCode] = useState(worker?.contractCode ?? "300");
+  const fixed = code !== "300";
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="label" htmlFor="contractCode">Tipo de contrato</label>
+        <select id="contractCode" name="contractCode" className="input" value={code} onChange={(e) => setCode(e.target.value)}>
+          {Object.entries(CONTRACT_LABEL).map(([v, l]) => (
+            <option key={v} value={v}>{l}</option>
+          ))}
+        </select>
+      </div>
+      {fixed && (
+        <div className="grid gap-3 rounded-lg border border-stone-200 bg-white p-3 sm:grid-cols-2">
+          <label className="flex items-start gap-2 text-sm sm:col-span-2">
+            <input type="checkbox" name="noClock" value="1" defaultChecked={!!worker?.noClock} className="mt-0.5 size-4 shrink-0" />
+            <span>No ficha ni cuenta horas (p. ej. maître fijo). En los costes del evento cuenta con el horario previsto.</span>
+          </label>
+          <div className="sm:col-span-2">
+            <label className="label" htmlFor="monthlySalary">Nómina mensual (€, opcional)</label>
+            <input id="monthlySalary" name="monthlySalary" inputMode="decimal" className="input" defaultValue={worker?.monthlySalary ?? ""} placeholder="1165,14" />
+            <p className="mt-1 text-xs text-stone-500">Sus servicios se valoran con su tarifa; en «Horas y pagos → Fijos» se ve lo que lleva cada mes y lo que pasa de la nómina, que se le paga aparte.</p>
+          </div>
+        </div>
+      )}
+      <p className="text-xs text-stone-500">
+        {fixed ? "Fijo: no entra en pagos por quincena, remesa, Excel de extras ni altas y bajas por actividad." : "Extra: cobra por horas y se le da de alta y de baja según los días que trabaja."}
+      </p>
+    </div>
+  );
+}
 
 type DocStatus = Record<string, { fileId: string | null; verified: boolean }>;
 
@@ -95,6 +132,7 @@ export function WorkerForm({ worker, docs = {} }: { worker?: Worker; docs?: DocS
         </fieldset>
         <fieldset className="rounded-lg border border-stone-200 bg-stone-50 p-4 sm:col-span-2">
           <legend className="px-1 text-sm font-semibold">Solo RRHH (el trabajador no lo ve)</legend>
+          <div className="mb-3"><ContractFields worker={worker} /></div>
           <label className="label" htmlFor="a3Code">Código de trabajador en A3</label>
           <input id="a3Code" name="a3Code" className="input" defaultValue={worker?.a3Code ?? ""} />
           <div className="mt-3">

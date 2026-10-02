@@ -1,7 +1,7 @@
 import path from "node:path";
 import ExcelJS from "exceljs";
 import { db } from "./db";
-import type { Role } from "./domain";
+import { EXTRA_WHERE, type Role } from "./domain";
 
 /**
  * Alta masiva de trabajadores en A3 (plantilla «Formato Alta masiva de trabajadores (Avanzada)»).
@@ -282,7 +282,7 @@ export const ALTA_SELECT = {
 /** Personal activo sin código de A3, con la fecha de su próximo servicio confirmado. */
 export async function pendingAltas(from: string) {
   const workers = await db.worker.findMany({
-    where: { active: true, a3Code: null },
+    where: { active: true, a3Code: null, ...EXTRA_WHERE },
     orderBy: { name: "asc" },
     select: {
       ...ALTA_SELECT,
