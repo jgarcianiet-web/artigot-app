@@ -432,17 +432,25 @@ async function linkVenueAndClient(form: FormData, ev: { venue: string; client: s
   return { venueId, clientId, ...extra };
 }
 
-export async function saveEvent(_prev: string | null, form: FormData) {
-  const by = await requireAdmin();
+/** Crea o actualiza un evento con los campos del formulario (también al confirmar un borrador). */
+async function writeEvent(form: FormData, by: string, note = "") {
   const parsed = eventSchema.safeParse(Object.fromEntries(form));
-  if (!parsed.success) return parsed.error.issues[0].message;
+  if (!parsed.success) return { error: parsed.error.issues[0].message } as const;
   const id = form.get("id") ? String(form.get("id")) : null;
   const before = id ? await db.event.findUniqueOrThrow({ where: { id } }) : null;
   const data = { ...parsed.data, ...(await linkVenueAndClient(form, parsed.data)) };
   const event = id ? await db.event.update({ where: { id }, data }) : await db.event.create({ data });
   const ed = diff(before, event, { name: "Nombre", date: "Fecha", startTime: "Inicio", endTime: "Fin", unloadTime: "Descarga", venue: "Lugar", client: "Cliente", salesRep: "Comercial", budget: "Presupuesto", budgetNote: "Comentario presupuesto", needCamareros: "Camareros", needMaitres: "Maîtres", needResponsables: "Responsables", needMozos: "Mozos" });
-  if (!before) await auditAdmin(by, "Evento", "Alta", `Nuevo evento: ${event.name} (${formatDate(event.date)})`, { entityId: event.id });
+  if (!before) await auditAdmin(by, "Evento", "Alta", `Nuevo evento: ${event.name} (${formatDate(event.date)})${note}`, { entityId: event.id });
   else if (ed.changed) await auditAdmin(by, "Evento", "Cambios", `${event.name}: ${ed.text}`, { entityId: event.id, data: ed.data });
+  return { event, before } as const;
+}
+
+export async function saveEvent(_prev: string | null, form: FormData) {
+  const by = await requireAdmin();
+  const r = await writeEvent(form, by);
+  if ("error" in r) return r.error ?? null;
+  const { event, before } = r;
 
   if (before) {
     const changes = [
@@ -999,4 +1007,71 @@ export async function saveRates(form: FormData) {
   }
   if (rateChanges.length) await auditAdmin(by, "Ajustes", "Tarifas", rateChanges.join("; "));
   revalidatePath("/admin", "layout");
+}
+
+// ---------- Borradores del cuadrante ----------
+
+type DraftStaff = { workerId: string; role: Role }[];
+const draftStaff = (v: unknown): DraftStaff => (Array.isArray(v) ? (v as DraftStaff).filter((x) => x && typeof x.workerId === "string" && isRole(x.role)) : []);
+
+/** Guarda el formulario del evento como borrador (solo hace falta el nombre y la fecha). */
+export async function saveDraft(_prev: string | null, form: FormData) {
+  const by = await requireAdmin();
+  const name = String(form.get("name") ?? "").trim();
+  const day = String(form.get("date") ?? "");
+  if (name.length < 2) return "Pon un nombre al evento.";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return "Pon la fecha.";
+  const fields = Object.fromEntries([...form.entries()].filter(([k, v]) => typeof v === "string" && k !== "draftId" && !k.startsWith("$")).map(([k, v]) => [k, String(v).slice(0, 4000)]));
+  const id = String(form.get("draftId") ?? "");
+  const draft = id
+    ? await db.eventDraft.update({ where: { id }, data: { name, date: day, form: fields } })
+    : await db.eventDraft.create({ data: { name, date: day, form: fields, createdBy: by } });
+  revalidatePath("/admin/cuadrante", "layout");
+  redirect(`/admin/cuadrante/borrador/${draft.id}${id ? "?ok=1" : ""}`);
+}
+
+export async function addDraftStaff(draftId: string, form: FormData) {
+  await requireAdmin();
+  const role = String(form.get("role") ?? "");
+  const ids = form.getAll("workerId").map(String);
+  if (!isRole(role) || !ids.length) return;
+  const d = await db.eventDraft.findUniqueOrThrow({ where: { id: draftId } });
+  const staff = draftStaff(d.staff).filter((x) => !ids.includes(x.workerId));
+  const valid = await db.worker.findMany({ where: { id: { in: ids }, active: true }, select: { id: true } });
+  await db.eventDraft.update({ where: { id: draftId }, data: { staff: [...staff, ...valid.map((w) => ({ workerId: w.id, role }))] } });
+  revalidatePath("/admin/cuadrante", "layout");
+}
+
+export async function removeDraftStaff(draftId: string, workerId: string) {
+  await requireAdmin();
+  const d = await db.eventDraft.findUniqueOrThrow({ where: { id: draftId } });
+  await db.eventDraft.update({ where: { id: draftId }, data: { staff: draftStaff(d.staff).filter((x) => x.workerId !== workerId) } });
+  revalidatePath("/admin/cuadrante", "layout");
+}
+
+export async function deleteDraft(draftId: string) {
+  await requireAdmin();
+  const d = await db.eventDraft.delete({ where: { id: draftId } });
+  revalidatePath("/admin/cuadrante", "layout");
+  redirect(`/admin/cuadrante?semana=${d.date}`);
+}
+
+/** Confirma el borrador: crea el evento de verdad y manda la convocatoria al personal previsto. */
+export async function confirmDraft(draftId: string, _prev: string | null): Promise<string | null> {
+  const by = await requireAdmin();
+  const d = await db.eventDraft.findUnique({ where: { id: draftId } });
+  if (!d) return "Este borrador ya no existe (¿se ha confirmado ya?).";
+  const form = new FormData();
+  for (const [k, v] of Object.entries(d.form as Record<string, string>)) if (k !== "id") form.set(k, v);
+  const staff = draftStaff(d.staff);
+  const r = await writeEvent(form, by, ` desde el cuadrante, con ${staff.length} convocados`);
+  if ("error" in r) return `Antes de confirmar, completa el evento: ${r.error}`;
+  const { event } = r;
+  const active = new Set((await db.worker.findMany({ where: { id: { in: staff.map((x) => x.workerId) }, active: true }, select: { id: true } })).map((w) => w.id));
+  const invited = staff.filter((x) => active.has(x.workerId));
+  if (invited.length) await db.assignment.createMany({ data: invited.map((x) => ({ eventId: event.id, workerId: x.workerId, role: x.role })), skipDuplicates: true });
+  await db.eventDraft.delete({ where: { id: draftId } });
+  notifyInvited(event, invited);
+  revalidatePath("/admin", "layout");
+  redirect(`/admin/eventos/${event.id}`);
 }

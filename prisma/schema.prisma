@@ -657,3 +657,20 @@ model StaffMessage {
 
   @@index([roomId, createdAt])
 }
+
+// Evento en borrador del cuadrante: no lo ve nadie más que RRHH ni avisa a nadie. Al confirmarlo se
+// crea el evento de verdad con los datos del formulario y se convoca al personal elegido.
+model EventDraft {
+  id        String   @id @default(cuid())
+  name      String
+  date      String
+  // Campos del formulario del evento tal cual (se validan al confirmar)
+  form      Json
+  // Personal previsto: [{ workerId, role }]
+  staff     Json     @default("[]")
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+}
