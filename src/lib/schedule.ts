@@ -1,7 +1,7 @@
 import ExcelJS from "exceljs";
 import { db } from "./db";
 import { addDays, callTime, clocksIn, costHours, hoursBetween, isFixed, payable, rateFor, ROLE_LABEL, type Role } from "./domain";
-import { monthRange, payrollLines } from "./payroll";
+import { monthRange } from "./payroll";
 
 /**
  * Cuadrante semanal (como el Excel «CAMAREROS» de RRHH): cada día, sus eventos y quién va, con su
@@ -73,16 +73,28 @@ export async function weekSchedule(monday: string) {
       }),
   }));
 
-  // Recuento de fijos: el mes de la semana, hasta el domingo
+  // Recuento de fijos: la semana entera y el mes del domingo hasta el domingo (la semana puede
+  // empezar en el mes anterior). Como en el cuadrante, lo que aún no se ha fichado cuenta con el
+  // horario previsto.
   const { from } = monthRange(sunday);
-  const [fixed, lines] = await Promise.all([
-    db.worker.findMany({ where: { active: true, contractCode: { in: ["100", "200"] } }, select: { id: true, name: true, monthlySalary: true, noClock: true, contractCode: true }, orderBy: { name: "asc" } }),
-    payrollLines(from, sunday),
-  ]);
+  const start = from < monday ? from : monday;
+  const fixed = await db.worker.findMany({
+    where: { active: true, contractCode: { in: ["100", "200"] } },
+    select: {
+      id: true, name: true, monthlySalary: true, noClock: true, contractCode: true, customRates: true,
+      assignments: { where: { status: "CONFIRMADO", event: { date: { gte: start, lte: sunday } } }, include: { event: true } },
+    },
+    orderBy: { name: "asc" },
+  });
+  const value = (w: (typeof fixed)[number], since: string) =>
+    Math.round(
+      w.assignments
+        .filter((a) => a.event.date >= since)
+        .reduce((s, a) => s + payable(costHours(a, w, a.event) ?? hoursBetween(callTime(a.event, a.role), a.event.endTime), rateFor(rates, a.role, a.event.type, w.customRates)).amount, 0) * 100,
+    ) / 100;
   const fixedRows = fixed.map((w) => {
-    const value = Math.round(lines.filter((l) => l.a.workerId === w.id).reduce((s, l) => s + l.amount, 0) * 100) / 100;
-    const week = Math.round(lines.filter((l) => l.a.workerId === w.id && l.a.event.date >= monday).reduce((s, l) => s + l.amount, 0) * 100) / 100;
-    return { id: w.id, name: w.name, week, value, salary: w.monthlySalary, clocks: clocksIn(w), left: w.monthlySalary != null ? Math.round((w.monthlySalary - value) * 100) / 100 : null };
+    const month = value(w, from);
+    return { id: w.id, name: w.name, week: value(w, monday), value: month, salary: w.monthlySalary, clocks: clocksIn(w), left: w.monthlySalary != null ? Math.round((w.monthlySalary - month) * 100) / 100 : null };
   });
   return { monday, sunday, monthFrom: from, days, fixed: fixedRows };
 }
