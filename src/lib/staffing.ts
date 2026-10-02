@@ -99,20 +99,45 @@ export function coverage(event: Needs, assignments: { role: string; status: stri
 
 type EventInfo = { id: string; name: string; date: string; startTime: string; unloadTime: string | null };
 
-/** Aviso de convocatoria a cada trabajador, después de responder (no retrasa la pantalla). */
+const hhmm = new Intl.DateTimeFormat("es-ES", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Madrid" });
+
+/**
+ * Aviso de convocatoria a cada trabajador, después de responder (no retrasa la pantalla). Se apunta
+ * en cada convocatoria a qué móviles salió el aviso (o por qué no) para verlo en el evento.
+ */
 export function notifyInvited(event: EventInfo, invited: { workerId: string; role: string }[]) {
   if (!invited.length) return;
   after(async () => {
     for (const role of ROLES) {
       const ids = invited.filter((i) => i.role === role).map((i) => i.workerId);
-      await notify({
+      if (!ids.length) continue;
+      const r = await notify({
         workerIds: ids,
         workerUrl: `/app/eventos/${event.id}`,
         title: "Nueva convocatoria",
         body: `${event.name} · ${formatDate(event.date)} a las ${callTime(event, role)} (${ROLE_LABEL[role].toLowerCase()}). Toca para aceptar o rechazar.`,
         tag: `inv-${event.id}`,
         emailFallback: true,
+      }).catch((e) => {
+        console.error("aviso convocatoria", e);
+        return { sent: [], emailed: [] as string[] };
       });
+      const now = new Date();
+      for (const workerId of ids) {
+        const mine = r.sent.filter((x) => x.device.workerId === workerId);
+        const okTo = mine.filter((x) => x.ok).map((x) => x.device.label ?? "móvil");
+        const errors = mine.filter((x) => !x.ok).map((x) => `${x.device.label ?? "móvil"}: ${x.error}`);
+        const parts = [
+          okTo.length && `✓ Aviso enviado a ${okTo.join(", ")} (${hhmm.format(now)})`,
+          errors.length && `✗ ${errors.join(" · ")}`,
+          !mine.length && "🔕 Sin móvil con avisos activados",
+          r.emailed.includes(workerId) && "✉ enviado por email",
+        ].filter(Boolean);
+        await db.assignment.updateMany({
+          where: { eventId: event.id, workerId },
+          data: { notice: parts.join(" · ").slice(0, 500), noticeOk: okTo.length > 0, noticeAt: now },
+        });
+      }
     }
   });
 }

@@ -216,8 +216,11 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
                   <li key={a.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
                     <span className="mr-auto">
                       <Link href={`/admin/personal/${a.workerId}`} className="link">{a.worker.name}</Link>
-                      {a.worker._count.devices === 0 && (
+                      {a.worker._count.devices === 0 && !a.notice && (
                         <span className="ml-1 text-xs text-amber-700" title="No ha activado los avisos de la app en ningún móvil: no le llegan las notificaciones">🔕 sin avisos</span>
+                      )}
+                      {a.notice && a.status !== "CONFIRMADO" && (
+                        <span className={`block text-xs ${a.noticeOk ? "text-emerald-700" : "text-amber-700"}`} title="Resultado del aviso de la convocatoria">{a.notice}</span>
                       )}
                     </span>
                     {a.status === "CONVOCADO" && (() => {
