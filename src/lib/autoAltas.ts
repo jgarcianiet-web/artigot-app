@@ -151,6 +151,27 @@ export async function syncAutoEmployments(opts: { actor?: string } = {}) {
   );
 }
 
+// ---------- Movimientos para el cuadrante y los eventos ----------
+
+export type Movement = { alta: boolean; sigue: boolean };
+
+/**
+ * ALTA / SIGUE / BAJA de cada extra confirmado en cada día del periodo, calculado igual que las
+ * altas automáticas (clave «workerId|fecha»). Así el cuadrante y cada evento enseñan lo mismo que
+ * Altas y bajas sin tener que ir allí.
+ */
+export async function movementsBetween(from: string, to: string) {
+  const work = await workDays(addDays(from, -1), addDays(to, 1));
+  const out = new Map<string, Movement>();
+  for (const [workerId, days] of work) {
+    for (const d of days.keys()) {
+      if (d < from || d > to) continue;
+      out.set(`${workerId}|${d}`, { alta: !days.has(addDays(d, -1)), sigue: days.has(addDays(d, 1)) });
+    }
+  }
+  return out;
+}
+
 // ---------- Vista día a día ----------
 
 export type DayRow = {

@@ -2,19 +2,15 @@
 
 import { useActionState } from "react";
 import { ActionForm, SubmitButton } from "@/components/client";
+import { type PickerWorker, WorkerPicker } from "@/components/WorkerPicker";
 import { CONTRACT_TYPES, END_REASONS } from "@/lib/employmentTypes";
 import { endEmployment, importEmployments, saveEmployment } from "./actions";
 
-export function EmploymentForm({ workers, defaultWorkerId }: { workers: { id: string; name: string }[]; defaultWorkerId?: string }) {
+export function EmploymentForm({ workers, defaultWorkerId }: { workers: PickerWorker[]; defaultWorkerId?: string }) {
   const [msg, run] = useActionState(saveEmployment, null);
   return (
     <ActionForm action={run} className="grid gap-3 sm:grid-cols-3">
-      <label className="text-sm sm:col-span-3">Persona
-        <select name="workerId" className="input mt-1" defaultValue={defaultWorkerId ?? ""} required>
-          <option value="">Elige…</option>
-          {workers.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-        </select>
-      </label>
+      <div className="text-sm sm:col-span-3">Persona<WorkerPicker workers={workers} defaultId={defaultWorkerId} required /></div>
       <label className="text-sm">Fecha de alta<input name="startDate" type="date" className="input mt-1" required /></label>
       <label className="text-sm">Fecha de baja prevista (opcional)<input name="endDate" type="date" className="input mt-1" /></label>
       <label className="text-sm">Tipo de contrato

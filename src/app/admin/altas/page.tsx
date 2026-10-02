@@ -50,7 +50,7 @@ export default async function Employments({ searchParams }: { searchParams: Prom
       orderBy: [{ startDate: "desc" }, { worker: { name: "asc" } }],
       take: 500,
     }),
-    db.worker.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    db.worker.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, dni: true, phone: true, zone: true } }),
     missingAltas(t, 14),
   ]);
   const byEvent = new Map<string, { event: (typeof missing)[number]["event"]; names: string[] }>();
@@ -99,7 +99,7 @@ export default async function Employments({ searchParams }: { searchParams: Prom
       )}
 
       <details className="card">
-        <summary className="cursor-pointer font-semibold">+ Nueva alta</summary>
+        <summary className="cursor-pointer font-semibold">+ Alta a mano <span className="text-sm font-normal text-stone-500">(solo para excepciones: las de los eventos se hacen solas)</span></summary>
         <div className="pt-3"><EmploymentForm workers={workers} /></div>
       </details>
 

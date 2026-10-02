@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import { db } from "./db";
 import { addDays, callTime, clocksIn, costHours, hoursBetween, isFixed, payable, rateFor, ROLE_LABEL, type Role } from "./domain";
+import { movementsBetween } from "./autoAltas";
 import { monthRange } from "./payroll";
 
 /**
@@ -20,6 +21,8 @@ export type ScheduleStaff = {
   time: string;
   clocked: boolean;
   amount: number;
+  /** Seguridad Social de los extras confirmados: alta ese día, sigue al día siguiente o baja */
+  ss?: "ALTA" | "BAJA" | "ALTA_BAJA" | "CONTINUA";
 };
 export type ScheduleEvent = { id: string; name: string; venue: string; type: string; status: string; time: string; staff: ScheduleStaff[]; total: number; confirmed: number; needed: number; draft?: boolean };
 
@@ -31,7 +34,7 @@ export function weekStart(date: string) {
 
 export async function weekSchedule(monday: string) {
   const sunday = addDays(monday, 6);
-  const [events, rates, drafts] = await Promise.all([
+  const [events, rates, drafts, moves] = await Promise.all([
     db.event.findMany({
       where: { date: { gte: monday, lte: sunday } },
       include: {
@@ -44,7 +47,13 @@ export async function weekSchedule(monday: string) {
     }),
     db.rate.findMany(),
     db.eventDraft.findMany({ where: { date: { gte: monday, lte: sunday } }, orderBy: { createdAt: "asc" } }),
+    movementsBetween(monday, sunday),
   ]);
+  const ssOf = (workerId: string, date: string): ScheduleStaff["ss"] => {
+    const m = moves.get(`${workerId}|${date}`);
+    if (!m) return undefined;
+    return m.alta ? (m.sigue ? "ALTA" : "ALTA_BAJA") : m.sigue ? "CONTINUA" : "BAJA";
+  };
   // Borradores: el personal previsto, con su importe según el horario del borrador
   const draftWorkers = await db.worker.findMany({
     where: { id: { in: drafts.flatMap((d) => (d.staff as { workerId: string }[]).map((x) => x.workerId)) } },
@@ -76,6 +85,11 @@ export async function weekSchedule(monday: string) {
   const order = (r: string) => ["MAITRE", "RESPONSABLE", "CAMARERO", "MOZO"].indexOf(r);
   const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i)).map((date) => ({
     date,
+    // Movimientos del día para la Seguridad Social (una persona cuenta una vez aunque tenga dos eventos)
+    ss: [...moves.entries()].filter(([k]) => k.endsWith(`|${date}`)).reduce(
+      (c, [, m]) => ({ altas: c.altas + Number(m.alta), bajas: c.bajas + Number(!m.sigue), siguen: c.siguen + Number(m.sigue) }),
+      { altas: 0, bajas: 0, siguen: 0 },
+    ),
     events: events
       .filter((e) => e.date === date)
       .map((e): ScheduleEvent => {
@@ -89,6 +103,7 @@ export async function weekSchedule(monday: string) {
               time: clocked ? `${a.checkIn}/${a.checkOut ?? "…"}` : `${call}/${e.endTime ?? "CIERRE"}`,
               clocked,
               amount: payable(hours, rateFor(rates, a.role, e.type, a.worker.customRates)).amount,
+              ss: a.status === "CONFIRMADO" ? ssOf(a.workerId, e.date) : undefined,
             };
           })
           .sort((x, y) => order(x.role) - order(y.role) || x.name.localeCompare(y.name, "es"));
