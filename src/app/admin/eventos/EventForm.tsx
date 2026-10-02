@@ -43,6 +43,7 @@ export function EventForm({
   salesReps = [],
   radius,
   defaultDate,
+  draft,
 }: {
   event?: Event;
   /** Valores iniciales de un evento nuevo (p. ej. desde una plantilla) */
@@ -52,8 +53,10 @@ export function EventForm({
   salesReps?: string[];
   radius: number;
   defaultDate?: string;
+  /** Borrador del cuadrante: se guarda sin crear el evento ni avisar a nadie */
+  draft?: { id?: string; action: (prev: string | null, form: FormData) => Promise<string | null> };
 }) {
-  const [error, action] = useActionState(saveEvent, null);
+  const [error, action] = useActionState(draft?.action ?? saveEvent, null);
   const v = { ...defaults, ...event };
   const [venueId, setVenueId] = useState(v.venueId ?? "");
   const [venueName, setVenueName] = useState(v.venue ?? "");
@@ -66,8 +69,9 @@ export function EventForm({
   const [pickerKey, setPickerKey] = useState(0);
 
   return (
-    <ActionForm action={action} className="card max-w-3xl space-y-5">
-      {event && <input type="hidden" name="id" value={event.id} />}
+    <ActionForm action={action} className="card max-w-3xl space-y-5" noValidate={!!draft}>
+      {event && !draft && <input type="hidden" name="id" value={event.id} />}
+      {draft?.id && <input type="hidden" name="draftId" value={draft.id} />}
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="sm:col-span-2">
           <label className="label">Nombre del evento</label>
@@ -236,7 +240,7 @@ export function EventForm({
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <SubmitButton>{event ? "Guardar cambios" : "Crear evento"}</SubmitButton>
+      <SubmitButton>{draft ? "Guardar borrador" : event ? "Guardar cambios" : "Crear evento"}</SubmitButton>
     </ActionForm>
   );
 }

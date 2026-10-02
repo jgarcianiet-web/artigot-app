@@ -21,7 +21,7 @@ export type ScheduleStaff = {
   clocked: boolean;
   amount: number;
 };
-export type ScheduleEvent = { id: string; name: string; venue: string; type: string; status: string; time: string; staff: ScheduleStaff[]; total: number; confirmed: number; needed: number };
+export type ScheduleEvent = { id: string; name: string; venue: string; type: string; status: string; time: string; staff: ScheduleStaff[]; total: number; confirmed: number; needed: number; draft?: boolean };
 
 /** Lunes de la semana de una fecha. */
 export function weekStart(date: string) {
@@ -31,7 +31,7 @@ export function weekStart(date: string) {
 
 export async function weekSchedule(monday: string) {
   const sunday = addDays(monday, 6);
-  const [events, rates] = await Promise.all([
+  const [events, rates, drafts] = await Promise.all([
     db.event.findMany({
       where: { date: { gte: monday, lte: sunday } },
       include: {
@@ -43,7 +43,36 @@ export async function weekSchedule(monday: string) {
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
     }),
     db.rate.findMany(),
+    db.eventDraft.findMany({ where: { date: { gte: monday, lte: sunday } }, orderBy: { createdAt: "asc" } }),
   ]);
+  // Borradores: el personal previsto, con su importe según el horario del borrador
+  const draftWorkers = await db.worker.findMany({
+    where: { id: { in: drafts.flatMap((d) => (d.staff as { workerId: string }[]).map((x) => x.workerId)) } },
+    select: { id: true, name: true, customRates: true, contractCode: true },
+  });
+  const dw = new Map(draftWorkers.map((w) => [w.id, w]));
+  const draftEvents = drafts.map((d): ScheduleEvent & { date: string; startTime: string } => {
+    const f = d.form as Record<string, string>;
+    const ev = { startTime: f.startTime || "00:00", endTime: f.endTime || null, unloadTime: f.unloadTime || null, type: f.type || "EVENTO" };
+    const staff = (d.staff as { workerId: string; role: string }[])
+      .filter((x) => dw.has(x.workerId))
+      .map((x): ScheduleStaff => {
+        const w = dw.get(x.workerId)!;
+        const call = callTime(ev, x.role);
+        return {
+          assignmentId: `${d.id}-${x.workerId}`, workerId: x.workerId, name: w.name, role: x.role, status: "PREVISTO", fixed: isFixed(w),
+          time: `${call}/${ev.endTime ?? "CIERRE"}`, clocked: false,
+          amount: payable(hoursBetween(call, ev.endTime), rateFor(rates, x.role, ev.type, w.customRates)).amount,
+        };
+      });
+    const need = (k: string) => Number(f[k]) || 0;
+    return {
+      id: d.id, draft: true, date: d.date, startTime: ev.startTime, name: d.name, venue: f.venue || "", type: ev.type, status: "BORRADOR",
+      time: `${ev.startTime}${ev.endTime ? `–${ev.endTime}` : ""}`, staff,
+      total: Math.round(staff.reduce((s, x) => s + x.amount, 0) * 100) / 100,
+      confirmed: staff.length, needed: need("needCamareros") + need("needResponsables") + need("needMaitres") + need("needMozos"),
+    };
+  });
   const order = (r: string) => ["MAITRE", "RESPONSABLE", "CAMARERO", "MOZO"].indexOf(r);
   const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i)).map((date) => ({
     date,
@@ -70,7 +99,8 @@ export async function weekSchedule(monday: string) {
           confirmed: staff.filter((s) => s.status === "CONFIRMADO").length,
           needed: e.needCamareros + e.needResponsables + e.needMaitres + e.needMozos,
         };
-      }),
+      })
+      .concat(draftEvents.filter((x) => x.date === date).map(({ date: _d, startTime: _s, ...x }) => x)),
   }));
 
   // Recuento de fijos: la semana entera y el mes del domingo hasta el domingo (la semana puede
@@ -127,7 +157,7 @@ export async function scheduleWorkbook(s: Awaited<ReturnType<typeof weekSchedule
     for (const e of d.events) {
       ws.mergeCells(row, col, row, col + 3);
       const t = ws.getCell(row, col);
-      t.value = `${e.name.toUpperCase()}${e.status === "CANCELADO" ? " (CANCELADO)" : ""}`;
+      t.value = `${e.name.toUpperCase()}${e.status === "CANCELADO" ? " (CANCELADO)" : e.draft ? " (BORRADOR)" : ""}`;
       t.font = { bold: true };
       t.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFDE68A" } };
       t.alignment = { horizontal: "center" };

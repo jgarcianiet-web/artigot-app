@@ -24,7 +24,7 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
         <a href={`/admin/cuadrante/excel?semana=${monday}`} className="btn btn-primary">⬇ Excel</a>
       </div>
       <p className="text-sm text-stone-500">
-        Se rellena solo con los eventos y el personal convocado: <span className="italic text-stone-400">en gris</span> quien aún no ha confirmado; <span className="rounded bg-sky-100 px-1 text-sky-800">F</span> los fijos. Horario: citación/fin (o lo fichado). Importe según su tarifa.
+        Con «+ Borrador» preparas un evento y su personal sin avisar a nadie; al confirmarlo se crea en Eventos y se manda la convocatoria. <span className="italic text-stone-400">En gris</span> quien aún no ha confirmado; <span className="rounded bg-sky-100 px-1 text-sky-800">F</span> los fijos. Horario: citación/fin (o lo fichado). Importe según su tarifa.
       </p>
       <div className="grid grid-cols-3 gap-3 sm:max-w-xl">
         <div className="card p-3"><div className="text-2xl font-semibold">{services}</div><div className="text-xs text-stone-500">Servicios</div></div>
@@ -37,14 +37,25 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
           {s.days.map((d) => (
             <section key={d.date} className="min-w-0 space-y-2">
               <h2 className={`rounded-md px-2 py-1 text-center text-xs font-semibold tracking-wide ${d.date === t ? "bg-brand-600 text-white" : "bg-stone-800 text-white"}`}>{dayLabel(d.date)}</h2>
+              {d.date >= t && (
+                <Link href={`/admin/cuadrante/borrador/nuevo?fecha=${d.date}`} className="block rounded-md border border-dashed border-stone-300 py-1 text-center text-xs text-stone-500 hover:border-stone-500 hover:text-stone-800">
+                  + Borrador
+                </Link>
+              )}
               {d.events.length === 0 && <p className="py-2 text-center text-xs text-stone-400">—</p>}
               {d.events.map((e) => (
-                <article key={e.id} className={`card space-y-1 p-2 ${e.status === "CANCELADO" ? "opacity-50" : ""}`}>
-                  <Link href={`/admin/eventos/${e.id}`} className="block rounded bg-amber-100 px-1.5 py-1 text-center text-xs font-semibold uppercase text-amber-950 hover:bg-amber-200">
+                <article key={e.id} className={`card space-y-1 p-2 ${e.status === "CANCELADO" ? "opacity-50" : ""} ${e.draft ? "border-2 border-dashed border-amber-400 bg-amber-50/40" : ""}`}>
+                  {e.draft && <p className="text-center text-[10px] font-semibold tracking-wide text-amber-700">BORRADOR</p>}
+                  <Link href={e.draft ? `/admin/cuadrante/borrador/${e.id}` : `/admin/eventos/${e.id}`} className={`block rounded px-1.5 py-1 text-center text-xs font-semibold uppercase ${e.draft ? "bg-white text-amber-900 ring-1 ring-amber-300 hover:bg-amber-100" : "bg-amber-100 text-amber-950 hover:bg-amber-200"}`}>
                     {e.name}
                   </Link>
-                  <p className="truncate text-[11px] text-stone-500" title={e.venue}>{e.time} · {e.venue}</p>
-                  <p className={`text-[11px] ${e.confirmed < e.needed ? "font-medium text-red-700" : "text-emerald-700"}`}>{e.confirmed}/{e.needed} confirmados</p>
+                  <p className="truncate text-[11px] text-stone-500" title={e.venue}>{e.time}{e.venue && ` · ${e.venue}`}</p>
+                  <p className={`text-[11px] ${e.confirmed < e.needed ? "font-medium text-red-700" : "text-emerald-700"}`}>{e.confirmed}/{e.needed} {e.draft ? "previstos" : "confirmados"}</p>
+                  {e.draft && (
+                    <Link href={`/admin/cuadrante/borrador/${e.id}`} className="block rounded bg-amber-500 py-0.5 text-center text-[11px] font-medium text-white hover:bg-amber-600">
+                      Editar · confirmar
+                    </Link>
+                  )}
                   <ol className="divide-y divide-stone-100 text-xs">
                     {e.staff.map((p, i) => (
                       <li key={p.assignmentId} className={`flex items-baseline gap-1 py-0.5 ${p.status === "CONVOCADO" ? "italic text-stone-400" : ""}`} title={`${p.name} · ${p.time}${p.status === "CONVOCADO" ? " · pendiente de confirmar" : ""}`}>
