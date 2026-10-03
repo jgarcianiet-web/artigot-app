@@ -123,6 +123,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
           <Link href={`/admin/eventos/${event.id}/directo`} className="btn">🔴 En directo</Link>
           <Link href={`/admin/eventos/${event.id}/editar`} className="btn">Editar</Link>
           <SaveTemplate eventId={event.id} suggestion={`${EVENT_TYPE_LABEL[event.type]} ${event.needCamareros + event.needMaitres + event.needResponsables + event.needMozos} personas`} />
+          <Link href={`/admin/cuadrante/copiar?k=evento&id=${event.id}`} className="btn" title="Copiar a otro día (o varias semanas) como borrador del cuadrante">⧉ Copiar como borrador</Link>
           <form action={duplicateEvent.bind(null, event.id)}>
             <SubmitButton className="btn">Duplicar</SubmitButton>
           </form>

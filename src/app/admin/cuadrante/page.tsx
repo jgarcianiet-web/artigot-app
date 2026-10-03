@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { repeatWeek } from "@/app/actions";
+import { ConfirmButton } from "@/components/client";
 import { RoleBadge } from "@/components/ui";
 import { addDays, euro, today } from "@/lib/domain";
 import { syncAutoEmployments } from "@/lib/autoAltas";
@@ -12,7 +14,7 @@ const SS: Record<NonNullable<ScheduleStaff["ss"]>, { label: string; title: strin
 };
 
 /** Cuadrante semanal de RRHH: quién va a cada evento, con su horario y su importe, y el recuento de fijos. */
-export default async function Schedule({ searchParams }: { searchParams: Promise<{ semana?: string }> }) {
+export default async function Schedule({ searchParams }: { searchParams: Promise<{ semana?: string; repetida?: string }> }) {
   const sp = await searchParams;
   const t = today();
   const monday = weekStart(sp.semana && /^\d{4}-\d{2}-\d{2}$/.test(sp.semana) ? sp.semana : t);
@@ -31,8 +33,16 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
         <span className="min-w-44 text-center font-semibold">{weekLabel(monday)}</span>
         <Link href={`/admin/cuadrante?semana=${addDays(monday, 7)}`} className="btn" aria-label="Semana siguiente">›</Link>
         {weekStart(t) !== monday && <Link href="/admin/cuadrante" className="btn btn-sm">Esta semana</Link>}
+        <form action={repeatWeek.bind(null, monday)}>
+          <ConfirmButton message="¿Copiar todos los eventos y borradores de esta semana a la siguiente? Se crean como borradores, sin avisar a nadie." className="btn">⧉ Repetir semana</ConfirmButton>
+        </form>
         <a href={`/admin/cuadrante/excel?semana=${monday}`} className="btn btn-primary">⬇ Excel</a>
       </div>
+      {sp.repetida != null && (
+        <p className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900">
+          {Number(sp.repetida) ? `✓ Semana repetida: ${sp.repetida} borradores en esta semana. Revísalos y confírmalos.` : "No había nada nuevo que copiar (ya estaba repetida)."}
+        </p>
+      )}
       <p className="text-sm text-stone-500">
         Con «+ Borrador» preparas un evento y su personal sin avisar a nadie; al confirmarlo se crea en Eventos y se manda la convocatoria. <span className="italic text-stone-400">En gris</span> quien aún no ha confirmado; <span className="rounded bg-sky-100 px-1 text-sky-800">F</span> los fijos. Seguridad Social de los extras confirmados (se calcula sola):{" "}
         <span className="rounded bg-emerald-600 px-1 text-white">A</span> alta, <span className="rounded bg-sky-600 px-1 text-white">S</span> sigue, <span className="rounded bg-red-600 px-1 text-white">B</span> baja.
@@ -91,7 +101,10 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
                       </li>
                     ))}
                   </ol>
-                  {e.staff.length > 0 && <p className="border-t border-stone-200 pt-1 text-right text-[11px] font-medium">{euro(e.total)}</p>}
+                  <div className="flex items-center justify-between border-t border-stone-200 pt-1 text-[11px]">
+                    <Link href={`/admin/cuadrante/copiar?k=${e.draft ? "borrador" : "evento"}&id=${e.id}`} className="text-stone-500 hover:text-stone-900" title="Copiar a otro día como borrador">⧉ Copiar</Link>
+                    {e.staff.length > 0 && <span className="font-medium">{euro(e.total)}</span>}
+                  </div>
                 </article>
               ))}
             </section>
