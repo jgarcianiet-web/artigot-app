@@ -1149,7 +1149,11 @@ export async function copyToDraft(kind: string, id: string, _prev: string | null
   if (!/^\d{4}-\d{2}-\d{2}$/.test(first)) return "Elige el día.";
   const weeks = Math.min(12, Math.max(1, Number(form.get("weeks")) || 1));
   const withStaff = form.get("staff") === "1";
-  const dates = Array.from({ length: weeks }, (_, i) => addDays(first, i * 7));
+  const all = Array.from({ length: weeks }, (_, i) => addDays(first, i * 7));
+  // Donde ya hay un borrador igual (p. ej. de «Repetir semana») no se vuelve a crear
+  const taken = new Set((await db.eventDraft.findMany({ where: { name: src.name, date: { in: all } }, select: { date: true } })).map((d) => d.date));
+  const dates = all.filter((d) => !taken.has(d));
+  if (!dates.length) return "Ya hay un borrador igual en esos días.";
   let lastId = "";
   for (const date of dates) {
     const d = await db.eventDraft.create({ data: { name: src.name, date, form: { ...src.form, date }, staff: withStaff ? src.staff : [], createdBy: by } });
