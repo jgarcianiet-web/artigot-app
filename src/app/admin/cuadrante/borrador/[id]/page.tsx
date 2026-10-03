@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { addDraftStaff, confirmDraft, deleteDraft, removeDraftStaff, saveDraft } from "@/app/actions";
+import { addDraftStaff, confirmDraft, copyToDraft, deleteDraft, removeDraftStaff, saveDraft } from "@/app/actions";
+import { CopyForm } from "@/components/CopyForm";
 import { EventForm } from "@/app/admin/eventos/EventForm";
 import { ConfirmButton, ListFilter, SelectAll, SubmitButton } from "@/components/client";
 import { RoleBadge } from "@/components/ui";
 import { eventFormOptions } from "@/lib/catalog";
 import { CLOCK_RADIUS_M } from "@/lib/clockRules";
 import { db } from "@/lib/db";
-import { euro, formatDate, isFixed, isRole, payable, rateFor, hoursBetween, callTime, ROLE_LABEL, ROLE_PLURAL, ROLES, type Role } from "@/lib/domain";
+import { addDays, euro, formatDate, isFixed, isRole, payable, rateFor, hoursBetween, callTime, ROLE_LABEL, ROLE_PLURAL, ROLES, type Role } from "@/lib/domain";
 import { ConfirmDraft } from "./ConfirmDraft";
 
 type Staff = { workerId: string; role: Role }[];
@@ -63,6 +64,10 @@ export default async function Draft({ params, searchParams }: { params: Promise<
         </div>
       </div>
       {ok && <p className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900">✓ Borrador guardado.</p>}
+      <details className="card">
+        <summary className="cursor-pointer text-sm font-semibold">⧉ Copiar a otro día</summary>
+        <div className="pt-3"><CopyForm action={copyToDraft.bind(null, "borrador", d.id)} defaultDate={addDays(ev.date, 7)} hasStaff={staff.length > 0} /></div>
+      </details>
 
       <section className="card space-y-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">

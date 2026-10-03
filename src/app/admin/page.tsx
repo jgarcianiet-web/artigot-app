@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { addDays, EVENT_TYPE_LABEL, formatDate, ROLE_PLURAL, today } from "@/lib/domain";
 import { coverage } from "@/lib/staffing";
 import { DOC_LABEL, DOC_WARN_DAYS } from "@/lib/staff";
-import { missingAltas, unreported } from "@/lib/employment";
+import { todayTasks } from "@/lib/todayTasks";
 import { syncAutoEmployments } from "@/lib/autoAltas";
 import { incompleteWorkers } from "@/lib/completeness";
 
@@ -28,9 +28,8 @@ export default async function Dashboard() {
     }),
   ]);
 
-  const [noAlta, notReported, incomplete, docsPending] = await Promise.all([
-    missingAltas(t, 7),
-    unreported(),
+  const [tasks, incomplete, docsPending] = await Promise.all([
+    todayTasks(t),
     incompleteWorkers(),
     db.workerDocument.count({ where: { verified: false, worker: { active: true } } }),
   ]);
@@ -61,6 +60,28 @@ export default async function Dashboard() {
         </div>
       </div>
 
+      <section className="space-y-2">
+        <h2>✅ Tareas de hoy</h2>
+        {tasks.length === 0 ? (
+          <p className="card text-sm text-emerald-800">Todo al día. No hay nada pendiente.</p>
+        ) : (
+          <ul className="card divide-y divide-stone-100 p-0">
+            {tasks.map((x) => (
+              <li key={x.key}>
+                <Link href={x.href} className="flex items-center gap-3 px-3 py-2.5 hover:bg-stone-50">
+                  <span className={`flex size-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${x.urgent ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>{x.n}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium">{x.text}</span>
+                    {x.detail && <span className="block truncate text-xs text-stone-500">{x.detail}</span>}
+                  </span>
+                  <span className="text-stone-400">›</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         {stats.map((s) => {
           const body = (
@@ -90,24 +111,6 @@ export default async function Dashboard() {
                 <Link href="/admin/personal?incompletos=1" className="link">{incomplete.length} {incomplete.length === 1 ? "persona" : "personas"} con datos o documentos incompletos</Link>
                 {incompleteSoon.length > 0 && <span className="font-medium text-red-700">, {incompleteSoon.length} con servicio en los próximos 7 días: {incompleteSoon.map((w) => w.name).join(", ")}</span>}
                 . Se les recuerda automáticamente.
-              </p>
-            )}
-          </div>
-        </section>
-      )}
-
-      {(noAlta.length > 0 || notReported.altas + notReported.bajas > 0) && (
-        <section className="space-y-2">
-          <h2>🪪 Altas y bajas</h2>
-          <div className={`card space-y-1 text-sm ${noAlta.length ? "border-red-300 bg-red-50" : ""}`}>
-            {noAlta.length > 0 && (
-              <p>
-                <Link href="/admin/altas" className="link font-medium text-red-700">{noAlta.length} {noAlta.length === 1 ? "persona convocada" : "personas convocadas"} sin alta</Link> en los próximos 7 días.
-              </p>
-            )}
-            {notReported.altas + notReported.bajas > 0 && (
-              <p>
-                <Link href="/admin/altas?ver=sin-comunicar" className="link">{notReported.altas} altas y {notReported.bajas} bajas</Link> sin comunicar a la Seguridad Social.
               </p>
             )}
           </div>
