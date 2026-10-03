@@ -49,6 +49,7 @@ export default async function StaffList({
         <h1>Personal</h1>
         <div className="flex flex-wrap gap-2">
           {repeated > 0 && <Link href="/admin/personal/repetidos" className="btn border-amber-300 bg-amber-50 text-amber-900">⚠ {repeated} {repeated === 1 ? "persona repetida" : "personas repetidas"}</Link>}
+          {noPush > 0 && <Link href="/admin/personal/avisos" className="btn">🔕 Pedir avisos ({noPush})</Link>}
           <Link href="/admin/personal/importar" className="btn">Importar Excel</Link>
           <a href="/admin/personal/exportar" className="btn">Exportar códigos</a>
           <Link href="/admin/personal/nuevo" className="btn btn-primary">+ Nuevo trabajador</Link>

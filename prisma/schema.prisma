@@ -51,6 +51,8 @@ model Worker {
   // Tipo de contrato en A3: 300 (o vacío) = extra fijo discontinuo, cobra por horas y lleva altas y
   // bajas por actividad; 100 / 200 = fijo con nómina mensual (sus horas solo se controlan)
   contractCode    String?
+  // Cuándo se le pidió por WhatsApp que activara los avisos de la app
+  pushAskedAt     DateTime?
   // Fijo que no ficha ni cuenta horas (p. ej. maître fijo)
   noClock         Boolean          @default(false)
   // Nómina mensual de un fijo (€): sus servicios valorados con su tarifa se comparan con ella y lo

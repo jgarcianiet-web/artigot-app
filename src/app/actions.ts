@@ -1163,3 +1163,9 @@ export async function repeatWeek(monday: string) {
   revalidatePath("/admin/cuadrante", "layout");
   redirect(`/admin/cuadrante?semana=${addDays(monday, 7)}&repetida=${items.length}`);
 }
+
+/** Apunta que se le ha pedido por WhatsApp que active los avisos. */
+export async function markPushAsked(workerId: string) {
+  await requireAdmin();
+  await db.worker.update({ where: { id: workerId }, data: { pushAskedAt: new Date() } });
+}
