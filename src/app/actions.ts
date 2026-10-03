@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { testPush } from "@/lib/push";
 import { mergeWorkers } from "@/lib/mergeWorkers";
+import { saveConvocationSettings } from "@/lib/convocation";
 import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -1084,4 +1085,17 @@ export async function confirmDraft(draftId: string, _prev: string | null): Promi
 export async function testWorkerPush(workerId: string) {
   await requireAdmin();
   return testPush({ workerId });
+}
+
+// ---------- Convocatorias sin respuesta ----------
+
+export async function saveConvocationAction(_prev: string | null, form: FormData) {
+  const by = await requireAdmin();
+  const n = (k: string, max: number) => Math.min(max, Math.max(1, Math.round(Number(form.get(k)) || 0)));
+  const value = { remindHours: n("remindHours", 168), rrhhHours: n("rrhhHours", 168), replace: form.get("replace") === "1", replaceHours: n("replaceHours", 336) };
+  if (value.replace && value.replaceHours <= value.remindHours) return "Pasar al siguiente tiene que ser más tarde que el recordatorio al trabajador.";
+  await saveConvocationSettings(value);
+  await auditAdmin(by, "Ajustes", "Convocatorias", `Recordatorio a las ${value.remindHours} h, aviso a RRHH a las ${value.rrhhHours} h, ${value.replace ? `pasar al siguiente a las ${value.replaceHours} h` : "sin pasar al siguiente"}`);
+  revalidatePath("/admin/ajustes/convocatorias");
+  return "Guardado.";
 }

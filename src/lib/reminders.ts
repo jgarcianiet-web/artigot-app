@@ -13,16 +13,14 @@ import { backupNow } from "./backup";
 import { syncAutoEmployments } from "./autoAltas";
 import { migrateFilesToStorage, sweepOrphanFiles } from "./files";
 import { storageEnabled } from "./storage";
+import { getConvocationSettings } from "./convocation";
+import { autoReplace } from "./staffing";
 
 /**
  * Avisos automáticos. Se comprueban cada pocos minutos; cada aviso se registra en ReminderLog
  * con una clave única, así que nunca se envía dos veces (ni con varios servidores a la vez).
  */
 export const REMINDERS = {
-  /** Horas sin responder a una convocatoria hasta recordárselo al trabajador */
-  PENDING_WORKER_H: 12,
-  /** Horas sin responder hasta avisar a RRHH */
-  PENDING_RRHH_H: 24,
   /** Hora (Madrid) del día anterior a partir de la que se envía el recordatorio del evento */
   DAY_BEFORE_HOUR: "17:00",
   /** Minutos tras la citación sin fichar para avisar de un posible retraso */
@@ -57,24 +55,48 @@ export async function runReminders(now = new Date()) {
   const sent: string[] = [];
   const hours = (ms: number) => ms / 3_600_000;
 
-  // 1. Convocatorias sin responder: recordatorio al trabajador y, más tarde, aviso a RRHH
+  // 1. Convocatorias sin responder: recordatorio al trabajador, aviso a RRHH y, si sigue sin
+  //    contestar, se da por rechazada y se convoca al siguiente (se cuenta desde la última convocatoria)
+  const conv = await getConvocationSettings();
   const pending = await db.assignment.findMany({
     where: { status: "CONVOCADO", event: { date: { gte: today }, status: "ABIERTO" } },
     include: { event: true, worker: { select: { name: true } } },
   });
   for (const a of pending) {
-    const waited = hours(now.getTime() - a.createdAt.getTime());
-    if (waited >= REMINDERS.PENDING_WORKER_H && (await claim(`pendiente-trabajador:${a.id}`))) {
+    const since = a.noticeAt ?? a.createdAt;
+    const key = `${a.id}:${since.getTime()}`;
+    const waited = hours(now.getTime() - since.getTime());
+    if (conv.replace && a.event.autoReplace && waited >= conv.replaceHours) {
+      const r = await db.assignment.updateMany({
+        where: { id: a.id, status: "CONVOCADO" },
+        data: { status: "RECHAZADO", respondedAt: now, notes: `Sin respuesta en ${conv.replaceHours} h` },
+      });
+      if (r.count) {
+        await notify({
+          workerIds: [a.workerId],
+          workerUrl: "/app",
+          title: "Convocatoria caducada",
+          body: `No contestaste a ${a.event.name} (${formatDate(a.event.date)}) y se ha convocado a otra persona.`,
+          tag: `cad-${a.id}`,
+        });
+        await audit("Automático", "Sistema", "Convocatoria", "Sin respuesta", `${a.worker.name} no contestó a ${a.event.name} en ${conv.replaceHours} h: se pasa al siguiente`, { entityId: a.eventId });
+        await autoReplace(a.eventId, a.role as Role, `${a.worker.name} (no contestó)`);
+        sent.push(`sin-respuesta:${a.worker.name}`);
+      }
+      continue;
+    }
+    if (waited >= conv.remindHours && (await claim(`pendiente-trabajador:${key}`))) {
       await notify({
         workerIds: [a.workerId],
         workerUrl: `/app/eventos/${a.eventId}`,
         title: "Convocatoria pendiente",
-        body: `Aún no has respondido a ${a.event.name} (${formatDate(a.event.date)}). ¿Puedes ir?`,
+        body: `Aún no has respondido a ${a.event.name} (${formatDate(a.event.date)}). ¿Puedes ir?${conv.replace && a.event.autoReplace ? ` Si no contestas, pasará a otra persona.` : ""}`,
         tag: `inv-${a.eventId}`,
+        emailFallback: true,
       });
       sent.push(`pendiente-trabajador:${a.worker.name}`);
     }
-    if (waited >= REMINDERS.PENDING_RRHH_H && (await claim(`pendiente-rrhh:${a.id}`))) {
+    if (waited >= conv.rrhhHours && (await claim(`pendiente-rrhh:${key}`))) {
       await notify({
         admins: true,
         adminUrl: `/admin/eventos/${a.eventId}`,
