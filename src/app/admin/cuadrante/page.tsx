@@ -53,10 +53,11 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
         <div className="card p-3"><div className="text-2xl font-semibold">{euro(total)}</div><div className="text-xs text-stone-500">Coste de personal</div></div>
       </div>
 
-      <div className="-mx-4 overflow-x-auto px-4 pb-2 lg:mx-0 lg:px-0">
-        <div className="grid min-w-[1100px] grid-cols-7 gap-2">
+      {/* En el móvil, un día debajo de otro; en el ordenador, la semana en 7 columnas */}
+      <div className="lg:overflow-x-auto lg:pb-2">
+        <div className="grid gap-4 sm:grid-cols-2 lg:min-w-[1100px] lg:grid-cols-7 lg:gap-2">
           {s.days.map((d) => (
-            <section key={d.date} className="min-w-0 space-y-2">
+            <section key={d.date} id={`dia-${d.date}`} className={`min-w-0 space-y-2 ${d.events.length === 0 && d.date < t ? "max-lg:hidden" : ""}`}>
               <h2 className={`rounded-md px-2 py-1 text-center text-xs font-semibold tracking-wide ${d.date === t ? "bg-brand-600 text-white" : "bg-stone-800 text-white"}`}>{dayLabel(d.date)}</h2>
               {(d.ss.altas > 0 || d.ss.bajas > 0) && (
                 <Link href={`/admin/altas?dia=${d.date}`} className="block rounded-md bg-stone-100 px-1 py-0.5 text-center text-[11px] text-stone-700 hover:bg-stone-200" title="Ver y descargar los Excel de altas y bajas de este día">

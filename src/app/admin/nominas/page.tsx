@@ -4,6 +4,8 @@ import { monthBounds, monthLlamamientos } from "@/lib/a3nominas";
 import { syncAutoEmployments } from "@/lib/autoAltas";
 import { euro, formatDate, num, today } from "@/lib/domain";
 import { DownloadNominas } from "./DownloadNominas";
+import { UploadPayslips } from "./UploadPayslips";
+import { db } from "@/lib/db";
 
 /** Nóminas de los extras del mes para A3: 4 Excel con una fila por llamamiento. */
 export default async function Nominas({ searchParams }: { searchParams: Promise<{ mes?: string }> }) {
@@ -18,6 +20,17 @@ export default async function Nominas({ searchParams }: { searchParams: Promise<
   const monthName = new Intl.DateTimeFormat("es-ES", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(y, m - 1, 1)));
   const people = new Set(llamamientos.map((l) => l.workerId)).size;
   const total = llamamientos.reduce((s, l) => s + l.net, 0);
+  // Cuadre: líquido que calculó la app (lo que se mandó a A3) frente al que sale en las nóminas de A3
+  const slips = await db.payslip.findMany({ where: { month }, include: { worker: { select: { name: true } } } });
+  const slipBy = new Map(slips.map((p) => [p.workerId, p]));
+  const appBy = new Map<string, { name: string; net: number }>();
+  for (const l of llamamientos) appBy.set(l.workerId, { name: l.name, net: (appBy.get(l.workerId)?.net ?? 0) + l.net });
+  const check = [...appBy].map(([workerId, a]) => {
+    const p = slipBy.get(workerId);
+    const diff = p?.net != null ? Math.round((p.net - a.net) * 100) / 100 : null;
+    return { workerId, name: a.name, app: a.net, a3: p?.net ?? null, has: !!p, diff };
+  });
+  const wrong = check.filter((c) => !c.has || c.a3 == null || Math.abs(c.diff ?? 0) >= 0.01).sort((x, y) => Math.abs(y.diff ?? 1e9) - Math.abs(x.diff ?? 1e9));
 
   return (
     <div className="space-y-4">
@@ -76,6 +89,42 @@ export default async function Nominas({ searchParams }: { searchParams: Promise<
           </div>
         </>
       )}
+      <section className="card space-y-2">
+        <h2 className="text-base">Después de calcular las nóminas en A3: repártelas y cuadra</h2>
+        <p className="text-sm text-stone-600">
+          Sube el PDF con todas las nóminas del mes que genera A3. La app lo separa por DNI, cada trabajador recibe las suyas en «Nómina» (con un
+          aviso) y se compara el líquido de cada nómina con el que calculó la app, para ver las diferencias antes de pagar.
+        </p>
+        <UploadPayslips month={month} />
+        {slips.length > 0 && (
+          <>
+            <p className="text-sm">
+              {slips.length} {slips.length === 1 ? "persona tiene" : "personas tienen"} su nómina de este mes en la app ·{" "}
+              {slips.filter((p) => p.seenAt).length} ya la {slips.filter((p) => p.seenAt).length === 1 ? "ha visto" : "han visto"}.
+            </p>
+            {wrong.length === 0 ? (
+              <p className="text-sm font-medium text-emerald-800">✓ Cuadra: el líquido de A3 coincide con el de la app en las {check.length} personas.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <p className="text-sm font-medium text-amber-800">⚠ {wrong.length} {wrong.length === 1 ? "persona no cuadra" : "personas no cuadran"}:</p>
+                <table className="table text-sm">
+                  <thead><tr><th>Persona</th><th className="text-right">Líquido app</th><th className="text-right">Líquido A3</th><th className="text-right">Diferencia</th></tr></thead>
+                  <tbody>
+                    {wrong.map((c) => (
+                      <tr key={c.workerId}>
+                        <td><Link href={`/admin/personal/${c.workerId}`} className="link">{c.name}</Link></td>
+                        <td className="text-right tabular-nums">{euro(c.app)}</td>
+                        <td className="text-right tabular-nums">{c.has ? (c.a3 != null ? euro(c.a3) : <span className="text-stone-400">no se ha podido leer</span>) : <span className="text-red-700">sin nómina en el PDF</span>}</td>
+                        <td className={`text-right tabular-nums ${c.diff ? "font-semibold text-red-700" : ""}`}>{c.diff != null ? `${c.diff > 0 ? "+" : ""}${euro(c.diff)}` : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+      </section>
     </div>
   );
 }

@@ -84,6 +84,7 @@ model Worker {
   payLines        PayLine[]
   employments     Employment[]
   pollAnswers     PollAnswer[]
+  payslips        Payslip[]
 }
 
 // Días en los que el trabajador no está disponible (fecha YYYY-MM-DD)
@@ -320,6 +321,7 @@ model StoredFile {
   document   WorkerDocument?
   candidate  Candidate?
   signatureOf Contract?
+  payslip    Payslip?
 }
 
 // Incidencia del evento. type: ROTURA | QUEJA | ACCIDENTE | PERSONAL | OTRO
@@ -582,9 +584,30 @@ model Remittance {
   total     Float
   execDate  String
   xml       String
+  // Personas incluidas en la transferencia (solo a ellas se les avisa del pago)
+  workerIds String[]  @default([])
   createdBy String
   createdAt DateTime  @default(now())
   period    PayPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+}
+
+// Nómina de A3 de un trabajador en un mes (sus páginas del PDF que calcula A3; todas las del mes juntas)
+model Payslip {
+  id        String    @id @default(cuid())
+  workerId  String
+  month     String
+  fileId    String    @unique
+  pages     Int
+  // Líquido a percibir leído del PDF (suma de sus nóminas del mes); null si no se ha podido leer
+  net       Float?
+  createdBy String
+  createdAt DateTime  @default(now())
+  seenAt    DateTime?
+  worker    Worker    @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  file      StoredFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@unique([workerId, month])
+  @@index([month])
 }
 
 // Altas y bajas en la Seguridad Social (sustituye al Excel de altas y bajas)

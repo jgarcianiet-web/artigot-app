@@ -50,7 +50,7 @@ export default async function NewEvent({ searchParams }: { searchParams: Promise
           <Link href="/admin/plantillas" className="text-sm text-stone-500 hover:underline">Gestionar plantillas</Link>
         </form>
       )}
-      <EventForm key={plantilla ?? "blank"} defaults={defaults} {...options} radius={CLOCK_RADIUS_M} defaultDate={date} />
+      <EventForm key={plantilla ?? "blank"} defaults={defaults} {...options} radius={CLOCK_RADIUS_M} defaultDate={date} templateId={t?.id} />
     </div>
   );
 }

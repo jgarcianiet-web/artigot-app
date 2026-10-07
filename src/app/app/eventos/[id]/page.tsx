@@ -11,7 +11,7 @@ import { reviewWindowOpen } from "@/lib/reviews";
 import { Checklist } from "@/components/StaffForms";
 import { checklistFor, getUniform } from "@/lib/staff";
 import { respond } from "../../actions";
-import { GROUP_WITH_LEAD } from "@/lib/groups";
+import { GROUP_WITH_LEAD, groupLine } from "@/lib/groups";
 import { acceptBlock } from "@/lib/convocation";
 import { Transport } from "./Transport";
 
@@ -36,8 +36,9 @@ export default async function WorkerEvent({ params }: { params: Promise<{ id: st
           <span>
             <span className="block font-semibold">{a.event.name}</span>
             <span className="text-sm text-stone-500 first-letter:uppercase">
-              {formatDate(a.event.date)} · citación {callTime(a.event, a.role)} · {a.event.venue}
+              {formatDate(a.event.date)} · citación {callTime(a.event, a.role, a.group)} · {a.event.venue}
             </span>
+            {a.group && <span className="block text-sm font-medium">{groupLine(a.group, a.event.startTime, a.role)}</span>}
           </span>
           <StatusBadge status={a.status} />
         </summary>

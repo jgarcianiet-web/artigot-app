@@ -15,6 +15,7 @@ import {
 import { ConfirmButton, ListFilter, SelectAll, SubmitButton } from "@/components/client";
 import { SaveTemplate } from "./SaveTemplate";
 import { TeamAltas } from "./TeamAltas";
+import { Groups } from "./Groups";
 import { budgetRows, pctText } from "@/lib/budget";
 import { AdminTransport } from "./Transport";
 import { CoverageBar, ScoreBadge, StatusBadge } from "@/components/ui";
@@ -39,7 +40,7 @@ import {
   costHours,
   today,
 } from "@/lib/domain";
-import { REVIEW_DAYS, reviewWindowOpen } from "@/lib/reviews";
+import { REVIEW_DAYS, reviewWindowOpen, teamOf } from "@/lib/reviews";
 import { CRITERIA, explainScore, reviewAverage } from "@/lib/scoring";
 import { candidatesFor, coverage, gaps } from "@/lib/staffing";
 
@@ -55,13 +56,28 @@ function ClockTag({ distance, accuracy, manual, offline }: { distance: number | 
 
 const STATUS_ORDER: Record<string, number> = { CONFIRMADO: 0, CONVOCADO: 1, RECHAZADO: 2, CANCELADO: 3 };
 
-export default async function EventDetail({ params }: { params: Promise<{ id: string }> }) {
+const TABS = [
+  { key: "equipo", label: "Equipo" },
+  { key: "grupos", label: "Grupos" },
+  { key: "horas", label: "Horas y coste" },
+  { key: "ss", label: "Seguridad Social" },
+  { key: "transporte", label: "Transporte" },
+] as const;
+type Tab = (typeof TABS)[number]["key"];
+
+export default async function EventDetail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {
   const adminName = await requireAdmin();
   const event = await db.event.findUnique({
     where: { id: (await params).id },
-    include: { assignments: { include: { worker: { include: { _count: { select: { devices: true } } } } }, orderBy: { worker: { name: "asc" } } } },
+    include: {
+      assignments: { include: { worker: { include: { _count: { select: { devices: true } } } }, group: true }, orderBy: { worker: { name: "asc" } } },
+      groups: { orderBy: { position: "asc" } },
+    },
   });
   if (!event) notFound();
+  const asked = (await searchParams).tab;
+  // Por defecto: el equipo hasta el día del evento; desde ese día, las horas
+  const tab: Tab = TABS.some((t) => t.key === asked) ? (asked as Tab) : event.date <= today() ? "horas" : "equipo";
 
   const [candidates, reviews, rates, unread] = await Promise.all([
     candidatesFor(event),
@@ -80,11 +96,11 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
     `Hola ${name.split(" ")[0]}, te convocamos para ${event.name} el ${formatDate(event.date, { long: true })} a las ${callTime(event, role)} en ${event.venue} (${ROLE_LABEL[role as Role]?.toLowerCase() ?? role}). Acepta o rechaza en la app: ${appUrl()}/app`;
   const pendingNoPush = event.assignments.filter((a) => a.status === "CONVOCADO" && a.worker._count.devices === 0);
   const maitres = confirmed.filter((a) => isLeadRole(a.role)); // maître o camarero responsable
-  const teamSize = confirmed.length - maitres.length;
-  const pendingReviewCount = maitres.reduce(
-    (n, m) => n + teamSize - reviews.filter((r) => r.reviewerId === m.workerId).length,
-    0,
-  );
+  // Cada maître o responsable valora a su equipo (con grupos, a su grupo)
+  const pendingReviewCount = maitres.reduce((n, m) => {
+    const done = new Set(reviews.filter((r) => r.reviewerId === m.workerId).map((r) => r.workerId));
+    return n + teamOf(confirmed, m.workerId).filter((a) => !done.has(a.workerId)).length;
+  }, 0);
 
 
   let totalHours = 0;
@@ -123,21 +139,26 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
           </Link>
           <Link href={`/admin/eventos/${event.id}/directo`} className="btn">🔴 En directo</Link>
           <Link href={`/admin/eventos/${event.id}/editar`} className="btn">Editar</Link>
-          <SaveTemplate eventId={event.id} suggestion={`${EVENT_TYPE_LABEL[event.type]} ${event.needCamareros + event.needMaitres + event.needResponsables + event.needMozos} personas`} />
-          <Link href={`/admin/cuadrante/copiar?k=evento&id=${event.id}`} className="btn" title="Copiar a otro día (o varias semanas) como borrador del cuadrante">⧉ Copiar como borrador</Link>
-          <form action={duplicateEvent.bind(null, event.id)}>
-            <SubmitButton className="btn">Duplicar</SubmitButton>
-          </form>
           <form action={setEventStatus.bind(null, event.id, event.status === "CERRADO" ? "ABIERTO" : "CERRADO")}>
             <SubmitButton className="btn">{event.status === "CERRADO" ? "Reabrir" : "Cerrar evento"}</SubmitButton>
           </form>
-          <form action={deleteEvent.bind(null, event.id)}>
-            <ConfirmButton message="¿Eliminar este evento y todas sus convocatorias?">Eliminar</ConfirmButton>
+          <details className="relative">
+            <summary className="btn cursor-pointer list-none">Más ▾</summary>
+            <div className="absolute right-0 z-20 mt-1 flex w-56 flex-col gap-2 rounded-xl border border-stone-200 bg-white p-2 shadow-lg">
+          <SaveTemplate eventId={event.id} suggestion={`${EVENT_TYPE_LABEL[event.type]} ${event.needCamareros + event.needMaitres + event.needResponsables + event.needMozos} personas`} />
+          <Link href={`/admin/cuadrante/copiar?k=evento&id=${event.id}`} className="btn" title="Copiar a otro día (o varias semanas) como borrador del cuadrante">⧉ Copiar como borrador</Link>
+          <form action={duplicateEvent.bind(null, event.id)}>
+            <SubmitButton className="btn w-full">Duplicar</SubmitButton>
           </form>
+          <form action={deleteEvent.bind(null, event.id)}>
+            <ConfirmButton message="¿Eliminar este evento y todas sus convocatorias?" className="btn btn-danger w-full">Eliminar</ConfirmButton>
+          </form>
+            </div>
+          </details>
         </div>
       </div>
 
-      {(() => {
+      {tab === "horas" && (() => {
         const b = budget;
         const color = b.deviation == null ? "" : b.deviation > 0 ? "text-red-700" : "text-emerald-700";
         return (
@@ -200,8 +221,29 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
         </p>
       </section>
 
+      <nav className="-mx-4 flex gap-1 overflow-x-auto border-b border-stone-200 px-4 lg:mx-0 lg:px-0" aria-label="Secciones del evento">
+        {TABS.map((t) => {
+          const n =
+            t.key === "grupos" ? event.groups.length : t.key === "equipo" ? event.assignments.filter((a) => a.status === "CONVOCADO" || a.status === "CONFIRMADO").length : 0;
+          return (
+            <Link
+              key={t.key}
+              href={`/admin/eventos/${event.id}?tab=${t.key}`}
+              scroll={false}
+              aria-current={tab === t.key ? "page" : undefined}
+              className={`shrink-0 border-b-2 px-3 py-2 text-sm whitespace-nowrap ${tab === t.key ? "border-stone-900 font-semibold text-stone-900" : "border-transparent text-stone-500 hover:text-stone-800"}`}
+            >
+              {t.label}
+              {n > 0 && <span className="ml-1 text-xs text-stone-400">{n}</span>}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {tab === "grupos" && <Groups event={event} groups={event.groups} members={event.assignments} />}
+
       {/* Por puesto */}
-      {ROLES.filter((role) => cov.find((c) => c.role === role)!.need > 0 || event.assignments.some((a) => a.role === role)).map((role) => {
+      {tab === "equipo" && ROLES.filter((role) => cov.find((c) => c.role === role)!.need > 0 || event.assignments.some((a) => a.role === role)).map((role) => {
         const assigned = event.assignments
           .filter((a) => a.role === role)
           .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]);
@@ -210,7 +252,10 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
           <section key={role} className="grid gap-4 lg:grid-cols-2">
             <div className="card space-y-2">
               <h2>
-                {ROLE_PLURAL[role]} convocados <span className="text-sm font-normal text-stone-500">· citación {callTime(event, role)}</span>
+                {ROLE_PLURAL[role]} convocados{" "}
+                <span className="text-sm font-normal text-stone-500">
+                  · citación {role !== "MOZO" && event.groups.length ? "la de su grupo" : callTime(event, role)}
+                </span>
               </h2>
               {assigned.length === 0 && <p className="text-sm text-stone-500">Nadie convocado todavía.</p>}
               <ul className="divide-y divide-stone-100">
@@ -218,6 +263,11 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
                   <li key={a.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
                     <span className="mr-auto">
                       <Link href={`/admin/personal/${a.workerId}`} className="link">{a.worker.name}</Link>
+                      {a.group && (
+                        <Link href={`/admin/eventos/${event.id}?tab=grupos`} className="ml-1 rounded bg-stone-100 px-1.5 text-[11px] text-stone-700" title={`Entrada ${a.group.callTime ?? event.startTime}`}>
+                          {a.group.name}
+                        </Link>
+                      )}
                       {a.worker._count.devices === 0 && !a.notice && (
                         <span className="ml-1 text-xs text-amber-700" title="No ha activado los avisos de la app en ningún móvil: no le llegan las notificaciones">🔕 sin avisos</span>
                       )}
@@ -319,7 +369,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
       })}
 
       {/* Valoraciones del maître / camarero responsable */}
-      {event.date <= today() && confirmed.some((a) => !isLeadRole(a.role)) && (
+      {tab === "horas" && event.date <= today() && confirmed.some((a) => !isLeadRole(a.role)) && (
         <section className="card space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2>Valoraciones del equipo</h2>
@@ -391,12 +441,16 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
         </section>
       )}
 
-      {confirmed.length > 0 && <AdminTransport eventId={event.id} meetingPoint={event.meetingPoint} meetingTime={event.meetingTime} />}
+      {tab === "transporte" && confirmed.length > 0 && <AdminTransport eventId={event.id} meetingPoint={event.meetingPoint} meetingTime={event.meetingTime} />}
 
-      {confirmed.length > 0 && <TeamAltas eventId={event.id} eventDate={event.date} confirmed={confirmed} />}
+      {tab === "ss" && confirmed.length > 0 && <TeamAltas eventId={event.id} eventDate={event.date} confirmed={confirmed} />}
+
+      {(tab === "transporte" || tab === "ss" || tab === "horas") && confirmed.length === 0 && (
+        <p className="card text-sm text-stone-500">Aún no hay personal confirmado.</p>
+      )}
 
       {/* Fichaje */}
-      {confirmed.length > 0 && (
+      {tab === "horas" && confirmed.length > 0 && (
         <form action={saveTimesheet.bind(null, event.id)} className="card space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2>Fichaje y horas</h2>
@@ -413,6 +467,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
                 <tr>
                   <th>Nombre</th>
                   <th>Puesto</th>
+                  {event.groups.length > 0 && <th>Grupo</th>}
                   <th>Entrada</th>
                   <th>Salida</th>
                   <th>Horas manuales</th>
@@ -421,7 +476,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
                 </tr>
               </thead>
               <tbody>
-                {confirmed.map((a) => {
+                {[...confirmed].sort((x, y) => (x.group?.position ?? 999) - (y.group?.position ?? 999)).map((a) => {
                   const h = costHours(a, a.worker, event);
                   const { billedHours, amount } = payable(h, rateFor(rates, a.role, event.type, a.worker.customRates));
                   totalHours += billedHours ?? 0;
@@ -430,6 +485,9 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
                     <tr key={a.id}>
                       <td className="whitespace-nowrap">{a.worker.name}</td>
                       <td>{ROLE_LABEL[a.role as keyof typeof ROLE_LABEL]}</td>
+                      {event.groups.length > 0 && (
+                        <td className="text-sm whitespace-nowrap">{a.group ? `${a.group.name} · ${a.group.callTime ?? event.startTime}` : "—"}</td>
+                      )}
                       <td>
                         <input type="time" name={`in_${a.id}`} defaultValue={a.checkIn ?? ""} className="input w-28" />
                         <ClockTag distance={a.checkInDistance} accuracy={a.checkInAccuracy} manual={a.checkInManual} offline={a.checkInOffline} />
@@ -455,7 +513,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
               </tbody>
               <tfoot>
                 <tr className="font-semibold">
-                  <td colSpan={5}>Total</td>
+                  <td colSpan={event.groups.length > 0 ? 6 : 5}>Total</td>
                   <td className="px-3 py-2 text-right">{num(totalHours)}</td>
                   <td className="px-3 py-2 text-right">{euro(totalCost)}</td>
                 </tr>

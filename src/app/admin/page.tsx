@@ -11,7 +11,7 @@ import { incompleteWorkers } from "@/lib/completeness";
 export default async function Dashboard() {
   const t = today();
   await syncAutoEmployments();
-  const [events, activeWorkers, pendingCount, openIncidents, docsToReview, docsExpiring] = await Promise.all([
+  const [events, activeWorkers, pendingCount, docsToReview, docsExpiring] = await Promise.all([
     db.event.findMany({
       where: { date: { gte: t, lte: addDays(t, 30) }, status: "ABIERTO" },
       include: { assignments: { select: { role: true, status: true } } },
@@ -19,7 +19,6 @@ export default async function Dashboard() {
     }),
     db.worker.count({ where: { active: true } }),
     db.assignment.count({ where: { status: "CONVOCADO", event: { date: { gte: t } } } }),
-    db.incident.count({ where: { resolved: false } }),
     db.workerDocument.findMany({ where: { verified: false, worker: { active: true } }, include: { worker: { select: { id: true, name: true } } } }),
     db.workerDocument.findMany({
       where: { expiresAt: { not: null, lte: addDays(t, DOC_WARN_DAYS) }, worker: { active: true } },
@@ -42,12 +41,12 @@ export default async function Dashboard() {
   });
   const urgent = rows.filter((r) => !r.complete && r.event.date <= addDays(t, 7));
 
+  // Lo que hay que hacer ya está en «Tareas de hoy»; aquí solo las cifras generales, cada una con su enlace
   const stats = [
-    { label: "Eventos próximos 30 días", value: events.length },
-    { label: "Con personal incompleto (7 días)", value: urgent.length, alert: urgent.length > 0 },
-    { label: "Respuestas pendientes", value: pendingCount },
-    { label: "Trabajadores activos", value: activeWorkers },
-    { label: "Incidencias abiertas", value: openIncidents, alert: openIncidents > 0, href: "/admin/incidencias" },
+    { label: "Eventos en los próximos 30 días", value: events.length, href: "/admin/eventos" },
+    { label: "Eventos sin cubrir en 7 días", value: urgent.length, alert: urgent.length > 0, href: "/admin/calendario" },
+    { label: "Convocados esperando respuesta", value: pendingCount, href: "/admin/calendario" },
+    { label: "Trabajadores activos", value: activeWorkers, href: "/admin/personal" },
   ];
 
   return (
@@ -82,21 +81,13 @@ export default async function Dashboard() {
         )}
       </section>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        {stats.map((s) => {
-          const body = (
-            <>
-              <div className={`text-3xl font-semibold ${s.alert ? "text-red-700" : ""}`}>{s.value}</div>
-              <div className="text-sm text-stone-500">{s.label}</div>
-            </>
-          );
-          const cls = `card block ${s.alert ? "border-red-300 bg-red-50" : ""}`;
-          return "href" in s && s.href ? (
-            <Link key={s.label} href={s.href} className={`${cls} hover:border-brand-600`}>{body}</Link>
-          ) : (
-            <div key={s.label} className={cls}>{body}</div>
-          );
-        })}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {stats.map((s) => (
+          <Link key={s.label} href={s.href} className={`card block py-3 hover:border-brand-600 ${s.alert ? "border-red-300 bg-red-50" : ""}`}>
+            <div className={`text-2xl font-semibold ${s.alert ? "text-red-700" : ""}`}>{s.value}</div>
+            <div className="text-sm text-stone-500">{s.label}</div>
+          </Link>
+        ))}
       </div>
 
       {(incomplete.length > 0 || docsPending > 0) && (

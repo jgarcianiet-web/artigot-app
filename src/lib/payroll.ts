@@ -10,7 +10,7 @@ export async function payrollLines(from: string, to: string, opts: { extras?: bo
   const [assignments, rates] = await Promise.all([
     db.assignment.findMany({
       where: { status: "CONFIRMADO", event: { date: { gte: from, lte: to } }, ...(opts.extras && { worker: EXTRA_WHERE }) },
-      include: { worker: true, event: true },
+      include: { worker: true, event: true, group: { select: { callTime: true } } },
       orderBy: [{ worker: { name: "asc" } }, { event: { date: "asc" } }],
     }),
     db.rate.findMany(),

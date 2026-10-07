@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { formatDate, isLeadRole, LEAD_ROLES, ROLE_LABEL, type Role } from "./domain";
 import { later } from "./later";
@@ -17,7 +18,7 @@ export const GROUP_WITH_LEAD = {
       select: { role: true, worker: { select: { name: true, phone: true } } },
     },
   },
-} as const;
+} satisfies Prisma.EventGroupDefaultArgs;
 
 export type GroupWithLead = {
   name: string;

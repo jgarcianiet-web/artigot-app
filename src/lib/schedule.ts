@@ -40,7 +40,7 @@ export async function weekSchedule(monday: string) {
       include: {
         assignments: {
           where: { status: { in: ["CONVOCADO", "CONFIRMADO"] } },
-          include: { worker: { select: { id: true, name: true, customRates: true, contractCode: true, noClock: true } } },
+          include: { worker: { select: { id: true, name: true, customRates: true, contractCode: true, noClock: true } }, group: { select: { name: true, callTime: true } } },
         },
       },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
@@ -95,7 +95,7 @@ export async function weekSchedule(monday: string) {
       .map((e): ScheduleEvent => {
         const staff = e.assignments
           .map((a): ScheduleStaff => {
-            const call = callTime(e, a.role);
+            const call = callTime(e, a.role, a.group);
             const clocked = !!a.checkIn;
             const hours = costHours(a, a.worker, e) ?? hoursBetween(call, e.endTime);
             return {
@@ -127,7 +127,7 @@ export async function weekSchedule(monday: string) {
     where: { active: true, contractCode: { in: ["100", "200"] } },
     select: {
       id: true, name: true, monthlySalary: true, noClock: true, contractCode: true, customRates: true,
-      assignments: { where: { status: "CONFIRMADO", event: { date: { gte: start, lte: sunday } } }, include: { event: true } },
+      assignments: { where: { status: "CONFIRMADO", event: { date: { gte: start, lte: sunday } } }, include: { event: true, group: { select: { callTime: true } } } },
     },
     orderBy: { name: "asc" },
   });
@@ -135,7 +135,7 @@ export async function weekSchedule(monday: string) {
     Math.round(
       w.assignments
         .filter((a) => a.event.date >= since)
-        .reduce((s, a) => s + payable(costHours(a, w, a.event) ?? hoursBetween(callTime(a.event, a.role), a.event.endTime), rateFor(rates, a.role, a.event.type, w.customRates)).amount, 0) * 100,
+        .reduce((s, a) => s + payable(costHours(a, w, a.event) ?? hoursBetween(callTime(a.event, a.role, a.group), a.event.endTime), rateFor(rates, a.role, a.event.type, w.customRates)).amount, 0) * 100,
     ) / 100;
   const fixedRows = fixed.map((w) => {
     const month = value(w, from);

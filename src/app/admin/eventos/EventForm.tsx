@@ -44,6 +44,7 @@ export function EventForm({
   radius,
   defaultDate,
   draft,
+  templateId,
 }: {
   event?: Event;
   /** Valores iniciales de un evento nuevo (p. ej. desde una plantilla) */
@@ -55,6 +56,8 @@ export function EventForm({
   defaultDate?: string;
   /** Borrador del cuadrante: se guarda sin crear el evento ni avisar a nadie */
   draft?: { id?: string; action: (prev: string | null, form: FormData) => Promise<string | null> };
+  /** Plantilla de la que sale el evento nuevo (para crear también sus grupos) */
+  templateId?: string;
 }) {
   const [error, action] = useActionState(draft?.action ?? saveEvent, null);
   const v = { ...defaults, ...event };
@@ -72,6 +75,7 @@ export function EventForm({
     <ActionForm action={action} className="card max-w-3xl space-y-5" noValidate={!!draft}>
       {event && !draft && <input type="hidden" name="id" value={event.id} />}
       {draft?.id && <input type="hidden" name="draftId" value={draft.id} />}
+      {templateId && !event && <input type="hidden" name="plantilla" value={templateId} />}
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="sm:col-span-2">
           <label className="label">Nombre del evento</label>

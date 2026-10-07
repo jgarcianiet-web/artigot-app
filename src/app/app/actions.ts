@@ -231,7 +231,7 @@ export async function saveReviews(eventId: string, _prev: ReviewResult | null, f
   if (!event || !(await isEventLead(eventId, me.id))) return { ok: false, message: "Solo el maître o el camarero responsable del evento puede valorar." };
   if (!reviewWindowOpen(event)) return { ok: false, message: "El plazo para valorar este evento no está abierto." };
 
-  const team = await reviewTeam(eventId);
+  const team = await reviewTeam(eventId, me.id);
   let saved = 0;
   const incomplete: string[] = [];
   for (const a of team) {

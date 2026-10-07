@@ -80,14 +80,14 @@ export function AdminNav({ name, logout, badges = {} }: { name: string; logout: 
   return (
     <>
       {/* Ordenador: barra lateral fija */}
-      <aside className="sticky top-0 hidden h-dvh w-56 shrink-0 flex-col gap-6 overflow-y-auto border-r border-stone-200 bg-white px-3 py-5 lg:flex">
+      <aside className="print:!hidden sticky top-0 hidden h-dvh w-56 shrink-0 flex-col gap-6 overflow-y-auto border-r border-stone-200 bg-white px-3 py-5 lg:flex">
         <Link href="/admin" className="px-3" aria-label="Panel"><Logo height={44} /></Link>
         <div className="flex-1"><Links path={path} badges={badges} /></div>
         <Account name={name} logout={logout} />
       </aside>
 
       {/* Móvil y tablet: barra superior con menú desplegable */}
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-stone-200 bg-white px-4 py-2.5 lg:hidden">
+      <header className="print:!hidden sticky top-0 z-30 flex items-center justify-between border-b border-stone-200 bg-white px-4 py-2.5 lg:hidden">
         <Link href="/admin" aria-label="Panel"><Logo height={32} /></Link>
         <button className="btn" aria-expanded={open} aria-controls="admin-menu" onClick={() => setOpen(true)}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
