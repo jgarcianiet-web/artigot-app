@@ -28,7 +28,7 @@ import { computeScores, CRITERIA, reviewAverage, SCORING } from "@/lib/scoring";
 import { DocumentUploadForm } from "@/components/StaffForms";
 import { DOC_LABEL, docState, formatIban } from "@/lib/staff";
 import { db } from "@/lib/db";
-import { CONTRACT_SHORT, euro, formatDate, isFixed, num, ownRatesText, today, workedHours } from "@/lib/domain";
+import { CENTER_LABEL, CONTRACT_SHORT, euro, formatDate, isFixed, num, ownRatesText, today, workedHours } from "@/lib/domain";
 
 const DEVICE_LABEL: Record<string, string> = { web: "Navegador / web app", fcm: "App Android", apns: "App iPhone" };
 
@@ -270,6 +270,8 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
               {isFixed(worker) && worker.monthlySalary != null && ` · nómina ${euro(worker.monthlySalary)}`}
             </dd>
             <dt className="text-stone-500">Código A3</dt><dd>{worker.a3Code ?? <Missing />}</dd>
+            <dt className="text-stone-500">Centro A3</dt>
+            <dd>{worker.a3Center ? (CENTER_LABEL[worker.a3Center] ?? worker.a3Center) : <span className="text-amber-700">Sin indicar (se usa el 1 · Madrid)</span>}</dd>
             <dt className="text-stone-500">Tarifa propia</dt>
             <dd>
               {ownRatesText(worker.customRates) || <span className="text-stone-400">la de su puesto</span>}

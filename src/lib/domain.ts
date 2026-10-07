@@ -200,3 +200,6 @@ export const costHours = (
   w: ContractInfo,
   e: { startTime: string; endTime: string | null },
 ) => workedHours(a) ?? (clocksIn(w) ? null : plannedHours({ startTime: a.group?.callTime || e.startTime, endTime: e.endTime }));
+
+/** Centros de la empresa en A3 (cada uno con su convenio) */
+export const CENTER_LABEL: Record<string, string> = { "1": "1 · Madrid", "2": "2 · Segovia" };
