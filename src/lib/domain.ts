@@ -49,9 +49,15 @@ export function needFor(event: Needs, role: Role) {
   return event.needMozos;
 }
 
-/** Hora de citación: los mozos entran a la hora de descarga si está definida. */
-export function callTime(event: { startTime: string; unloadTime: string | null }, role: string) {
-  return role === "MOZO" && event.unloadTime ? event.unloadTime : event.startTime;
+export type GroupTime = { callTime: string | null } | null | undefined;
+
+/**
+ * Hora de citación: los mozos entran a la hora de descarga si está definida; en los eventos con grupos,
+ * el resto entra a la hora de su grupo.
+ */
+export function callTime(event: { startTime: string; unloadTime: string | null }, role: string, group?: GroupTime) {
+  if (role === "MOZO") return event.unloadTime || event.startTime;
+  return group?.callTime || event.startTime;
 }
 
 const TZ = "Europe/Madrid";
@@ -188,6 +194,9 @@ export function parseContract(v: string): string | null {
 }
 /** Horas previstas del servicio (para el coste de quien no ficha). */
 export const plannedHours = (e: { startTime: string; endTime: string | null }) => hoursBetween(e.startTime, e.endTime);
-/** Horas para el coste: las fichadas o corregidas; si no ficha, las previstas del evento. */
-export const costHours = (a: Parameters<typeof workedHours>[0], w: ContractInfo, e: { startTime: string; endTime: string | null }) =>
-  workedHours(a) ?? (clocksIn(w) ? null : plannedHours(e));
+/** Horas para el coste: las fichadas o corregidas; si no ficha, las previstas del evento (desde la hora de su grupo). */
+export const costHours = (
+  a: Parameters<typeof workedHours>[0] & { group?: GroupTime },
+  w: ContractInfo,
+  e: { startTime: string; endTime: string | null },
+) => workedHours(a) ?? (clocksIn(w) ? null : plannedHours({ startTime: a.group?.callTime || e.startTime, endTime: e.endTime }));

@@ -24,19 +24,26 @@ export function loadQueue(): QueuedClock[] {
   }
 }
 
+/** Guarda la cola y comprueba que se ha guardado de verdad (sin espacio o en modo privado puede fallar). */
 function saveQueue(q: QueuedClock[]) {
+  let ok = false;
   try {
-    localStorage.setItem(KEY, JSON.stringify(q));
+    const json = JSON.stringify(q);
+    localStorage.setItem(KEY, json);
+    ok = localStorage.getItem(KEY) === json;
   } catch {
-    /* sin almacenamiento: no se puede guardar */
+    ok = false;
   }
   window.dispatchEvent(new Event(QUEUE_EVENT));
+  return ok;
 }
 
+/** Devuelve false si el móvil no ha podido guardar el fichaje. */
 export function enqueueClock(item: Omit<QueuedClock, "id">) {
   const q = loadQueue().filter((x) => !(x.assignmentId === item.assignmentId && x.kind === item.kind));
-  q.push({ ...item, id: `${item.assignmentId}-${item.kind}-${item.capturedAt}` });
-  saveQueue(q);
+  const id = `${item.assignmentId}-${item.kind}-${item.capturedAt}`;
+  q.push({ ...item, id });
+  return saveQueue(q) && loadQueue().some((x) => x.id === id);
 }
 
 export function removeQueued(id: string) {

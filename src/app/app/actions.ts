@@ -20,6 +20,8 @@ import { answerPoll } from "@/lib/polls";
 import { DOC_LABEL, validDniNie, validIban } from "@/lib/staff";
 import { clocksIn, formatDate, isLeadRole, isRole, nowTime, type Role, today } from "@/lib/domain";
 import { autoReplace } from "@/lib/staffing";
+import { placeInGroup } from "@/lib/groups";
+import { sameDayBooking } from "@/lib/convocation";
 import { notify } from "@/lib/push";
 import { isEventLead, pendingReviews, reviewTeam, reviewWindowOpen } from "@/lib/reviews";
 import { CRITERIA } from "@/lib/scoring";
@@ -40,23 +42,44 @@ export async function logout() {
 
 async function ownAssignment(assignmentId: string) {
   const worker = await requireWorker();
-  const a = await db.assignment.findUnique({ where: { id: assignmentId }, include: { event: true, worker: { select: { contractCode: true, noClock: true } } } });
+  const a = await db.assignment.findUnique({ where: { id: assignmentId }, include: { event: true, group: true, worker: { select: { contractCode: true, noClock: true } } } });
   if (!a || a.workerId !== worker.id) throw new Error("No autorizado");
   return { a, worker };
 }
 
 export async function respond(assignmentId: string, accept: boolean) {
   const { a, worker } = await ownAssignment(assignmentId);
-  if (a.event.date < today() || a.status === "CANCELADO" || a.checkIn) return;
-  const status = accept ? "CONFIRMADO" : "RECHAZADO";
-  if (a.status === status) return;
+  if (a.event.date < today() || a.checkIn) return;
+  // Solo se acepta una convocatoria pendiente; solo se rechaza una pendiente o confirmada.
+  // (Una petición antigua, p. ej. tras caducar o después de un rechazo, no cambia nada.)
+  const from = accept ? ["CONVOCADO"] : ["CONVOCADO", "CONFIRMADO"];
+  if (!from.includes(a.status)) return;
   // Un maître o camarero responsable con valoraciones atrasadas no puede aceptar nuevas convocatorias hasta completarlas
   if (accept && (await pendingReviews(worker.id)).some((p) => p.overdue)) return;
-  await db.assignment.update({
-    where: { id: a.id },
-    // Retirarse después de haber confirmado resta puntos de fiabilidad
-    data: { status, respondedAt: new Date(), ...(a.status === "CONFIRMADO" && !accept && { withdrew: true }) },
+  const status = accept ? "CONFIRMADO" : "RECHAZADO";
+  const changed = await db.$transaction(async (tx) => {
+    // Una respuesta a la vez por trabajador: dos aceptaciones simultáneas no pueden confirmarle en dos eventos del mismo día
+    await tx.$executeRaw`SELECT id FROM "Worker" WHERE id = ${worker.id} FOR UPDATE`;
+    if (accept && (await sameDayBooking(tx, a))) return false;
+    const r = await tx.assignment.updateMany({
+      where: { id: a.id, status: { in: from } },
+      data: {
+        status,
+        respondedAt: new Date(),
+        // Retirarse después de haber confirmado resta puntos de fiabilidad
+        ...(a.status === "CONFIRMADO" && !accept && { withdrew: true }),
+        // Quien no va deja su sitio en el grupo
+        ...(!accept && { groupId: null }),
+      },
+    });
+    return r.count > 0;
   });
+  if (!changed) {
+    revalidatePath("/app", "layout");
+    return;
+  }
+  // En los eventos con grupos, quien acepta entra en el grupo que más lo necesita
+  if (accept) await placeInGroup(a.id);
   // Quien no va se sustituye automáticamente por el siguiente mejor puntuado del mismo puesto
   if (!accept && isRole(a.role)) after(() => autoReplace(a.eventId, a.role as Role, worker.name));
   after(() =>
@@ -90,7 +113,7 @@ export async function clock(
   if (kind === "out" && a.checkOut) return { ok: false, message: `Ya fichaste la salida a las ${a.checkOut}.` };
 
   const pos = { lat: Number(position?.lat), lng: Number(position?.lng), accuracy: Number(position?.accuracy) };
-  const check = checkClock({ event: a.event, role: a.role, position: pos });
+  const check = checkClock({ event: a.event, role: a.role, group: a.group, position: pos });
   if (!check.ok) return { ok: false, message: check.reason };
 
   const time = nowTime();
@@ -136,7 +159,7 @@ export async function clockOffline(
   sentAt: number,
 ): Promise<ClockResult & { done: boolean }> {
   const worker = await requireWorker();
-  const a = await db.assignment.findUnique({ where: { id: assignmentId }, include: { event: true } });
+  const a = await db.assignment.findUnique({ where: { id: assignmentId }, include: { event: true, group: true } });
   // Fichaje guardado en este móvil por otra persona (o de una convocatoria borrada): se descarta
   if (!a || a.workerId !== worker.id) return { ok: false, done: true, message: "Se ha descartado un fichaje guardado en este móvil que no es tuyo." };
   const label = kind === "in" ? "entrada" : "salida";
@@ -154,8 +177,20 @@ export async function clockOffline(
     return { ok: false, done: true, message: `Tu fichaje de ${label} sin cobertura tiene más de 48 horas y ya no se puede registrar. Avisa a RRHH.` };
   }
   const pos = { lat: Number(position?.lat), lng: Number(position?.lng), accuracy: Number(position?.accuracy) };
-  const check = checkClock({ event: a.event, role: a.role, position: pos, now: at });
-  if (!check.ok) return { ok: false, done: true, message: `Tu fichaje de ${label} sin cobertura no se ha registrado: ${check.reason}` };
+  const check = checkClock({ event: a.event, role: a.role, group: a.group, position: pos, now: at });
+  if (!check.ok) {
+    // RRHH lo revisa: el trabajador estuvo pero el fichaje no cumple las reglas (lejos, fuera de hora…)
+    after(() =>
+      notify({
+        admins: true,
+        adminUrl: `/admin/eventos/${a.eventId}`,
+        title: "⚠ Fichaje sin cobertura rechazado",
+        body: `${worker.name} · ${label} de las ${hhmm(at)} en ${a.event.name}: ${check.reason} Revisa sus horas.`,
+        tag: `offline-${a.id}-${kind}`,
+      }),
+    );
+    return { ok: false, done: true, message: `Tu fichaje de ${label} sin cobertura no se ha registrado: ${check.reason} RRHH ya está avisado para revisarlo.` };
+  }
   const time = hhmm(at);
   const accuracy = Math.round(pos.accuracy);
   await db.assignment.update({
@@ -233,9 +268,9 @@ export async function saveReviews(eventId: string, _prev: ReviewResult | null, f
 /** El responsable marca la llegada de alguien de su equipo (p. ej. sin batería). Queda como fichaje manual. */
 export async function markArrival(assignmentId: string) {
   const me = await requireWorker();
-  const a = await db.assignment.findUnique({ where: { id: assignmentId }, include: { event: true } });
+  const a = await db.assignment.findUnique({ where: { id: assignmentId }, include: { event: true, group: true } });
   if (!a || a.status !== "CONFIRMADO" || a.checkIn || !(await isEventLead(a.eventId, me.id))) return;
-  const w = clockWindow(a.event, a.role);
+  const w = clockWindow(a.event, a.role, a.group);
   const now = new Date();
   if (now < w.opensAt || now > w.closesAt) return;
   await db.assignment.update({

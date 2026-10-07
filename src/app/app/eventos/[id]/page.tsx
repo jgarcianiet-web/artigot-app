@@ -11,6 +11,8 @@ import { reviewWindowOpen } from "@/lib/reviews";
 import { Checklist } from "@/components/StaffForms";
 import { checklistFor, getUniform } from "@/lib/staff";
 import { respond } from "../../actions";
+import { GROUP_WITH_LEAD } from "@/lib/groups";
+import { acceptBlock } from "@/lib/convocation";
 import { Transport } from "./Transport";
 
 export default async function WorkerEvent({ params }: { params: Promise<{ id: string }> }) {
@@ -18,12 +20,13 @@ export default async function WorkerEvent({ params }: { params: Promise<{ id: st
   const me = await requireWorker();
   const a = await db.assignment.findUnique({
     where: { eventId_workerId: { eventId: id, workerId: me.id } },
-    include: { event: { include: { savedVenue: { select: { accessNotes: true } } } } },
+    include: { event: { include: { savedVenue: { select: { accessNotes: true } } } }, group: GROUP_WITH_LEAD },
   });
   if (!a) notFound();
   const confirmed = a.status === "CONFIRMADO";
   const checklist = checklistFor(await getUniform(), a.role, a.event.checklist);
   const canRespond = a.event.date >= today() && !a.checkIn && (a.status === "CONVOCADO" || confirmed);
+  const blocked = canRespond && a.status === "CONVOCADO" ? await acceptBlock(a) : null;
 
   return (
     <div className="space-y-4">
@@ -34,11 +37,12 @@ export default async function WorkerEvent({ params }: { params: Promise<{ id: st
           <StatusBadge status={a.status} />
         </summary>
         <div className="mt-3 space-y-3">
-          <EventInfo event={a.event} role={a.role} />
+          <EventInfo event={a.event} role={a.role} group={a.group} />
+          {blocked && <p className="rounded-lg bg-red-50 p-2 text-sm text-red-700">{blocked}</p>}
           {canRespond && a.status === "CONVOCADO" && (
             <div className="grid grid-cols-2 gap-2">
               <form action={respond.bind(null, a.id, true)}>
-                <button className="btn btn-success w-full py-3">Acepto</button>
+                <button className="btn btn-success w-full py-3" disabled={!!blocked}>Acepto</button>
               </form>
               <form action={respond.bind(null, a.id, false)}>
                 <button className="btn btn-danger w-full py-3">No puedo</button>

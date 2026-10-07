@@ -144,8 +144,26 @@ model Event {
   reviews       Review[]
   incidents     Incident[]
   files         StoredFile[]
+  groups        EventGroup[]
 
   @@index([date])
+}
+
+// Grupo de un evento grande: su maître o camarero responsable (la asignación de puesto de mando del grupo)
+// y su hora de entrada, que sustituye a la del evento para los camareros del grupo. Los mozos van aparte.
+model EventGroup {
+  id          String       @id @default(cuid())
+  eventId     String
+  name        String
+  callTime    String?
+  // Camareros que necesita el grupo (orientativo, para repartir)
+  need        Int          @default(0)
+  position    Int          @default(0)
+  createdAt   DateTime     @default(now())
+  event       Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  assignments Assignment[]
+
+  @@index([eventId])
 }
 
 // Estado: CONVOCADO | CONFIRMADO | RECHAZADO | CANCELADO
@@ -186,6 +204,9 @@ model Assignment {
   notice        String?
   noticeOk      Boolean?
   noticeAt      DateTime?
+  // Grupo dentro del evento (eventos grandes)
+  groupId       String?
+  group         EventGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
   createdAt     DateTime  @default(now())
   event         Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
   worker        Worker    @relation(fields: [workerId], references: [id], onDelete: Cascade)
@@ -389,6 +410,8 @@ model EventTemplate {
   needMozos        Int      @default(0)
   notes            String?
   checklist        String?
+  // Grupos del evento: [{ name, callTime, need }]
+  groups           Json?
   venueId          String?
   venue            Venue?   @relation(fields: [venueId], references: [id], onDelete: SetNull)
   createdAt        DateTime @default(now())
