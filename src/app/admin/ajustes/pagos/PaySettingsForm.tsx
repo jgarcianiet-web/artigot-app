@@ -23,7 +23,7 @@ export function PaySettingsForm({ s }: { s: PaySettings }) {
         <label className="text-sm">Seguridad Social a cargo del trabajador (%)<input name="ssPct" inputMode="decimal" className="input mt-1" defaultValue={dec(s.ssPct)} /></label>
         <label className="text-sm">IRPF general (%)<input name="irpfPct" inputMode="decimal" className="input mt-1" defaultValue={dec(s.irpfPct)} /></label>
         <p className="text-xs text-stone-500 sm:col-span-2">
-          Por defecto 6,55 % (contingencias comunes 4,70 + desempleo temporal 1,60 + formación 0,10 + MEI 0,15) y 2 % de IRPF, el mínimo para contratos de menos de un año.
+          Por defecto 6,50 % (contingencias comunes 4,70 + desempleo 1,55 de los fijos discontinuos + formación 0,10 + MEI 0,15) y 2 % de IRPF, el mínimo para contratos de menos de un año.
           El neto real lo da la nómina de A3 (se puede importar en Pagos). Revisadlo con vuestra asesoría.
         </p>
       </fieldset>
