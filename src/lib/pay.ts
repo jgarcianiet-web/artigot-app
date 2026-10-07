@@ -30,8 +30,8 @@ export type PaySettings = {
 };
 
 export const PAY_DEFAULTS: PaySettings = {
-  // 2026, contrato temporal: 4,70 CC + 1,60 desempleo + 0,10 FP + 0,15 MEI
-  ssPct: 6.55,
+  // 2026, fijo discontinuo (indefinido): 4,70 CC + 1,55 desempleo + 0,10 FP + 0,15 MEI (como en las nóminas de A3)
+  ssPct: 6.5,
   // Mínimo legal para contratos de duración inferior a un año
   irpfPct: 2,
   ratesAreNet: false,
