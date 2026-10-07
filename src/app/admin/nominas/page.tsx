@@ -65,9 +65,9 @@ export default async function Nominas({ searchParams }: { searchParams: Promise<
         <>
           <DownloadNominas month={month} n={llamamientos.length} />
           <ol className="list-decimal space-y-0.5 pl-5 text-sm text-stone-600">
-            <li><strong>Contratación-Fechas</strong>: alta, baja y motivo 15. Abre cada llamamiento («Vida Laboral» = Sí).</li>
-            <li><strong>Datos Contractuales</strong>: contrato 300, Tipo General, inicio y fin.</li>
-            <li><strong>Plantillas Calendario</strong>: los días trabajados con sus horas (jornada parcial).</li>
+            <li><strong>Contratación-Fechas</strong>: alta, baja y motivo 15. Abre cada llamamiento.</li>
+            <li><strong>Datos Contractuales</strong>: contrato 300, Tipo General, inicio y fin, prueba y preaviso, y la ocupación (CNO) del puesto.</li>
+            <li><strong>Plantillas Calendario</strong>: un tramo del alta a la baja con los días trabajados y sus horas (jornada parcial).</li>
             <li><strong>Ajuste Salarial</strong>: el líquido pactado de cada nómina; lo que sobra va al concepto del ajuste (22).</li>
           </ol>
           <div className="card overflow-x-auto p-0">

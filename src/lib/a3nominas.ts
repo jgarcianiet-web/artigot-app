@@ -3,7 +3,7 @@ import ExcelJS from "exceljs";
 import { getA3 } from "./a3";
 import { a3Name, getA3Alta } from "./a3alta";
 import { db } from "./db";
-import { EXTRA_WHERE } from "./domain";
+import { addDays, EXTRA_WHERE, type Role } from "./domain";
 import { deductions, getPaySettings, netOf } from "./pay";
 import { monthRange, payrollLines } from "./payroll";
 
@@ -28,7 +28,7 @@ export type Llamamiento = {
   workerId: string;
   name: string;
   code: string;
-  w: { name: string; firstName: string | null; surname1: string | null; surname2: string | null };
+  w: { name: string; role: string; firstName: string | null; surname1: string | null; surname2: string | null };
   alta: string;
   baja: string;
   /** Horas de cada día trabajado */
@@ -43,7 +43,7 @@ export async function monthLlamamientos(from: string, to: string) {
   const [employments, s] = await Promise.all([
     db.employment.findMany({
       where: { startDate: { gte: from, lte: to }, worker: EXTRA_WHERE },
-      include: { worker: { select: { id: true, name: true, a3Code: true, firstName: true, surname1: true, surname2: true, irpf: true } } },
+      include: { worker: { select: { id: true, name: true, role: true, a3Code: true, firstName: true, surname1: true, surname2: true, irpf: true } } },
       orderBy: [{ worker: { name: "asc" } }, { startDate: "asc" }],
     }),
     getPaySettings(),
@@ -78,6 +78,10 @@ export async function monthLlamamientos(from: string, to: string) {
 const date = (iso: string) => new Date(`${iso}T00:00:00Z`);
 /** Lunes = 0 … domingo = 6 */
 const weekday = (iso: string) => (date(iso).getUTCDay() + 6) % 7;
+/** Como los exporta A3: todo en texto, fechas «dd/mm/aaaa» y el código del trabajador con 6 cifras */
+const text = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+const code6 = (c: string) => (/^\d+$/.test(c) ? c.padStart(6, "0") : c);
+const col = (n: number) => (n < 26 ? String.fromCharCode(65 + n) : `A${String.fromCharCode(65 + n - 26)}`);
 
 async function fill(template: string, rows: Record<string, ExcelJS.CellValue>[]) {
   const wb = new ExcelJS.Workbook();
@@ -87,38 +91,55 @@ async function fill(template: string, rows: Record<string, ExcelJS.CellValue>[])
     const row = ws.getRow(3 + i);
     for (const [c, v] of Object.entries(values)) {
       if (v == null || v === "") continue;
-      const cell = row.getCell(c);
-      cell.value = v;
-      if (v instanceof Date) cell.numFmt = "dd/mm/yyyy";
+      row.getCell(c).value = v;
     }
     row.commit();
   });
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
 
-/** Los 4 Excel de A3, en el orden en que se importan. */
+/** Tramos de calendario: del alta a la baja en semanas (cada día de la semana sale una sola vez por fila). */
+function calendarRows(l: Llamamiento) {
+  const hours = new Map(l.days.map((d) => [d.date, d.hours]));
+  const out: { from: string; to: string; byWeekday: (number | null)[] }[] = [];
+  let d = l.alta;
+  while (d <= l.baja) {
+    const chunk = { from: d, to: d, byWeekday: Array<number | null>(WEEKDAYS).fill(null) };
+    for (let i = 0; i < WEEKDAYS && d <= l.baja; i++) {
+      chunk.to = d;
+      if (hours.has(d)) chunk.byWeekday[weekday(d)] = hours.get(d)!;
+      d = addDays(d, 1);
+    }
+    out.push(chunk);
+  }
+  return out;
+}
+
+/** Los 4 Excel de A3, en el orden en que se importan (con los mismos valores que pone A3 al exportarlos). */
 export async function nominaWorkbooks(list: Llamamiento[]) {
   const [a3, cfg] = await Promise.all([getA3(), getA3Alta()]);
-  const company = /^\d+$/.test(a3.companyCode) ? Number(a3.companyCode) : a3.companyCode;
-  const head = (l: Llamamiento) => ({ A: company, B: l.code, C: a3Name(l.w) });
+  const head = (l: Llamamiento) => ({ A: String(a3.companyCode), B: code6(l.code), C: a3Name(l.w) });
   const contratacion = await fill("a3-contratacion-fechas.xlsx", list.map((l) => ({
-    ...head(l), D: "Si", E: date(l.alta), F: date(l.alta), G: date(l.baja), H: MOTIVO,
+    ...head(l), D: "Si", E: "Automática", F: text(l.alta), G: text(l.baja), H: MOTIVO,
   })));
   const contractuales = await fill("a3-datos-contractuales.xlsx", list.map((l) => ({
-    ...head(l), D: "No", E: date(l.alta), F: CONTRATO, G: "Tipo General", J: date(l.alta), K: date(l.baja),
+    ...head(l), D: "Si", E: "Automática", F: CONTRATO, G: "Tipo General", J: text(l.alta), K: text(l.baja),
+    L: 2, M: "Meses", N: 15, S: cfg.occupation[l.w.role as Role] ?? cfg.occupation.CAMARERO,
   })));
-  // Calendario: una fila por día trabajado, con ese día laborable y sus horas
-  const calendario = await fill("a3-plantillas-calendario.xlsx", list.flatMap((l) => l.days.map((d) => {
-    const wd = weekday(d.date);
-    const row: Record<string, ExcelJS.CellValue> = { ...head(l), D: "No", E: date(d.date), F: date(d.date), G: "Jornada parcial" };
-    for (let i = 0; i < WEEKDAYS; i++) {
-      row[String.fromCharCode(72 + i)] = i === wd ? "Laborable" : "Vacío"; // H…N
-      if (i === wd) row[String.fromCharCode(79 + i)] = d.hours; // O…U
-    }
+  // Calendario: un tramo por llamamiento (del alta a la baja), con los días trabajados laborables y sus horas
+  const calendario = await fill("a3-plantillas-calendario.xlsx", list.flatMap((l) => calendarRows(l).map((c) => {
+    const row: Record<string, ExcelJS.CellValue> = { ...head(l), D: "No", E: text(c.from), F: text(c.to), G: "Jornada parcial" };
+    c.byWeekday.forEach((h, i) => {
+      row[col(7 + i)] = h != null ? "Laborable" : "Vacío"; // H…N
+      row[col(14 + i)] = h ?? 0; // O…U
+    });
     return row;
   })));
+  // Ajuste salarial: el líquido pactado, con las mismas marcas que tienen en A3 (vacaciones, cotización e IRPF)
+  const flags: Record<string, string> = { I: "Si", N: "Si", O: "Si", P: "Si" };
+  for (let i = 16; i <= 27; i++) flags[col(i)] = "No"; // Q…AB
   const ajuste = await fill("a3-ajuste-salarial.xlsx", list.map((l) => ({
-    ...head(l), D: "No", E: date(l.alta), F: "Líquido", G: l.net, H: `${cfg.adjustConcept || "22"}=100%`,
+    ...head(l), D: "Si", E: "Automática", F: "Líquido", G: l.net, H: `${cfg.adjustConcept || "22"}=100,00%`, ...flags,
   })));
   return [
     { name: "1_contratacion_fechas.xlsx", label: "Contratación-Fechas", data: contratacion },
