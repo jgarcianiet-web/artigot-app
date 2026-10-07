@@ -37,6 +37,7 @@ import {
   ROLE_PLURAL,
   ROLES,
   costHours,
+  today,
 } from "@/lib/domain";
 import { REVIEW_DAYS, reviewWindowOpen } from "@/lib/reviews";
 import { CRITERIA, explainScore, reviewAverage } from "@/lib/scoring";
@@ -318,7 +319,7 @@ export default async function EventDetail({ params }: { params: Promise<{ id: st
       })}
 
       {/* Valoraciones del maître / camarero responsable */}
-      {confirmed.some((a) => !isLeadRole(a.role)) && (
+      {event.date <= today() && confirmed.some((a) => !isLeadRole(a.role)) && (
         <section className="card space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2>Valoraciones del equipo</h2>

@@ -45,6 +45,10 @@
   select.input:not(.py-1) {
     @apply min-h-10;
   }
+  /* Botón de «Elegir archivo» con el mismo aspecto que el resto de botones */
+  input[type="file"]::file-selector-button {
+    @apply mr-3 cursor-pointer rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm font-medium text-stone-800 shadow-sm hover:bg-stone-50;
+  }
   .label {
     @apply mb-1 block text-sm font-medium text-stone-700;
   }
