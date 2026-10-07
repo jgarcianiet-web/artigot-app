@@ -1,7 +1,7 @@
 import path from "node:path";
 import ExcelJS from "exceljs";
 import { getA3 } from "./a3";
-import { a3Name, getA3Alta } from "./a3alta";
+import { a3Name, getA3Alta, positionCode } from "./a3alta";
 import { db } from "./db";
 import { addDays, EXTRA_WHERE, type Role } from "./domain";
 import { deductions, getPaySettings, netOf } from "./pay";
@@ -128,7 +128,7 @@ export async function nominaWorkbooks(list: Llamamiento[]) {
   })));
   const contractuales = await fill("a3-datos-contractuales.xlsx", list.map((l) => ({
     ...head(l), D: "No", E: "Automática", F: CONTRATO, G: "Tipo General", J: date(l.alta), K: date(l.baja),
-    L: 2, M: "Meses", N: 15, S: cfg.occupation[l.w.role as Role] ?? cfg.occupation.CAMARERO,
+    L: 2, M: "Meses", N: 15, R: positionCode(cfg), S: cfg.occupation[l.w.role as Role] ?? cfg.occupation.CAMARERO,
   })));
   // Calendario: un tramo por llamamiento (del alta a la baja), con los días trabajados laborables y sus horas
   const calendario = await fill("a3-plantillas-calendario.xlsx", list.flatMap((l) => calendarRows(l).map((c) => {

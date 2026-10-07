@@ -11,7 +11,10 @@ import { EXTRA_WHERE, type Role } from "./domain";
 
 export type A3AltaConfig = {
   center: string;
+  /** Convenio del centro 1 (Madrid) */
   agreement: string;
+  /** Convenio del centro 2 (Segovia) */
+  agreement2: string;
   category: string;
   position: string;
   regime: string;
@@ -43,6 +46,7 @@ export type A3AltaConfig = {
 export const A3_ALTA_DEFAULTS: A3AltaConfig = {
   center: "1",
   agreement: "28002085011981",
+  agreement2: "40000195011982",
   category: "2",
   position: "36",
   regime: "Régimen General",
@@ -259,7 +263,7 @@ export async function buildAltaWorkbook(rows: AltaRow[], companyCode: string, cf
       L: date(w.birthDate),
       M: w.nationality || cfg.nationality,
       N: null,
-      O: cfg.agreement,
+      O: agreementFor(cfg, w.a3Center || cfg.center),
       P: cfg.category,
       Q: cfg.position,
       U: cfg.regime,
@@ -368,7 +372,14 @@ export async function buildBajasWorkbook(rows: BajaRow[], companyCode: string, c
 
 export const ALTAS_SUCESIVAS_TEMPLATE = path.join(process.cwd(), "templates", "a3-altas-sucesivas.xlsx");
 
-export type AltaSucesivaRow = BajaRow & { role: Role };
+export type AltaSucesivaRow = BajaRow & { role: Role; center?: string | null };
+
+/** Convenio según el centro del trabajador: 1 Madrid, 2 Segovia. */
+export const agreementFor = (cfg: A3AltaConfig, center: string | null | undefined) =>
+  String(center ?? cfg.center).trim() === "2" ? cfg.agreement2 : cfg.agreement;
+
+/** Posición/puesto como en A3: 8 cifras («00000036»). */
+export const positionCode = (cfg: A3AltaConfig) => (/^\d+$/.test(cfg.position) ? cfg.position.padStart(8, "0") : cfg.position);
 
 /**
  * Rellena la plantilla de altas sucesivas de A3 (un nuevo llamamiento de un fijo discontinuo que ya
@@ -387,7 +398,8 @@ export async function buildAltasSucesivasWorkbook(rows: AltaSucesivaRow[], compa
     const d = row.getCell("D");
     d.value = new Date(`${r.date}T00:00:00Z`);
     d.numFmt = "dd/mm/yyyy";
-    if (cfg.agreement) row.getCell("P").value = cfg.agreement;
+    const agreement = agreementFor(cfg, r.center);
+    if (agreement) row.getCell("P").value = agreement;
     const cno = cfg.occupation[r.role] ?? cfg.occupation.CAMARERO;
     if (cno) row.getCell("Q").value = cno;
     row.commit();
