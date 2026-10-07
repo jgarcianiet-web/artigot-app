@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     getA3Alta(),
     db.employment.findMany({
       where: { startDate: day, worker: { a3Code: { not: null } } },
-      include: { worker: { select: { name: true, a3Code: true, firstName: true, surname1: true, surname2: true, role: true } } },
+      include: { worker: { select: { name: true, a3Code: true, a3Center: true, firstName: true, surname1: true, surname2: true, role: true } } },
       orderBy: { worker: { name: "asc" } },
     }),
   ]);
@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
       .map((e) => ({
         code: e.worker.a3Code, name: e.worker.name, firstName: e.worker.firstName, surname1: e.worker.surname1, surname2: e.worker.surname2, date: day,
         role: roleOf(e.category, e.worker.role),
+        center: e.worker.a3Center,
       })),
     a3.companyCode,
     cfg,

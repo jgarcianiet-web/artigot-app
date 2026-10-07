@@ -30,9 +30,10 @@ export function A3AltaForm({ cfg, lists, next }: { cfg: A3AltaConfig; lists: Lis
         <h2>Valores del alta masiva</h2>
         <p className="text-sm text-stone-500">Los mismos para todas las altas, como en vuestra exportación de A3. Cada trabajador pone sus datos personales.</p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-4">
-        <label className="text-sm">Centro<input name="center" className="input mt-1" defaultValue={cfg.center} /></label>
-        <label className="text-sm">Convenio<input name="agreement" className="input mt-1" defaultValue={cfg.agreement} /></label>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <label className="text-sm">Centro (si la ficha no lo tiene)<input name="center" className="input mt-1" defaultValue={cfg.center} /></label>
+        <label className="text-sm">Convenio centro 1 (Madrid)<input name="agreement" className="input mt-1" defaultValue={cfg.agreement} /></label>
+        <label className="text-sm">Convenio centro 2 (Segovia)<input name="agreement2" className="input mt-1" defaultValue={cfg.agreement2} /></label>
         <label className="text-sm">Categoría<input name="category" className="input mt-1" defaultValue={cfg.category} /></label>
         <label className="text-sm">Puesto<input name="position" className="input mt-1" defaultValue={cfg.position} /></label>
       </div>
