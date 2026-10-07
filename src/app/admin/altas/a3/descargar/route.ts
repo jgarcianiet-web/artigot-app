@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getA3 } from "@/lib/a3";
-import { ALTA_SELECT, buildAltaWorkbook, buildAmpWorkbook, buildImputacionWorkbook, bumpLastCode, getA3Alta, type AltaRow } from "@/lib/a3alta";
+import { getPaySettings } from "@/lib/pay";
+import { ALTA_SELECT, buildAltaWorkbook, buildAmpWorkbook, buildBancoPagoWorkbook, buildImputacionWorkbook, bumpLastCode, getA3Alta, type AltaRow } from "@/lib/a3alta";
 import { auditAdmin } from "@/lib/audit";
 import { adminName } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -11,7 +12,7 @@ const ISO = /^\d{4}-\d{2}-\d{2}$/;
 /**
  * Guarda los datos revisados de cada alta (apellidos, sexo, nacimiento, nacionalidad y el código
  * asignado) y devuelve los Excel para importar en A3: el alta masiva y, según Ajustes → A3, la
- * imputación y «Camareros extras (AMP)». Van en JSON (base64) para descargar los tres de una vez.
+ * imputación, banco de pago y «Camareros extras (AMP)». Van en JSON (base64) para descargarlos todos de una vez.
  */
 export async function POST(req: NextRequest) {
   const by = await adminName();
@@ -53,11 +54,13 @@ export async function POST(req: NextRequest) {
   const files = [{ name: `alta_a3_${day}.xlsx`, label: "Alta masiva de trabajadores", data: await buildAltaWorkbook(rows, a3.companyCode, cfg) }];
   const waiters = rows.filter((r) => r.worker.role !== "MOZO");
   if (cfg.imputation || cfg.imputationMozo) files.push({ name: `imputacion_a3_${day}.xlsx`, label: "Imputación", data: await buildImputacionWorkbook(rows, a3.companyCode, cfg) });
+  const pay = await getPaySettings();
+  if (pay.debtorIban) files.push({ name: `banco_pago_a3_${day}.xlsx`, label: "Datos Banco de Pago", data: await buildBancoPagoWorkbook(rows, a3.companyCode, pay.debtorIban) });
   if (cfg.ampExtra && waiters.length) files.push({ name: `camareros_extras_a3_${day}.xlsx`, label: "Camareros extras (AMP)", data: await buildAmpWorkbook(waiters, a3.companyCode) });
   await bumpLastCode(Math.max(...codes.map(Number)));
   await auditAdmin(by, "A3", "Alta masiva", `Excel de alta en A3 (${files.map((f) => f.label).join(", ")}) de ${rows.length}: ${rows.map((r) => `${r.worker.name} (${r.code})`).join(", ")}`);
   return NextResponse.json(
-    { files: files.map((f) => ({ name: f.name, label: f.label, base64: f.data.toString("base64") })), missingImputation: !cfg.imputation && !cfg.imputationMozo },
+    { files: files.map((f) => ({ name: f.name, label: f.label, base64: f.data.toString("base64") })), missingImputation: !cfg.imputation && !cfg.imputationMozo, missingBank: !pay.debtorIban },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

@@ -7,6 +7,7 @@ const TABS = [
   { href: "/admin/liquidacion", label: "Horas" },
   { href: "/admin/pagos", label: "Pagos" },
   { href: "/admin/fijos", label: "Fijos" },
+  { href: "/admin/nominas", label: "Nóminas A3" },
   { href: "/admin/jornada", label: "Registro de jornada" },
 ];
 

@@ -17,7 +17,7 @@ const GROUPS: { title?: string; items: Item[] }[] = [
 // Rutas que viven bajo Ajustes aunque no empiecen por /admin/ajustes
 const SETTINGS = ["/admin/fincas", "/admin/clientes", "/admin/plantillas", "/admin/tarifas", "/admin/usuarios", "/admin/registro"];
 // «Horas y pagos» agrupa liquidación, pagos y registro de jornada
-const PAY = ["/admin/pagos", "/admin/jornada", "/admin/fijos"];
+const PAY = ["/admin/pagos", "/admin/jornada", "/admin/fijos", "/admin/nominas"];
 
 function isActive(path: string, href: string) {
   if (href === "/admin") return path === "/admin";

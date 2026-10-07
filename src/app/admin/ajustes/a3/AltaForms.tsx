@@ -80,6 +80,11 @@ export function A3AltaForm({ cfg, lists, next }: { cfg: A3AltaConfig; lists: Lis
         </label>
       </fieldset>
       <label className="block max-w-xs text-sm">
+        Concepto del ajuste salarial (nóminas)
+        <input name="adjustConcept" inputMode="numeric" className="input mt-1" defaultValue={cfg.adjustConcept} />
+        <span className="text-xs text-stone-500">Donde A3 pone lo que sobra del líquido pactado (22 = Complement personal absorbible).</span>
+      </label>
+      <label className="block max-w-xs text-sm">
         Último código de trabajador usado en A3
         <input name="lastCode" type="number" min={0} className="input mt-1" defaultValue={cfg.lastCode || ""} />
         <span className="text-xs text-stone-500">La próxima alta llevará el {next}. Se actualiza solo al importar la base de datos.</span>
