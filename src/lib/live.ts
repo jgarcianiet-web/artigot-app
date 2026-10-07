@@ -48,7 +48,8 @@ export async function liveTeam(eventId: string, now = new Date(), leadWorkerId?:
     };
   });
   // El maître o responsable de un grupo ve a su grupo (y a quienes dirigen el evento)
-  if (leadWorkerId) {
+  // (el maître general, sin grupo, ve a todo el evento)
+  if (leadWorkerId && rows.find((r) => r.workerId === leadWorkerId)?.groupId) {
     const team = new Set(teamOf(rows, leadWorkerId).map((r) => r.id));
     rows = rows.filter((r) => r.lead || team.has(r.id));
   }

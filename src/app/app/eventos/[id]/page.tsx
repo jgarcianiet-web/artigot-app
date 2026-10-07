@@ -11,8 +11,8 @@ import { reviewWindowOpen } from "@/lib/reviews";
 import { Checklist } from "@/components/StaffForms";
 import { checklistFor, getUniform } from "@/lib/staff";
 import { respond } from "../../actions";
-import { GROUP_WITH_LEAD, groupLine } from "@/lib/groups";
-import { acceptBlock } from "@/lib/convocation";
+import { generalLead, GROUP_WITH_LEAD, groupLine } from "@/lib/groups";
+import { acceptBlock, sameDayBookings } from "@/lib/convocation";
 import { Transport } from "./Transport";
 
 export default async function WorkerEvent({ params }: { params: Promise<{ id: string }> }) {
@@ -27,6 +27,10 @@ export default async function WorkerEvent({ params }: { params: Promise<{ id: st
   const checklist = checklistFor(await getUniform(), a.role, a.event.checklist);
   const canRespond = a.event.date >= today() && !a.checkIn && (a.status === "CONVOCADO" || confirmed);
   const blocked = canRespond && a.status === "CONVOCADO" ? await acceptBlock(a) : null;
+  const sameDay = canRespond ? await sameDayBookings(a) : [];
+  // Eventos con grupos: el maître general (o, si es él, que supervisa todos los grupos)
+  const isGeneral = !a.groupId && isLeadRole(a.role) && a.status === "CONFIRMADO" && (await db.eventGroup.count({ where: { eventId: a.eventId } })) > 0;
+  const general = isGeneral ? "Eres el maître general del evento: supervisas todos los grupos." : a.group ? await generalLead(a.eventId) : null;
 
   return (
     <div className="space-y-4">
@@ -39,12 +43,18 @@ export default async function WorkerEvent({ params }: { params: Promise<{ id: st
               {formatDate(a.event.date)} · citación {callTime(a.event, a.role, a.group)} · {a.event.venue}
             </span>
             {a.group && <span className="block text-sm font-medium">{groupLine(a.group, a.event.startTime, a.role)}</span>}
+            {general && <span className="block text-sm">{general}</span>}
           </span>
           <StatusBadge status={a.status} />
         </summary>
         <div className="mt-3 space-y-3">
-          <EventInfo event={a.event} role={a.role} group={a.group} />
+          <EventInfo event={a.event} role={a.role} group={a.group} general={general} />
           {blocked && <p className="rounded-lg bg-red-50 p-2 text-sm text-red-700">{blocked}</p>}
+          {sameDay.length > 0 && (
+            <p className="rounded-lg bg-amber-50 p-2 text-sm text-amber-900">
+              ⚠ Ojo: ese día también estás en {sameDay.join(" y ")}. Comprueba que te da tiempo a los dos.
+            </p>
+          )}
           {canRespond && a.status === "CONVOCADO" && (
             <div className="grid grid-cols-2 gap-2">
               <form action={respond.bind(null, a.id, true)}>

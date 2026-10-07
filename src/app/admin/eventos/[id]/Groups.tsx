@@ -3,7 +3,7 @@ import { ConfirmButton, SubmitButton } from "@/components/client";
 import { StatusBadge } from "@/components/ui";
 import { isLeadRole, ROLE_LABEL, type Role } from "@/lib/domain";
 import { deleteGroup, distributeGroups } from "./groupActions";
-import { CreateGroups, EditGroup, MoveSelect } from "./GroupForms";
+import { CreateGroups, EditGroup, LeadSelect, MoveSelect } from "./GroupForms";
 
 type Group = { id: string; name: string; callTime: string | null; need: number };
 type Member = { id: string; workerId: string; role: string; status: string; groupId: string | null; worker: { name: string } };
@@ -17,8 +17,16 @@ const byLead = (a: Member, b: Member) =>
  */
 export function Groups({ event, groups, members }: { event: { id: string; startTime: string; needCamareros: number }; groups: Group[]; members: Member[] }) {
   const people = members.filter((m) => m.role !== "MOZO" && (m.status === "CONFIRMADO" || m.status === "CONVOCADO")).sort(byLead);
-  const loose = people.filter((m) => !m.groupId);
+  const crewAll = people.filter((m) => !isLeadRole(m.role));
+  const leads = people.filter((m) => isLeadRole(m.role));
+  const general = leads.filter((m) => !m.groupId);
+  const loose = crewAll.filter((m) => !m.groupId);
   const opts = groups.map((g) => ({ id: g.id, name: g.name }));
+  const gName = new Map(groups.map((g) => [g.id, g.name]));
+  const leadOpts = leads.map((l) => ({
+    id: l.id,
+    label: `${l.worker.name} (${ROLE_LABEL[l.role as Role].toLowerCase()}${l.status !== "CONFIRMADO" ? ", sin confirmar" : ""}${l.groupId ? ` · ahora en ${gName.get(l.groupId)}` : " · general"})`,
+  }));
   const row = (m: Member) => (
     <li key={m.id} className="flex flex-wrap items-center gap-2 py-1.5 text-sm">
       <span className="mr-auto">
@@ -38,8 +46,9 @@ export function Groups({ event, groups, members }: { event: { id: string; startT
             <h2>Grupos</h2>
             <p className="text-sm text-stone-600">
               Para los eventos grandes: cada grupo lleva su maître o camarero responsable y su hora de entrada, que es la que ven
-              sus camareros y la que cuenta para fichar, los retrasos y las horas. Quien acepta la convocatoria entra solo en el
-              grupo que más lo necesita; el maître ve y valora solo a su grupo. Los mozos van aparte con la descarga.
+              sus camareros y la que cuenta para fichar, los retrasos y las horas. El camarero que acepta la convocatoria entra solo en
+              el grupo que más lo necesita. El maître de cada grupo ve y valora a su grupo; el maître que no está en ningún grupo es el
+              general del evento: supervisa todos los grupos. Los mozos van aparte con la descarga.
             </p>
           </div>
           {groups.length > 0 && (
@@ -59,14 +68,24 @@ export function Groups({ event, groups, members }: { event: { id: string; startT
           )}
         </div>
         <CreateGroups eventId={event.id} defaultTime={event.startTime} first={groups.length === 0} />
+        {groups.length > 0 && (
+          <div className="rounded-lg bg-stone-50 p-3 text-sm">
+            <span className="font-medium">Maître general del evento: </span>
+            {general.length ? (
+              general.map((g) => `${g.worker.name}${g.status !== "CONFIRMADO" ? " (sin confirmar)" : ""}`).join(", ")
+            ) : (
+              <span className="text-stone-500">ninguno (todos los maîtres están en un grupo). Para tener uno, déjalo sin grupo.</span>
+            )}
+          </div>
+        )}
       </section>
 
       {groups.length > 0 && (
         <div className="grid gap-4 lg:grid-cols-2">
           {groups.map((g) => {
-            const list = people.filter((m) => m.groupId === g.id);
-            const leads = list.filter((m) => isLeadRole(m.role) && m.status === "CONFIRMADO");
-            const crew = list.filter((m) => !isLeadRole(m.role) && m.status === "CONFIRMADO").length;
+            const list = crewAll.filter((m) => m.groupId === g.id);
+            const lead = leads.find((m) => m.groupId === g.id);
+            const crew = list.filter((m) => m.status === "CONFIRMADO").length;
             return (
               <section key={g.id} className="card space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -77,8 +96,9 @@ export function Groups({ event, groups, members }: { event: { id: string; startT
                     {crew}{g.need ? ` / ${g.need}` : ""} camareros
                   </span>
                 </div>
-                {leads.length === 0 && <p className="text-sm text-amber-700">⚠ Sin maître ni camarero responsable confirmado.</p>}
                 <EditGroup group={g} eventStart={event.startTime} />
+                <LeadSelect key={lead?.id ?? "none"} groupId={g.id} current={lead?.id ?? null} leads={leadOpts} />
+                {!lead && <p className="text-xs text-amber-700">{general.length ? "Sin maître propio: lo lleva el general." : "⚠ Sin maître ni responsable."}</p>}
                 {list.length === 0 ? (
                   <p className="text-sm text-stone-500">Nadie en este grupo todavía.</p>
                 ) : (

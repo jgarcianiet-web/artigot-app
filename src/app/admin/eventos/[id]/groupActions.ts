@@ -5,6 +5,7 @@ import { auditAdmin } from "@/lib/audit";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { distribute, groupable, notifyGroupChange } from "@/lib/groups";
+import { isLeadRole, LEAD_ROLES } from "@/lib/domain";
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const done = (eventId: string) => {
@@ -61,16 +62,35 @@ export async function deleteGroup(groupId: string) {
   done(g.eventId);
 }
 
-/** Mueve a una persona a otro grupo (o la deja sin grupo) y le avisa. */
+/**
+ * Mueve a una persona a otro grupo (o la deja sin grupo) y le avisa. Cada grupo tiene un solo maître o
+ * responsable: si se pone a otro, el anterior pasa a ser general del evento (sin grupo).
+ */
 export async function moveToGroup(assignmentId: string, groupId: string | null) {
   await requireAdmin();
   const a = await db.assignment.findUniqueOrThrow({ where: { id: assignmentId } });
   if (!groupable(a.role)) return;
   if (groupId && !(await db.eventGroup.findFirst({ where: { id: groupId, eventId: a.eventId } }))) return;
   if (a.groupId === groupId) return;
+  const replaced =
+    groupId && isLeadRole(a.role)
+      ? await db.assignment.findMany({ where: { groupId, role: { in: [...LEAD_ROLES] }, id: { not: a.id } }, select: { id: true } })
+      : [];
+  if (replaced.length) await db.assignment.updateMany({ where: { id: { in: replaced.map((r) => r.id) } }, data: { groupId: null } });
   await db.assignment.update({ where: { id: a.id }, data: { groupId } });
-  notifyGroupChange([a.id]);
+  notifyGroupChange([a.id, ...replaced.map((r) => r.id)]);
   done(a.eventId);
+}
+
+/** Elige el maître o responsable de un grupo (o lo deja sin asignar: el que había pasa a general). */
+export async function setGroupLead(groupId: string, assignmentId: string) {
+  await requireAdmin();
+  if (assignmentId) return moveToGroup(assignmentId, groupId);
+  const current = await db.assignment.findMany({ where: { groupId, role: { in: [...LEAD_ROLES] } }, select: { id: true, eventId: true } });
+  if (!current.length) return;
+  await db.assignment.updateMany({ where: { id: { in: current.map((c) => c.id) } }, data: { groupId: null } });
+  notifyGroupChange(current.map((c) => c.id));
+  done(current[0].eventId);
 }
 
 /** Reparte a quien no tiene grupo, o rehace el reparto completo. */

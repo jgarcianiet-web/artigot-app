@@ -46,33 +46,28 @@ function emptiest(groups: { id: string; need: number }[], count: Map<string, num
 }
 
 /**
- * Coloca a quien acaba de aceptar en el grupo que más lo necesita (si el evento tiene grupos y aún no está en
- * ninguno). Un maître o responsable va al primer grupo que no tenga quien lo dirija.
+ * Coloca al camarero que acaba de aceptar en el grupo que más lo necesita (si el evento tiene grupos y aún no está
+ * en ninguno). A los maîtres y responsables los asigna RRHH: el que no tiene grupo es el maître general del evento.
  */
 export async function placeInGroup(assignmentId: string) {
   const a = await db.assignment.findUnique({
     where: { id: assignmentId },
     include: { event: { include: { groups: { orderBy: { position: "asc" } }, assignments: { where: { status: { in: ["CONVOCADO", "CONFIRMADO"] } } } } } },
   });
-  if (!a || a.groupId || !groupable(a.role) || !a.event.groups.length) return;
+  if (!a || a.groupId || !groupable(a.role) || isLeadRole(a.role) || !a.event.groups.length) return;
   const others = a.event.assignments.filter((x) => x.id !== a.id && x.groupId && x.status === "CONFIRMADO");
-  let target: string | undefined;
-  if (isLeadRole(a.role)) {
-    target = a.event.groups.find((g) => !others.some((x) => x.groupId === g.id && isLeadRole(x.role)))?.id;
-  } else {
-    const count = new Map<string, number>();
-    for (const x of others) if (!isLeadRole(x.role)) count.set(x.groupId!, (count.get(x.groupId!) ?? 0) + 1);
-    target = emptiest(a.event.groups, count)?.id;
-  }
+  const count = new Map<string, number>();
+  for (const x of others) if (!isLeadRole(x.role)) count.set(x.groupId!, (count.get(x.groupId!) ?? 0) + 1);
+  const target = emptiest(a.event.groups, count)?.id;
   if (!target) return;
   await db.assignment.update({ where: { id: a.id }, data: { groupId: target } });
   notifyGroupChange([a.id]);
 }
 
 /**
- * Reparte al personal entre los grupos. Con `all` se rehace el reparto completo; si no, solo se coloca a quien
- * aún no tiene grupo. Los camareros se reparten por puntuación alternando grupos (para que cada grupo tenga
- * gente con experiencia) y respetando lo que necesita cada uno; los maîtres y responsables, uno por grupo.
+ * Reparte a los camareros entre los grupos. Con `all` se rehace el reparto completo; si no, solo se coloca a quien
+ * aún no tiene grupo. Se reparten por puntuación alternando grupos (para que cada grupo tenga gente con
+ * experiencia) y respetando lo que necesita cada uno. Los maîtres y responsables no se tocan: los elige RRHH.
  * Devuelve cuántas personas han cambiado de grupo.
  */
 export async function distribute(eventId: string, all: boolean) {
@@ -81,25 +76,17 @@ export async function distribute(eventId: string, all: boolean) {
     include: { groups: { orderBy: { position: "asc" } }, assignments: { where: { status: { in: ["CONVOCADO", "CONFIRMADO"] } } } },
   });
   if (!ev.groups.length) return 0;
-  const members: Member[] = ev.assignments.filter((a) => groupable(a.role));
+  const members: Member[] = ev.assignments.filter((a) => groupable(a.role) && !isLeadRole(a.role));
   const next = new Map(members.map((m) => [m.id, all ? null : m.groupId]));
   const scores = await computeScores(members.map((m) => m.workerId), ev.date);
   const byScore = (x: Member, y: Member) =>
     // Primero los confirmados; después por puntuación
     (x.status === "CONFIRMADO" ? 0 : 1) - (y.status === "CONFIRMADO" ? 0 : 1) || (scores.get(y.workerId)?.score ?? 0) - (scores.get(x.workerId)?.score ?? 0);
 
-  // Quien dirige: uno por grupo, primero los maîtres
-  const leads = members.filter((m) => isLeadRole(m.role) && !next.get(m.id)).sort((x, y) => (x.role === "MAITRE" ? 0 : 1) - (y.role === "MAITRE" ? 0 : 1) || byScore(x, y));
-  for (const g of ev.groups) {
-    if (members.some((m) => isLeadRole(m.role) && next.get(m.id) === g.id)) continue;
-    const l = leads.shift();
-    if (l) next.set(l.id, g.id);
-  }
-
   // Camareros: en orden de puntuación, siempre al grupo con más hueco (así se alternan los mejores)
   const count = new Map<string, number>();
-  for (const m of members) if (!isLeadRole(m.role) && next.get(m.id)) count.set(next.get(m.id)!, (count.get(next.get(m.id)!) ?? 0) + 1);
-  for (const m of members.filter((m) => !isLeadRole(m.role) && !next.get(m.id)).sort(byScore)) {
+  for (const m of members) if (next.get(m.id)) count.set(next.get(m.id)!, (count.get(next.get(m.id)!) ?? 0) + 1);
+  for (const m of members.filter((m) => !next.get(m.id)).sort(byScore)) {
     const g = emptiest(ev.groups, count);
     next.set(m.id, g.id);
     count.set(g.id, (count.get(g.id) ?? 0) + 1);
@@ -122,7 +109,9 @@ export function notifyGroupChange(assignmentIds: string[]) {
     for (const a of list) {
       const body = a.group
         ? groupLine(a.group, a.event.startTime, a.role)
-        : `Ya no estás en ningún grupo. Tu hora de entrada es la del evento: ${a.event.startTime}.`;
+        : isLeadRole(a.role)
+          ? `Eres el ${ROLE_LABEL[a.role as Role].toLowerCase()} general del evento: supervisas todos los grupos. Entrada ${a.event.startTime}.`
+          : `Ya no estás en ningún grupo. Tu hora de entrada es la del evento: ${a.event.startTime}.`;
       await notify({
         workerIds: [a.workerId],
         workerUrl: `/app/eventos/${a.eventId}`,
@@ -139,4 +128,14 @@ export function groupLine(g: GroupWithLead, eventStart: string, role: string | n
   const lead = groupLead(g);
   const leadText = lead && !(role && isLeadRole(role)) ? ` · ${lead.label}: ${lead.name}` : "";
   return `${g.name}${leadText} · Entrada ${g.callTime || eventStart}`;
+}
+
+/** Maître (o responsable) general del evento con grupos: quien dirige y no está en ningún grupo. */
+export async function generalLead(eventId: string) {
+  const l = await db.assignment.findFirst({
+    where: { eventId, status: "CONFIRMADO", role: { in: [...LEAD_ROLES] }, groupId: null, event: { groups: { some: {} } } },
+    orderBy: { role: "asc" }, // MAITRE antes que RESPONSABLE
+    select: { role: true, worker: { select: { name: true } } },
+  });
+  return l ? `${ROLE_LABEL[l.role as Role]} general: ${l.worker.name}` : null;
 }

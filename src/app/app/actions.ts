@@ -21,7 +21,6 @@ import { DOC_LABEL, validDniNie, validIban } from "@/lib/staff";
 import { clocksIn, formatDate, isLeadRole, isRole, nowTime, type Role, today } from "@/lib/domain";
 import { autoReplace } from "@/lib/staffing";
 import { placeInGroup } from "@/lib/groups";
-import { sameDayBooking } from "@/lib/convocation";
 import { notify } from "@/lib/push";
 import { isEventLead, pendingReviews, reviewTeam, reviewWindowOpen } from "@/lib/reviews";
 import { CRITERIA } from "@/lib/scoring";
@@ -58,9 +57,6 @@ export async function respond(assignmentId: string, accept: boolean) {
   if (accept && (await pendingReviews(worker.id)).some((p) => p.overdue)) return;
   const status = accept ? "CONFIRMADO" : "RECHAZADO";
   const changed = await db.$transaction(async (tx) => {
-    // Una respuesta a la vez por trabajador: dos aceptaciones simultáneas no pueden confirmarle en dos eventos del mismo día
-    await tx.$executeRaw`SELECT id FROM "Worker" WHERE id = ${worker.id} FOR UPDATE`;
-    if (accept && (await sameDayBooking(tx, a))) return false;
     const r = await tx.assignment.updateMany({
       where: { id: a.id, status: { in: from } },
       data: {

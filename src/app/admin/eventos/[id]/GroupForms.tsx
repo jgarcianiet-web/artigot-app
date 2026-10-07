@@ -2,7 +2,7 @@
 
 import { useActionState, useTransition } from "react";
 import { ActionForm, SubmitButton } from "@/components/client";
-import { createGroups, moveToGroup, updateGroup } from "./groupActions";
+import { createGroups, moveToGroup, setGroupLead, updateGroup } from "./groupActions";
 
 export function CreateGroups({ eventId, defaultTime, first }: { eventId: string; defaultTime: string; first: boolean }) {
   const [msg, action] = useActionState(createGroups.bind(null, eventId), null);
@@ -65,5 +65,29 @@ export function MoveSelect({ assignmentId, groupId, groups }: { assignmentId: st
         <option key={g.id} value={g.id}>{g.name}</option>
       ))}
     </select>
+  );
+}
+
+/** Quién dirige el grupo (maître o camarero responsable del evento). */
+export function LeadSelect({ groupId, current, leads }: { groupId: string; current: string | null; leads: { id: string; label: string }[] }) {
+  const [pending, start] = useTransition();
+  return (
+    <label className="block text-sm">
+      <span className="label">Maître o responsable del grupo</span>
+      <select
+        className="input"
+        defaultValue={current ?? ""}
+        disabled={pending}
+        onChange={(e) => {
+          const v = e.target.value;
+          start(() => setGroupLead(groupId, v));
+        }}
+      >
+        <option value="">— Sin asignar (lo lleva el general) —</option>
+        {leads.map((l) => (
+          <option key={l.id} value={l.id}>{l.label}</option>
+        ))}
+      </select>
+    </label>
   );
 }

@@ -86,6 +86,12 @@ export default async function EventDetail({ params, searchParams }: { params: Pr
     unreadCounts({ kind: "admin", name: adminName }, [event.id]),
   ]);
   const unreadChat = unread.get(event.id) ?? 0;
+  // Quien ese día también va a otro evento (mañana y tarde): se puede, pero se avisa
+  const otherSameDay = new Map<string, string[]>();
+  for (const o of await db.assignment.findMany({
+    where: { workerId: { in: event.assignments.map((a) => a.workerId) }, eventId: { not: event.id }, status: { in: ["CONVOCADO", "CONFIRMADO"] }, event: { date: event.date } },
+    select: { workerId: true, event: { select: { name: true, startTime: true, endTime: true } } },
+  })) otherSameDay.set(o.workerId, [...(otherSameDay.get(o.workerId) ?? []), `${o.event.name} ${o.event.startTime}${o.event.endTime ? `–${o.event.endTime}` : ""}`]);
   const [budget] = await budgetRows({ eventId: event.id });
   const cov = coverage(event, event.assignments);
   const missing = gaps(event, event.assignments);
@@ -96,11 +102,22 @@ export default async function EventDetail({ params, searchParams }: { params: Pr
     `Hola ${name.split(" ")[0]}, te convocamos para ${event.name} el ${formatDate(event.date, { long: true })} a las ${callTime(event, role)} en ${event.venue} (${ROLE_LABEL[role as Role]?.toLowerCase() ?? role}). Acepta o rechaza en la app: ${appUrl()}/app`;
   const pendingNoPush = event.assignments.filter((a) => a.status === "CONVOCADO" && a.worker._count.devices === 0);
   const maitres = confirmed.filter((a) => isLeadRole(a.role)); // maître o camarero responsable
+  // Lista de comprobación antes de cerrar el evento
+  const openIncidents = await db.incident.count({ where: { eventId: event.id, resolved: false } });
+  const noHours = confirmed.filter((a) => costHours(a, a.worker, event) == null);
+  const stillPending = event.assignments.filter((a) => a.status === "CONVOCADO");
+  const closeChecks = [
+    event.date > today() && "el evento aún no se ha celebrado",
+    noHours.length && `${noHours.length} ${noHours.length === 1 ? "persona sin horas" : "personas sin horas"} (${noHours.slice(0, 5).map((a) => a.worker.name).join(", ")}${noHours.length > 5 ? "…" : ""}): no se le pagará hasta tenerlas`,
+    openIncidents && `${openIncidents} ${openIncidents === 1 ? "incidencia abierta" : "incidencias abiertas"}`,
+    stillPending.length && `${stillPending.length} ${stillPending.length === 1 ? "convocado sin contestar" : "convocados sin contestar"}`,
+  ].filter((x): x is string => typeof x === "string");
   // Cada maître o responsable valora a su equipo (con grupos, a su grupo)
   const pendingReviewCount = maitres.reduce((n, m) => {
     const done = new Set(reviews.filter((r) => r.reviewerId === m.workerId).map((r) => r.workerId));
     return n + teamOf(confirmed, m.workerId).filter((a) => !done.has(a.workerId)).length;
   }, 0);
+  if (pendingReviewCount > 0 && event.date <= today()) closeChecks.push(`${pendingReviewCount} valoraciones del equipo sin hacer`);
 
 
   let totalHours = 0;
@@ -140,7 +157,20 @@ export default async function EventDetail({ params, searchParams }: { params: Pr
           <Link href={`/admin/eventos/${event.id}/directo`} className="btn">🔴 En directo</Link>
           <Link href={`/admin/eventos/${event.id}/editar`} className="btn">Editar</Link>
           <form action={setEventStatus.bind(null, event.id, event.status === "CERRADO" ? "ABIERTO" : "CERRADO")}>
-            <SubmitButton className="btn">{event.status === "CERRADO" ? "Reabrir" : "Cerrar evento"}</SubmitButton>
+            {event.status === "CERRADO" ? (
+              <SubmitButton className="btn">Reabrir</SubmitButton>
+            ) : (
+              <ConfirmButton
+                className="btn"
+                message={
+                  closeChecks.length
+                    ? `Antes de cerrar el evento, queda pendiente:\n\n${closeChecks.map((c) => `• ${c}`).join("\n")}\n\n¿Cerrarlo igualmente?`
+                    : "Todo listo: horas cerradas, sin incidencias abiertas ni respuestas pendientes. ¿Cerrar el evento?"
+                }
+              >
+                Cerrar evento{closeChecks.length > 0 && <span className="ml-1 rounded-full bg-amber-100 px-1.5 text-xs text-amber-900">{closeChecks.length}</span>}
+              </ConfirmButton>
+            )}
           </form>
           <details className="relative">
             <summary className="btn cursor-pointer list-none">Más ▾</summary>
@@ -268,6 +298,11 @@ export default async function EventDetail({ params, searchParams }: { params: Pr
                           {a.group.name}
                         </Link>
                       )}
+                      {otherSameDay.has(a.workerId) && (a.status === "CONVOCADO" || a.status === "CONFIRMADO") && (
+                        <span className="ml-1 rounded bg-amber-100 px-1.5 text-[11px] text-amber-900" title="Ese día también trabaja en otro evento">
+                          ⚠ también en {otherSameDay.get(a.workerId)!.join(", ")}
+                        </span>
+                      )}
                       {a.worker._count.devices === 0 && !a.notice && (
                         <span className="ml-1 text-xs text-amber-700" title="No ha activado los avisos de la app en ningún móvil: no le llegan las notificaciones">🔕 sin avisos</span>
                       )}
@@ -343,12 +378,13 @@ export default async function EventDetail({ params, searchParams }: { params: Pr
                               name="workerId"
                               value={c.id}
                               className="size-4"
-                              defaultChecked={i < missing[role]}
+                              defaultChecked={!c.busyWith && i < missing[role]}
                             />
                           </td>
                           <td>
                             {c.name}
                             {c.available && <span className="ml-1.5 rounded bg-emerald-100 px-1.5 text-[11px] text-emerald-800" title="Ha dicho en un sondeo que puede trabajar este día">✓ disponible</span>}
+                            {c.busyWith && <div className="text-xs text-amber-800">⚠ Ese día ya está en {c.busyWith}</div>}
                             {c.zone && <div className="text-xs text-stone-500">{c.zone}</div>}
                             {c.mainRole !== role && (
                               <div className="text-xs text-stone-500">Puesto principal: {ROLE_LABEL[c.mainRole as keyof typeof ROLE_LABEL]?.toLowerCase()}</div>

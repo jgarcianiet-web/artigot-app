@@ -18,10 +18,12 @@ type Props = {
   };
   /** Grupo del trabajador en los eventos grandes */
   group?: GroupWithLead | null;
+  /** «Maître general: …» en los eventos con grupos */
+  general?: string | null;
 };
 
 /** Datos del servicio tal y como los ve el trabajador. */
-export function EventInfo({ event, role, group }: Props) {
+export function EventInfo({ event, role, group, general }: Props) {
   const lead = group ? groupLead(group) : null;
   return (
     <div className="space-y-0.5">
@@ -37,9 +39,11 @@ export function EventInfo({ event, role, group }: Props) {
       {group && (
         <div className="my-1 rounded-lg bg-brand-50 px-2 py-1 text-sm">
           <strong>{group.name}</strong>
-          {isLeadRole(role) ? " · diriges este grupo" : lead ? ` · ${lead.label}: ${lead.name}` : " · maître por confirmar"}
+          {isLeadRole(role) ? " · diriges este grupo" : lead ? ` · ${lead.label}: ${lead.name}` : ""}
+          {general && <span className="block text-xs text-stone-600">{general}</span>}
         </div>
       )}
+      {!group && general && <div className="my-1 rounded-lg bg-brand-50 px-2 py-1 text-sm">{general}</div>}
       <a
         className="text-sm text-brand-700 underline"
         href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(

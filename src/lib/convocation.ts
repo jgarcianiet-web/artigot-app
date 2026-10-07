@@ -28,21 +28,17 @@ export async function saveConvocationSettings(value: ConvocationSettings) {
   await db.setting.upsert({ where: { key: "convocatorias" }, create: { key: "convocatorias", value }, update: { value } });
 }
 
-/** Otro servicio confirmado ese mismo día (no se puede estar en dos eventos a la vez). */
-export async function sameDayBooking(
-  tx: Pick<typeof db, "assignment">,
-  a: { id: string; workerId: string; event: { date: string } },
-) {
-  return tx.assignment.findFirst({
-    where: { workerId: a.workerId, id: { not: a.id }, status: "CONFIRMADO", event: { date: a.event.date } },
-    select: { event: { select: { name: true } } },
+/** Otros servicios ese mismo día (convocado o confirmado): se puede ir a los dos (mañana y tarde), pero se avisa. */
+export async function sameDayBookings(a: { id: string; workerId: string; event: { date: string } }) {
+  const list = await db.assignment.findMany({
+    where: { workerId: a.workerId, id: { not: a.id }, status: { in: ["CONVOCADO", "CONFIRMADO"] }, event: { date: a.event.date } },
+    select: { status: true, event: { select: { name: true, startTime: true, endTime: true } } },
   });
+  return list.map((o) => `${o.event.name} (${o.event.startTime}${o.event.endTime ? `–${o.event.endTime}` : ""}${o.status === "CONVOCADO" ? ", pendiente de contestar" : ""})`);
 }
 
-/** Para la ficha del evento: ¿puede aceptar? Si no, por qué. */
-export async function acceptBlock(a: { id: string; workerId: string; event: { date: string } }) {
-  const other = await sameDayBooking(db, a);
-  if (other) return `Ya estás confirmado ese día en ${other.event.name}. Si puedes hacer los dos, habla con RRHH.`;
+/** Para la ficha del evento: ¿puede aceptar? (solo lo impiden las valoraciones atrasadas) */
+export async function acceptBlock(a: { workerId: string }) {
   if ((await pendingReviews(a.workerId)).some((p) => p.overdue)) return "Antes de aceptar nuevas convocatorias, valora a tu equipo de los eventos anteriores.";
   return null;
 }

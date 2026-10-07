@@ -17,7 +17,7 @@ export default async function GroupSheet({ params }: { params: Promise<{ id: str
   if (!event) notFound();
   const sections = [
     ...event.groups.map((g) => ({ key: g.id, name: g.name, time: g.callTime ?? event.startTime, people: event.assignments.filter((a) => a.groupId === g.id) })),
-    { key: "sin", name: "Sin grupo", time: event.startTime, people: event.assignments.filter((a) => !a.groupId && a.role !== "MOZO") },
+    { key: "sin", name: "Maître general y sin grupo", time: event.startTime, people: event.assignments.filter((a) => !a.groupId && a.role !== "MOZO") },
     { key: "mozos", name: "Mozos", time: event.unloadTime ?? event.startTime, people: event.assignments.filter((a) => a.role === "MOZO") },
   ].filter((s) => s.people.length);
   const sort = (a: { role: string; worker: { name: string } }, b: { role: string; worker: { name: string } }) =>
