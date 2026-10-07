@@ -89,7 +89,13 @@ export function ClockButtons({
   }, [assignmentId]);
 
   function saveOffline(kind: "in" | "out", position: Position, at: number) {
-    enqueueClock({ assignmentId, kind, ...position, capturedAt: at });
+    if (!enqueueClock({ assignmentId, kind, ...position, capturedAt: at })) {
+      setResult({
+        ok: false,
+        message: `No hemos podido guardar tu ${kind === "in" ? "entrada" : "salida"} en este móvil (sin espacio o en modo privado). No está registrada: avisa ahora a tu maître o a RRHH con la hora (${hhmm(new Date(at))}) para que la apunten.`,
+      });
+      return;
+    }
     setResult({
       ok: true,
       message: `Sin cobertura: ${kind === "in" ? "entrada" : "salida"} guardada a las ${hhmm(new Date(at))}. Se enviará sola en cuanto vuelva la señal; no cierres sesión.`,

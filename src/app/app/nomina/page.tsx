@@ -5,6 +5,7 @@ import { clocksIn, euro, formatDate, isFixed, num, ROLE_LABEL, today, type Role 
 import { deductions, getPaySettings, halfFromKey, halfLabel, netOf, payPeriod } from "@/lib/pay";
 import { workerMonth } from "@/lib/staff";
 import { monthRecordDocs } from "@/lib/timeRecord";
+import { FileLink } from "@/components/FileLink";
 
 const MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 const shift = (month: string, d: number) => {
@@ -23,7 +24,7 @@ export default async function MyPay({ searchParams }: { searchParams: Promise<{ 
     getPaySettings(),
     db.worker.findUniqueOrThrow({ where: { id: me.id }, select: { iban: true, contractCode: true, noClock: true } }),
   ]);
-  if (isFixed(worker)) return <FixedMonth month={month} current={current} m={m} noClock={!clocksIn(worker)} />;
+  if (isFixed(worker)) return <FixedMonth month={month} current={current} m={m} noClock={!clocksIn(worker)} slip={<PayslipLink workerId={me.id} month={month} />} />;
   const record = (await monthRecordDocs(month, me.id))[0];
   const halves = await Promise.all([1, 2].map((n) => payPeriod(halfFromKey(`${month}-${n}`)!, { workerId: me.id })));
   const [y, mm] = month.split("-").map(Number);
@@ -110,6 +111,8 @@ export default async function MyPay({ searchParams }: { searchParams: Promise<{ 
         );
       })}
 
+      <PayslipLink workerId={me.id} month={month} />
+
       {record && (
         <Link href={`/app/firmar/${record.id}`} className="card flex items-center justify-between text-sm">
           <span>🕒 Registro de jornada de {MONTHS[mm - 1]}</span>
@@ -133,7 +136,7 @@ export default async function MyPay({ searchParams }: { searchParams: Promise<{ 
 }
 
 /** Fijos: su nómina es mensual; aquí solo ven sus servicios y sus horas. */
-function FixedMonth({ month, current, m, noClock }: { month: string; current: string; m: Awaited<ReturnType<typeof workerMonth>>; noClock: boolean }) {
+function FixedMonth({ month, current, m, noClock, slip }: { month: string; current: string; m: Awaited<ReturnType<typeof workerMonth>>; noClock: boolean; slip: React.ReactNode }) {
   const [y, mm] = month.split("-").map(Number);
   return (
     <div className="space-y-4">
@@ -148,6 +151,7 @@ function FixedMonth({ month, current, m, noClock }: { month: string; current: st
         {!noClock && <div className="card p-3"><div className="text-2xl font-semibold tabular-nums">{num(m.hours)}</div><div className="text-xs text-stone-500">Horas</div></div>}
       </div>
       <p className="text-sm text-stone-600">Cobras tu nómina mensual. Si un mes trabajas más de lo que cubre tu nómina, la diferencia se te paga aparte.</p>
+      {slip}
       {m.rows.length > 0 && (
         <ul className="card divide-y divide-stone-100 p-0 text-sm">
           {m.rows.map((r) => (
@@ -162,5 +166,19 @@ function FixedMonth({ month, current, m, noClock }: { month: string; current: st
         </ul>
       )}
     </div>
+  );
+}
+
+/** La nómina de A3 del mes (si RRHH ya la ha subido). Al verla aquí queda como vista. */
+async function PayslipLink({ workerId, month }: { workerId: string; month: string }) {
+  const p = await db.payslip.findUnique({ where: { workerId_month: { workerId, month } } });
+  if (!p) return null;
+  if (!p.seenAt) await db.payslip.update({ where: { id: p.id }, data: { seenAt: new Date() } });
+  const [y, mm] = month.split("-").map(Number);
+  return (
+    <FileLink href={`/api/files/${p.fileId}`} title={`Nómina de ${MONTHS[mm - 1]} ${y}`} className="card flex items-center justify-between text-sm">
+      <span>📄 Mi nómina de {MONTHS[mm - 1]}{p.pages > 1 ? ` (${p.pages} páginas)` : ""}</span>
+      <span className="font-medium text-stone-900 underline">Ver PDF ›</span>
+    </FileLink>
   );
 }

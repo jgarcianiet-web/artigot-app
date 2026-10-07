@@ -172,6 +172,10 @@ export async function generateRemittance(key: string, _prev: PayResult, form: Fo
   if (current.status === "ABIERTA" && pending && form.get("force") !== "1") {
     return { ok: false, message: `Hay ${pending} servicios sin horas cerradas; no se pagarían en esta remesa. Ciérralos en Liquidación o marca «Generar igualmente».` };
   }
+  // Antes de cerrar la quincena: si no hay a quién pagar, no se toca nada
+  if (!current.rows.some((r) => r.net > 0 && r.iban && validIban(r.iban))) {
+    return { ok: false, message: "No hay nadie con importe y un IBAN válido en esta quincena. La quincena sigue como estaba." };
+  }
   await closePeriod(h, by);
   const { rows, payDate } = await payPeriod(h);
   const payable = rows.filter((r) => r.net > 0 && r.iban && validIban(r.iban));
@@ -195,7 +199,7 @@ export async function generateRemittance(key: string, _prev: PayResult, form: Fo
   });
   const total = Math.round(payable.reduce((t, r) => t + r.net, 0) * 100) / 100;
   const rem = await db.remittance.create({
-    data: { periodId: current.period?.id ?? (await ensurePeriod(h, by)).id, msgId, count: payable.length, total, execDate, xml, createdBy: by },
+    data: { periodId: current.period?.id ?? (await ensurePeriod(h, by)).id, msgId, count: payable.length, total, execDate, xml, createdBy: by, workerIds: payable.map((r) => r.workerId) },
   });
   await auditAdmin(by, "Remesa", "Generada", `Remesa de la quincena ${halfLabel(h)}: ${payable.length} transferencias, ${euro(total)}, ejecución ${execDate}${skipped.length ? `; sin IBAN: ${skipped.join(", ")}` : ""}`, { entityId: h.key, data: { msgId, lines: payable.map((r) => ({ name: r.name, net: r.net })) } });
   done(h);
@@ -214,16 +218,27 @@ export async function reopenPeriod(key: string) {
   done(h);
 }
 
-/** Marca la quincena como pagada y avisa a cada persona de su importe. */
+/**
+ * Marca la quincena como pagada y avisa a cada persona de su importe. Si se pagó con remesa, solo se avisa a
+ * quien iba en ella: a quien quedó fuera (sin IBAN válido) se le paga aparte y no recibe un «te hemos pagado».
+ */
 export async function markPaid(key: string) {
   const by = await requireAdmin();
   const h = half(key);
+  const period = await db.payPeriod.findFirst({ where: { from: h.from, to: h.to }, include: { remittances: { select: { workerIds: true } } } });
   const res = await db.payPeriod.updateMany({ where: { from: h.from, to: h.to, status: "CERRADA" }, data: { status: "PAGADA", paidAt: new Date(), updatedBy: by } });
   if (!res.count) return;
   const { rows } = await payPeriod(h);
-  await auditAdmin(by, "Pago", "Pagada", `Quincena ${halfLabel(h)} marcada como pagada (${rows.filter((x) => x.net > 0).length} personas, ${euro(rows.reduce((t, x) => t + x.net, 0))})`, { entityId: h.key });
+  const inRemittance = new Set(period?.remittances.flatMap((r) => r.workerIds) ?? []);
+  const remitted = period?.remittances.length ?? 0;
+  // Remesas anteriores a guardar quién iba: se toma a quien tiene un IBAN válido (los mismos que entraron)
+  const included = (x: (typeof rows)[number]) =>
+    !remitted || (inRemittance.size ? inRemittance.has(x.workerId) : !!x.iban && validIban(x.iban));
+  const paid = rows.filter((x) => x.net > 0 && included(x));
+  const outside = rows.filter((x) => x.net > 0 && !paid.includes(x)).map((x) => x.name);
+  await auditAdmin(by, "Pago", "Pagada", `Quincena ${halfLabel(h)} marcada como pagada (${paid.length} personas, ${euro(paid.reduce((t, x) => t + x.net, 0))})${outside.length ? `; fuera de la remesa, sin aviso de pago: ${outside.join(", ")}` : ""}`, { entityId: h.key });
   after(async () => {
-    for (const r of rows.filter((x) => x.net > 0)) {
+    for (const r of paid) {
       await notify({
         workerIds: [r.workerId],
         workerUrl: `/app/nomina?q=${h.key}`,

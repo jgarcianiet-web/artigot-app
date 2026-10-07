@@ -17,7 +17,7 @@ export default async function LeadPanel({ params }: { params: Promise<{ id: stri
   const me = await requireWorker();
   if (!(await isEventLead(id, me.id))) notFound();
   const [live, incidents] = await Promise.all([
-    liveTeam(id),
+    liveTeam(id, new Date(), me.id),
     db.incident.findMany({
       where: { eventId: id },
       include: { reporter: { select: { name: true } }, worker: { select: { name: true } }, photos: { select: { id: true } } },

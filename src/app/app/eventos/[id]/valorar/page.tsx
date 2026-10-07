@@ -13,7 +13,7 @@ export default async function RateTeam({ params }: { params: Promise<{ id: strin
   if (!event || !(await isEventLead(id, me.id))) notFound();
 
   const [team, reviews] = await Promise.all([
-    reviewTeam(id),
+    reviewTeam(id, me.id),
     db.review.findMany({ where: { eventId: id, reviewerId: me.id } }),
   ]);
   const byWorker = new Map(reviews.map((r) => [r.workerId, r]));

@@ -84,6 +84,7 @@ model Worker {
   payLines        PayLine[]
   employments     Employment[]
   pollAnswers     PollAnswer[]
+  payslips        Payslip[]
 }
 
 // Días en los que el trabajador no está disponible (fecha YYYY-MM-DD)
@@ -144,8 +145,26 @@ model Event {
   reviews       Review[]
   incidents     Incident[]
   files         StoredFile[]
+  groups        EventGroup[]
 
   @@index([date])
+}
+
+// Grupo de un evento grande: su maître o camarero responsable (la asignación de puesto de mando del grupo)
+// y su hora de entrada, que sustituye a la del evento para los camareros del grupo. Los mozos van aparte.
+model EventGroup {
+  id          String       @id @default(cuid())
+  eventId     String
+  name        String
+  callTime    String?
+  // Camareros que necesita el grupo (orientativo, para repartir)
+  need        Int          @default(0)
+  position    Int          @default(0)
+  createdAt   DateTime     @default(now())
+  event       Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  assignments Assignment[]
+
+  @@index([eventId])
 }
 
 // Estado: CONVOCADO | CONFIRMADO | RECHAZADO | CANCELADO
@@ -186,6 +205,9 @@ model Assignment {
   notice        String?
   noticeOk      Boolean?
   noticeAt      DateTime?
+  // Grupo dentro del evento (eventos grandes)
+  groupId       String?
+  group         EventGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
   createdAt     DateTime  @default(now())
   event         Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
   worker        Worker    @relation(fields: [workerId], references: [id], onDelete: Cascade)
@@ -299,6 +321,7 @@ model StoredFile {
   document   WorkerDocument?
   candidate  Candidate?
   signatureOf Contract?
+  payslip    Payslip?
 }
 
 // Incidencia del evento. type: ROTURA | QUEJA | ACCIDENTE | PERSONAL | OTRO
@@ -389,6 +412,8 @@ model EventTemplate {
   needMozos        Int      @default(0)
   notes            String?
   checklist        String?
+  // Grupos del evento: [{ name, callTime, need }]
+  groups           Json?
   venueId          String?
   venue            Venue?   @relation(fields: [venueId], references: [id], onDelete: SetNull)
   createdAt        DateTime @default(now())
@@ -559,9 +584,30 @@ model Remittance {
   total     Float
   execDate  String
   xml       String
+  // Personas incluidas en la transferencia (solo a ellas se les avisa del pago)
+  workerIds String[]  @default([])
   createdBy String
   createdAt DateTime  @default(now())
   period    PayPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+}
+
+// Nómina de A3 de un trabajador en un mes (sus páginas del PDF que calcula A3; todas las del mes juntas)
+model Payslip {
+  id        String    @id @default(cuid())
+  workerId  String
+  month     String
+  fileId    String    @unique
+  pages     Int
+  // Líquido a percibir leído del PDF (suma de sus nóminas del mes); null si no se ha podido leer
+  net       Float?
+  createdBy String
+  createdAt DateTime  @default(now())
+  seenAt    DateTime?
+  worker    Worker    @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  file      StoredFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@unique([workerId, month])
+  @@index([month])
 }
 
 // Altas y bajas en la Seguridad Social (sustituye al Excel de altas y bajas)

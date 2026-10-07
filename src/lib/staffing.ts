@@ -19,12 +19,14 @@ export type Candidate = {
   score: Score;
   /** Ha dicho en un sondeo que puede trabajar ese día */
   available: boolean;
+  /** Ya está convocado o confirmado ese día en otro evento (p. ej. «Comida Hotel 13:00–17:00»): se puede, pero se avisa */
+  busyWith: string | null;
 };
 
 /**
  * Trabajadores disponibles para un evento, por puesto.
- * Excluye: inactivos, no disponibles ese día, ya ocupados en otro evento ese día
- * y los que ya han estado en este evento (también quien rechazó: no se le vuelve a convocar solo).
+ * Excluye: inactivos, no disponibles ese día y los que ya han estado en este evento (también quien rechazó: no
+ * se le vuelve a convocar solo). Quien ya trabaja ese día en otro evento (mañana y tarde) sí sale, avisado y detrás.
  * Un trabajador aparece en cada puesto que puede desempeñar (p. ej. camarero y camarero responsable).
  * Ordena por la puntuación del algoritmo (ver scoring.ts).
  */
@@ -34,10 +36,12 @@ export async function candidatesFor(event: { id: string; date: string }) {
       where: {
         active: true,
         unavailabilities: { none: { date: event.date } },
+        assignments: { none: { eventId: event.id } },
+      },
+      include: {
         assignments: {
-          none: {
-            OR: [{ eventId: event.id }, { status: { in: ACTIVE_STATUSES }, event: { date: event.date } }],
-          },
+          where: { status: { in: ACTIVE_STATUSES }, event: { date: event.date } },
+          select: { event: { select: { name: true, startTime: true, endTime: true } } },
         },
       },
       orderBy: { name: "asc" },
@@ -69,12 +73,13 @@ export async function candidatesFor(event: { id: string; date: string }) {
         recentEvents: recentByWorker.get(w.id) ?? 0,
         score: scores.get(w.id)!,
         available: said.has(w.id),
+        busyWith: w.assignments.map((a) => `${a.event.name} ${a.event.startTime}${a.event.endTime ? `–${a.event.endTime}` : ""}`).join(", ") || null,
       });
     }
   }
   for (const role of ROLES) {
     byRole[role].sort(
-      (a, b) => Number(b.available) - Number(a.available) || b.score.score - a.score.score || a.recentEvents - b.recentEvents || a.name.localeCompare(b.name),
+      (a, b) => Number(!!a.busyWith) - Number(!!b.busyWith) || Number(b.available) - Number(a.available) || b.score.score - a.score.score || a.recentEvents - b.recentEvents || a.name.localeCompare(b.name),
     );
   }
   return byRole;
@@ -161,7 +166,8 @@ export async function fillGaps(eventId: string, roles: readonly Role[] = ROLES) 
         let count = 0;
         for (const c of candidates[role]) {
           if (count >= missing[role]) break;
-          if (picked.has(c.id)) continue;
+          // La selección automática no convoca a quien ya trabaja ese día en otro evento (RRHH sí puede, a mano)
+          if (picked.has(c.id) || c.busyWith) continue;
           picked.add(c.id);
           await tx.assignment.create({ data: { eventId, workerId: c.id, role } });
           invited.push({ workerId: c.id, role, name: c.name });

@@ -4,10 +4,11 @@ import { db } from "./db";
 import { mailEnabled, sendMail } from "./mail";
 import { addDays, appUrl, callTime, formatDate, isLeadRole, LEAD_ROLES, ROLE_LABEL, type Role } from "./domain";
 import { notify } from "./push";
-import { REVIEW_DAYS } from "./reviews";
+import { REVIEW_DAYS, teamOf } from "./reviews";
 import { DOC_LABEL, DOC_WARN_DAYS } from "./staff";
 import { generateTimeRecords, monthLabel, shiftMonth } from "./timeRecord";
 import { audit } from "./audit";
+import { GROUP_WITH_LEAD, groupLine } from "./groups";
 import { incompleteWorkers, missingText } from "./completeness";
 import { backupNow } from "./backup";
 import { syncAutoEmployments } from "./autoAltas";
@@ -113,7 +114,7 @@ export async function runReminders(now = new Date()) {
   if (now >= madridTime(today, REMINDERS.DAY_BEFORE_HOUR)) {
     const team = await db.assignment.findMany({
       where: { status: "CONFIRMADO", event: { date: tomorrow, status: "ABIERTO" } },
-      include: { event: true },
+      include: { event: true, group: GROUP_WITH_LEAD },
     });
     for (const a of team) {
       if (!(await claim(`dia-antes:${a.id}`))) continue;
@@ -121,7 +122,7 @@ export async function runReminders(now = new Date()) {
         workerIds: [a.workerId],
         workerUrl: `/app/eventos/${a.eventId}`,
         title: `Mañana: ${a.event.name}`,
-        body: `Citación a las ${callTime(a.event, a.role)} en ${a.event.venue}.${a.event.meetingPoint ? ` Punto de encuentro: ${a.event.meetingPoint}${a.event.meetingTime ? ` a las ${a.event.meetingTime}` : ""}.` : ""}${a.event.notes ? " Revisa las notas del evento." : ""}`,
+        body: `${a.group ? `${groupLine(a.group, a.event.startTime, a.role)}. ` : ""}Citación a las ${callTime(a.event, a.role, a.group)} en ${a.event.venue}.${a.event.meetingPoint ? ` Punto de encuentro: ${a.event.meetingPoint}${a.event.meetingTime ? ` a las ${a.event.meetingTime}` : ""}.` : ""}${a.event.notes ? " Revisa las notas del evento." : ""}`,
         tag: `manana-${a.eventId}`,
       });
       sent.push(`dia-antes:${a.id}`);
@@ -132,15 +133,16 @@ export async function runReminders(now = new Date()) {
   const todays = await db.assignment.findMany({
     // Quien no ficha (fijo sin fichaje) no cuenta
     where: { status: "CONFIRMADO", checkIn: null, event: { date: { in: [today, addDays(today, -1)] } }, NOT: { worker: { noClock: true, contractCode: { in: ["100", "200"] } } } },
-    include: { event: true, worker: { select: { name: true, phone: true } } },
+    include: { event: true, group: { select: { callTime: true } }, worker: { select: { name: true, phone: true } } },
   });
   for (const a of todays) {
-    const call = madridTime(a.event.date, callTime(a.event, a.role));
+    const call = madridTime(a.event.date, callTime(a.event, a.role, a.group));
     const lateFrom = new Date(call.getTime() + REMINDERS.LATE_AFTER_MIN * 60_000);
-    if (now < lateFrom || now > clockWindow(a.event, a.role).closesAt) continue;
+    if (now < lateFrom || now > clockWindow(a.event, a.role, a.group).closesAt) continue;
     if (!(await claim(`retraso:${a.id}`))) continue;
     const leads = await db.assignment.findMany({
-      where: { eventId: a.eventId, status: "CONFIRMADO", role: { in: [...LEAD_ROLES] }, workerId: { not: a.workerId } },
+      // Con grupos: el responsable de su grupo (y quien dirige el evento sin grupo)
+      where: { eventId: a.eventId, status: "CONFIRMADO", role: { in: [...LEAD_ROLES] }, workerId: { not: a.workerId }, ...(a.groupId && { OR: [{ groupId: a.groupId }, { groupId: null }] }) },
       select: { workerId: true },
     });
     await notify({
@@ -173,14 +175,14 @@ export async function runReminders(now = new Date()) {
       include: {
         event: {
           include: {
-            assignments: { where: { status: "CONFIRMADO" }, select: { workerId: true, role: true } },
+            assignments: { where: { status: "CONFIRMADO" }, select: { workerId: true, role: true, groupId: true } },
             reviews: { select: { workerId: true, reviewerId: true } },
           },
         },
       },
     });
     for (const l of leads) {
-      const team = l.event.assignments.filter((a) => !isLeadRole(a.role));
+      const team = teamOf(l.event.assignments, l.workerId);
       const done = new Set(l.event.reviews.filter((r) => r.reviewerId === l.workerId).map((r) => r.workerId));
       const missing = team.filter((a) => !done.has(a.workerId)).length;
       if (!missing || !(await claim(`valorar:${l.id}`))) continue;

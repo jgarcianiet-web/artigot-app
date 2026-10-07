@@ -173,3 +173,11 @@ export function ListFilter({ name, placeholder = "Buscar por nombre, zona o telÃ
     </div>
   );
 }
+
+export function PrintButton({ label = "ðŸ–¨ Imprimir" }: { label?: string }) {
+  return (
+    <button type="button" className="btn btn-primary" onClick={() => window.print()}>
+      {label}
+    </button>
+  );
+}

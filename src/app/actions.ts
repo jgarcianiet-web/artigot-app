@@ -1,5 +1,7 @@
 "use server";
 
+import { placeInGroup } from "@/lib/groups";
+
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { testPush } from "@/lib/push";
@@ -470,6 +472,8 @@ export async function saveEvent(_prev: string | null, form: FormData) {
   const r = await writeEvent(form, by);
   if ("error" in r) return r.error ?? null;
   const { event, before } = r;
+  // Evento nuevo desde una plantilla con grupos: se crean sus grupos
+  if (!before && form.get("plantilla")) await groupsFromTemplate(event.id, String(form.get("plantilla")));
 
   if (before) {
     const changes = [
@@ -483,16 +487,25 @@ export async function saveEvent(_prev: string | null, form: FormData) {
       after(async () => {
         const people = await db.assignment.findMany({
           where: { eventId: event.id, status: { in: ["CONVOCADO", "CONFIRMADO"] } },
-          select: { workerId: true },
+          select: { workerId: true, role: true, group: { select: { callTime: true } } },
         });
-        await notify({
-          workerIds: people.map((p) => p.workerId),
-          workerUrl: `/app/eventos/${event.id}`,
-          title: `Cambios en ${event.name}`,
-          body: `Nueva ${changes.join(", ")}`,
-          tag: `upd-${event.id}`,
-          emailFallback: true,
-        });
+        // Quien entra a la hora de su grupo (o de la descarga) no cambia de hora aunque cambie la del servicio
+        const ownTime = (p: (typeof people)[number]) => !!p.group?.callTime || (p.role === "MOZO" && !!event.unloadTime);
+        const hourOnly = `hora: ${event.startTime}`;
+        for (const [list, text] of [
+          [people.filter((p) => !ownTime(p)), changes],
+          [people.filter(ownTime), changes.filter((c) => c !== hourOnly)],
+        ] as const) {
+          if (!list.length || !text.length) continue;
+          await notify({
+            workerIds: list.map((p) => p.workerId),
+            workerUrl: `/app/eventos/${event.id}`,
+            title: `Cambios en ${event.name}`,
+            body: `Nueva ${text.join(", ")}`,
+            tag: `upd-${event.id}`,
+            emailFallback: true,
+          });
+        }
       });
     }
   }
@@ -501,6 +514,15 @@ export async function saveEvent(_prev: string | null, form: FormData) {
 }
 
 // ---------- Plantillas, fincas y clientes ----------
+
+async function groupsFromTemplate(eventId: string, templateId: string) {
+  const t = await db.eventTemplate.findUnique({ where: { id: templateId } });
+  const list = Array.isArray(t?.groups) ? (t.groups as { name?: string; callTime?: string | null; need?: number }[]) : [];
+  if (list.length)
+    await db.eventGroup.createMany({
+      data: list.map((g, i) => ({ eventId, name: String(g.name ?? `Grupo ${i + 1}`), callTime: g.callTime ?? null, need: Number(g.need) || 0, position: i })),
+    });
+}
 
 export async function saveAsTemplate(eventId: string, _prev: string | null, form: FormData) {
   await requireAdmin();
@@ -519,6 +541,7 @@ export async function saveAsTemplate(eventId: string, _prev: string | null, form
     notes: e.notes,
     checklist: e.checklist,
     venueId: e.venueId,
+    groups: (await db.eventGroup.findMany({ where: { eventId }, orderBy: { position: "asc" } })).map((g) => ({ name: g.name, callTime: g.callTime, need: g.need })),
   };
   await db.eventTemplate.upsert({ where: { name }, create: { name, ...data }, update: data });
   revalidatePath("/admin/plantillas");
@@ -669,9 +692,11 @@ export async function setAssignmentStatus(id: string, status: string) {
   if (!["CONVOCADO", "CONFIRMADO", "RECHAZADO", "CANCELADO"].includes(status)) return;
   const a = await db.assignment.update({
     where: { id },
-    data: { status, respondedAt: status === "CONVOCADO" ? null : new Date() },
+    // Quien no va deja su sitio en el grupo
+    data: { status, respondedAt: status === "CONVOCADO" ? null : new Date(), ...((status === "RECHAZADO" || status === "CANCELADO") && { groupId: null }) },
     include: { event: true, worker: { select: { name: true } } },
   });
+  if (status === "CONFIRMADO") await placeInGroup(a.id);
   await auditAdmin(by, "Convocatoria", "Estado", `${a.worker.name} en ${a.event.name} (${formatDate(a.event.date)}): ${status.toLowerCase()}`, { entityId: a.eventId });
   if (status === "CONVOCADO") notifyInvited(a.event, [a]);
   // Si RRHH anota que alguien no puede ir (p. ej. avisó por teléfono), también se busca sustituto

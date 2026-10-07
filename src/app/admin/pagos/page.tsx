@@ -169,7 +169,7 @@ export default async function Payments({ searchParams }: { searchParams: Promise
             {p.status === "CERRADA" && (
               <div className="flex flex-wrap gap-2">
                 <form action={markPaid.bind(null, h.key)}>
-                  <ConfirmButton message="¿Marcar la quincena como pagada? Se avisará a cada persona de su importe." className="btn btn-primary">✓ Marcar como pagada</ConfirmButton>
+                  <ConfirmButton message={p.remittances.length ? "¿Marcar la quincena como pagada? Se avisará de su importe a quien iba en la remesa (a quien quedó fuera, no)." : "¿Marcar la quincena como pagada? Se avisará a cada persona de su importe."} className="btn btn-primary">✓ Marcar como pagada</ConfirmButton>
                 </form>
                 <form action={reopenPeriod.bind(null, h.key)}>
                   <ConfirmButton message="¿Reabrir la quincena? Los importes se volverán a calcular. Si ya subiste la remesa al banco, no la reabras." className="btn">Reabrir</ConfirmButton>

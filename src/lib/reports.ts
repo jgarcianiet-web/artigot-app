@@ -31,6 +31,7 @@ export async function buildReport(from: string, to: string) {
         status: true,
         withdrew: true,
         checkIn: true,
+        group: { select: { callTime: true } },
         createdAt: true,
         respondedAt: true,
         event: { select: { date: true, startTime: true, unloadTime: true } },
@@ -94,7 +95,7 @@ export async function buildReport(from: string, to: string) {
     const r = row(a.workerId, a.worker.name);
     if (a.status === "RECHAZADO" && !a.withdrew) r.rejected++;
     if (a.withdrew) r.withdrawals++;
-    if (a.status === "CONFIRMADO" && a.checkIn && lateMinutes(a.checkIn, callTime(a.event, a.role)) > SCORING.LATE_GRACE_MIN) r.lates++;
+    if (a.status === "CONFIRMADO" && a.checkIn && lateMinutes(a.checkIn, callTime(a.event, a.role, a.group)) > SCORING.LATE_GRACE_MIN) r.lates++;
   }
   for (const rv of reviews) {
     const r = byWorker.get(rv.workerId);

@@ -62,7 +62,7 @@ export async function budgetRows(filter: { from?: string; to?: string; salesRep?
         ...(filter.eventId ? { id: filter.eventId } : { date: { gte: filter.from, lte: filter.to } }),
         ...(filter.salesRep && { salesRep: filter.salesRep === "-" ? null : filter.salesRep }),
       },
-      include: { assignments: { where: { status: "CONFIRMADO" }, include: { worker: { select: { name: true, customRates: true, contractCode: true, noClock: true } } } } },
+      include: { assignments: { where: { status: "CONFIRMADO" }, include: { worker: { select: { name: true, customRates: true, contractCode: true, noClock: true } }, group: { select: { callTime: true } } } } },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
     }),
     db.rate.findMany(),

@@ -89,6 +89,7 @@ export async function computeScores(workerIds: string[], refDate: string) {
         status: true,
         withdrew: true,
         checkIn: true,
+        group: { select: { callTime: true } },
         event: { select: { date: true, startTime: true, unloadTime: true } },
       },
     }),
@@ -123,7 +124,7 @@ export async function computeScores(workerIds: string[], refDate: string) {
     const mine = assignments.filter((a) => a.workerId === w.id);
     const withdrawals = mine.filter((a) => a.withdrew).length;
     const lates = mine.filter(
-      (a) => a.status === "CONFIRMADO" && a.checkIn && lateMinutes(a.checkIn, callTime(a.event, a.role)) > SCORING.LATE_GRACE_MIN,
+      (a) => a.status === "CONFIRMADO" && a.checkIn && lateMinutes(a.checkIn, callTime(a.event, a.role, a.group)) > SCORING.LATE_GRACE_MIN,
     ).length;
     const recentEvents = mine.filter((a) => a.status === "CONFIRMADO" && a.event.date >= rotationFrom && a.event.date < refDate).length;
     const reliability =

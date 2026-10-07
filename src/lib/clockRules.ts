@@ -1,4 +1,4 @@
-import { addDays, callTime } from "./domain";
+import { addDays, callTime, type GroupTime } from "./domain";
 
 /**
  * Reglas del fichaje:
@@ -49,8 +49,8 @@ export function madridTime(date: string, time: string) {
 type EventTimes = { date: string; startTime: string; endTime: string | null; unloadTime: string | null };
 
 /** Inicio (citación del puesto) y fin del servicio como instantes reales. */
-export function serviceSpan(event: EventTimes, role: string) {
-  const start = madridTime(event.date, callTime(event, role));
+export function serviceSpan(event: EventTimes, role: string, group?: GroupTime) {
+  const start = madridTime(event.date, callTime(event, role, group));
   const serviceStart = madridTime(event.date, event.startTime);
   let end: Date;
   if (event.endTime) {
@@ -63,8 +63,8 @@ export function serviceSpan(event: EventTimes, role: string) {
   return { start, end };
 }
 
-export function clockWindow(event: EventTimes, role: string) {
-  const { start, end } = serviceSpan(event, role);
+export function clockWindow(event: EventTimes, role: string, group?: GroupTime) {
+  const { start, end } = serviceSpan(event, role, group);
   const margin = CLOCK_MARGIN_MIN * 60_000;
   return { opensAt: new Date(start.getTime() - margin), closesAt: new Date(end.getTime() + margin) };
 }
@@ -90,6 +90,7 @@ export type ClockCheck =
 export function checkClock(opts: {
   event: EventTimes & { lat: number | null; lng: number | null };
   role: string;
+  group?: GroupTime;
   position: { lat: number; lng: number; accuracy: number };
   now?: Date;
 }): ClockCheck {
@@ -98,7 +99,7 @@ export function checkClock(opts: {
   if (event.lat == null || event.lng == null) {
     return { ok: false, reason: "RRHH aún no ha fijado la ubicación de este evento. Avísales para poder fichar." };
   }
-  const { opensAt, closesAt } = clockWindow(event, role);
+  const { opensAt, closesAt } = clockWindow(event, role, opts.group);
   if (now < opensAt) {
     return { ok: false, reason: `Todavía no se puede fichar: el fichaje abre a las ${hhmm(opensAt)} (30 min antes de tu citación).` };
   }

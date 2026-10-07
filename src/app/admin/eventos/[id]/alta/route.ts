@@ -9,7 +9,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!(await isAdmin())) return new NextResponse("No autorizado", { status: 401 });
   const event = await db.event.findUnique({
     where: { id: (await params).id },
-    include: { assignments: { where: { status: "CONFIRMADO" }, include: { worker: true }, orderBy: { worker: { name: "asc" } } } },
+    include: { assignments: { where: { status: "CONFIRMADO" }, include: { worker: true, group: true }, orderBy: { worker: { name: "asc" } } } },
   });
   if (!event) return new NextResponse("No encontrado", { status: 404 });
   const wb = new ExcelJS.Workbook();
@@ -45,7 +45,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       email: w.email,
       role: ROLE_LABEL[a.role as Role] ?? a.role,
       date: event.date,
-      start: callTime(event, a.role),
+      start: callTime(event, a.role, a.group),
       end: event.endTime,
       venue: event.venue,
       missing,

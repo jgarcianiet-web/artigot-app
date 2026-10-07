@@ -17,6 +17,7 @@ import { Onboarding } from "@/components/Onboarding";
 import { incompleteWorkers } from "@/lib/completeness";
 import { privacySignature } from "@/lib/privacy";
 import { pushConfig } from "@/lib/push";
+import { GROUP_WITH_LEAD } from "@/lib/groups";
 
 /** Meses hacia delante que se pueden marcar en «Mi disponibilidad» */
 const MONTHS_AHEAD = 6;
@@ -29,7 +30,7 @@ export default async function WorkerHome() {
     include: {
       assignments: {
         where: { event: { date: { gte: addDays(t, -60) } } },
-        include: { event: { include: { savedVenue: { select: { accessNotes: true } } } } },
+        include: { event: { include: { savedVenue: { select: { accessNotes: true } } } }, group: GROUP_WITH_LEAD },
         orderBy: { event: { date: "asc" } },
       },
       unavailabilities: { where: { date: { gte: t, lte: addDays(t, 31 * (MONTHS_AHEAD + 1)) } } },
@@ -43,7 +44,7 @@ export default async function WorkerHome() {
     (a) =>
       clocksIn(worker) &&
       a.status === "CONFIRMADO" &&
-      (a.event.date === t || (a.event.date === addDays(t, -1) && now <= clockWindow(a.event, a.role).closesAt)),
+      (a.event.date === t || (a.event.date === addDays(t, -1) && now <= clockWindow(a.event, a.role, a.group).closesAt)),
   );
   const pending = worker.assignments.filter((a) => a.status === "CONVOCADO" && a.event.date >= t);
   const upcoming = worker.assignments.filter((a) => a.status === "CONFIRMADO" && a.event.date >= t && !clockable.includes(a));
@@ -106,6 +107,63 @@ export default async function WorkerHome() {
         <h1>Hola, {worker.name.split(" ")[0]}</h1>
       </header>
 
+      {/* Lo primero: el servicio de hoy (fichar) y las convocatorias por contestar; los trámites, debajo */}
+      {clockable.map((a) => (
+        <section key={a.id} className="card space-y-3 border-brand-600 ring-2 ring-brand-100">
+          <h2>Hoy trabajas</h2>
+          <EventInfo event={a.event} role={a.role} group={a.group} />
+          <Checklist id={a.id} {...checklistFor(uniform, a.role, a.event.checklist)} extra={lines(a.event.checklist)} />
+          <ClockButtons
+            assignmentId={a.id}
+            checkIn={a.checkIn}
+            checkOut={a.checkOut}
+            windowText={(() => {
+              const w = clockWindow(a.event, a.role, a.group);
+              return `Fichaje con ubicación: de ${hhmm(w.opensAt)} a ${hhmm(w.closesAt)}, a menos de ${CLOCK_RADIUS_M} m del evento.`;
+            })()}
+            rules={(() => {
+              const w = clockWindow(a.event, a.role, a.group);
+              return { opensAt: w.opensAt.toISOString(), closesAt: w.closesAt.toISOString(), lat: a.event.lat, lng: a.event.lng, radius: CLOCK_RADIUS_M };
+            })()}
+          />
+          <ChatLink eventId={a.eventId} />
+          {isLeadRole(a.role) && (
+            <Link href={`/app/eventos/${a.eventId}/equipo`} className="btn btn-primary w-full">👥 Panel del equipo e incidencias</Link>
+          )}
+        </section>
+      ))}
+
+      {pending.length > 0 && (
+      <section className="space-y-3">
+        <h2>Convocatorias pendientes {pending.length > 0 && <span className="text-amber-600">({pending.length})</span>}</h2>
+        {pending.map((a) => {
+          const busy = worker.assignments.filter((o) => o.id !== a.id && (o.status === "CONFIRMADO" || o.status === "CONVOCADO") && o.event.date === a.event.date);
+          return (
+          <div key={a.id} className="card space-y-3 border-amber-300">
+            <EventInfo event={a.event} role={a.role} group={a.group} />
+            {busy.length > 0 && (
+              <p className="rounded-lg bg-amber-50 p-2 text-sm text-amber-900">
+                ⚠ Ojo: ese día también estás en {busy.map((o) => `${o.event.name} (${callTime(o.event, o.role, o.group)}${o.event.endTime ? `–${o.event.endTime}` : ""})`).join(" y ")}. Comprueba que te da tiempo a los dos.
+              </p>
+            )}
+            <div className="grid grid-cols-2 gap-2">
+              <form action={respond.bind(null, a.id, true)}>
+                <button className="btn btn-success w-full py-3" disabled={blocked} title={blocked ? "Completa antes tus valoraciones pendientes" : undefined}>
+                  Acepto
+                </button>
+              </form>
+              <form action={respond.bind(null, a.id, false)}>
+                <button className="btn btn-danger w-full py-3">No puedo</button>
+              </form>
+            </div>
+            <p className="text-xs text-stone-500">Al aceptar entras en el chat del evento con RRHH y el resto del equipo.</p>
+          </div>
+          );
+        })}
+      </section>
+      )}
+
+
       {steps.some((st) => !st.done) && <Onboarding name={worker.name.split(" ")[0]} steps={steps} push={await pushConfig()} signAction={startPrivacySignature} />}
 
       {polls.map((p) => <PollCard key={p.id} poll={p} busy={busy} />)}
@@ -140,52 +198,6 @@ export default async function WorkerHome() {
       )}
 
 
-      {clockable.map((a) => (
-        <section key={a.id} className="card space-y-3 border-brand-600 ring-2 ring-brand-100">
-          <h2>Hoy trabajas</h2>
-          <EventInfo event={a.event} role={a.role} />
-          <Checklist id={a.id} {...checklistFor(uniform, a.role, a.event.checklist)} extra={lines(a.event.checklist)} />
-          <ClockButtons
-            assignmentId={a.id}
-            checkIn={a.checkIn}
-            checkOut={a.checkOut}
-            windowText={(() => {
-              const w = clockWindow(a.event, a.role);
-              return `Fichaje con ubicación: de ${hhmm(w.opensAt)} a ${hhmm(w.closesAt)}, a menos de ${CLOCK_RADIUS_M} m del evento.`;
-            })()}
-            rules={(() => {
-              const w = clockWindow(a.event, a.role);
-              return { opensAt: w.opensAt.toISOString(), closesAt: w.closesAt.toISOString(), lat: a.event.lat, lng: a.event.lng, radius: CLOCK_RADIUS_M };
-            })()}
-          />
-          <ChatLink eventId={a.eventId} />
-          {isLeadRole(a.role) && (
-            <Link href={`/app/eventos/${a.eventId}/equipo`} className="btn btn-primary w-full">👥 Panel del equipo e incidencias</Link>
-          )}
-        </section>
-      ))}
-
-      <section className="space-y-3">
-        <h2>Convocatorias pendientes {pending.length > 0 && <span className="text-amber-600">({pending.length})</span>}</h2>
-        {pending.length === 0 && <p className="text-sm text-stone-500">No tienes convocatorias pendientes de responder.</p>}
-        {pending.map((a) => (
-          <div key={a.id} className="card space-y-3 border-amber-300">
-            <EventInfo event={a.event} role={a.role} />
-            <div className="grid grid-cols-2 gap-2">
-              <form action={respond.bind(null, a.id, true)}>
-                <button className="btn btn-success w-full py-3" disabled={blocked} title={blocked ? "Completa antes tus valoraciones pendientes" : undefined}>
-                  Acepto
-                </button>
-              </form>
-              <form action={respond.bind(null, a.id, false)}>
-                <button className="btn btn-danger w-full py-3">No puedo</button>
-              </form>
-            </div>
-            <p className="text-xs text-stone-500">Al aceptar entras en el chat del evento con RRHH y el resto del equipo.</p>
-          </div>
-        ))}
-      </section>
-
       <section className="space-y-3">
         <h2>Próximos servicios confirmados</h2>
         {upcoming.length === 0 && <p className="text-sm text-stone-500">Ninguno por ahora.</p>}
@@ -196,7 +208,7 @@ export default async function WorkerHome() {
               <span>
                 <span className="font-medium">{a.event.name}</span>
                 <span className="block text-sm text-stone-500">
-                  {formatDate(a.event.date)} · {callTime(a.event, a.role)} · {a.event.venue}
+                  {formatDate(a.event.date)} · {callTime(a.event, a.role, a.group)} · {a.event.venue}
                 </span>
               </span>
               {n > 0 ? (

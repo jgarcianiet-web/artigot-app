@@ -8,7 +8,7 @@ import { isEventLead } from "./reviews";
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
 
-export type Scope = "CHAT" | "INCIDENT" | "DOC" | "CANDIDATE" | "SIGNATURE" | "PHOTO" | "STAFF";
+export type Scope = "CHAT" | "INCIDENT" | "DOC" | "CANDIDATE" | "SIGNATURE" | "PHOTO" | "STAFF" | "PAYSLIP";
 
 /** Guarda una imagen subida (las fotos se reducen en el móvil antes de enviarlas). */
 export async function storeImage(file: File, opts: { eventId: string; scope: Scope; incidentId?: string }) {
@@ -44,6 +44,11 @@ export async function storeCandidateFile(file: File) {
 export async function storeSignature(png: Buffer, workerId: string) {
   if (png.length === 0 || png.length > 500_000) throw new Error("Firma no válida.");
   return save(png, { scope: "SIGNATURE", workerId, mime: "image/png" });
+}
+
+/** Nómina de A3 de un trabajador (PDF generado al separar el de todo el mes). */
+export async function storePayslipFile(pdf: Buffer, workerId: string) {
+  return save(pdf, { scope: "PAYSLIP", workerId, mime: "application/pdf" });
 }
 
 async function store(file: File, opts: { eventId?: string; scope: Scope; incidentId?: string; workerId?: string }) {
@@ -112,11 +117,11 @@ export async function sweepOrphanFiles() {
  * Quién puede ver cada archivo:
  * - Fotos del chat: quien puede leer el chat del evento (RRHH + personal confirmado).
  * - Fotos de incidencias: RRHH y el maître / camarero responsable del evento.
- * - Documentos del trabajador: RRHH y el propio trabajador.
+ * - Documentos y nóminas del trabajador: RRHH y el propio trabajador.
  */
 export async function canReadFile(viewer: Viewer, file: { scope: string; eventId: string | null; workerId: string | null }) {
   if (viewer.kind === "admin") return true;
-  if (file.scope === "DOC" || file.scope === "SIGNATURE" || file.scope === "PHOTO") return file.workerId === viewer.id;
+  if (file.scope === "DOC" || file.scope === "SIGNATURE" || file.scope === "PHOTO" || file.scope === "PAYSLIP") return file.workerId === viewer.id;
   if (file.scope === "CANDIDATE" || file.scope === "STAFF") return false; // solo RRHH
   if (!file.eventId) return false;
   if (file.scope === "CHAT") return canAccessChat(viewer, file.eventId);

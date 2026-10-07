@@ -34,7 +34,7 @@ export function LiveTeam({ live, markAction }: { live: Live; markAction?: (assig
             <div className="min-w-0 flex-1">
               <div className="font-medium">{r.name}</div>
               <div className="text-xs text-stone-500">
-                {ROLE_LABEL[r.role as Role]} · citación {r.call}
+                {r.group && `${r.group} · `}{ROLE_LABEL[r.role as Role]} · citación {r.call}
                 {r.checkIn && ` · entrada ${r.checkIn}`}
                 {r.checkIn && (r.manual ? " (manual)" : r.distance != null ? ` · 📍 ${r.distance} m` : "")}
                 {r.checkOut && ` · salida ${r.checkOut}`}
