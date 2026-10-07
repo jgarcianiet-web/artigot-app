@@ -1,4 +1,4 @@
-import { after } from "next/server";
+import { later } from "./later";
 import { db } from "./db";
 import { addDays, callTime, formatDate, needFor, type Needs, ROLE_LABEL, ROLES, type Role, today, workerRoles } from "./domain";
 import { notify } from "./push";
@@ -107,7 +107,7 @@ const hhmm = new Intl.DateTimeFormat("es-ES", { hour: "2-digit", minute: "2-digi
  */
 export function notifyInvited(event: EventInfo, invited: { workerId: string; role: string }[]) {
   if (!invited.length) return;
-  after(async () => {
+  later(async () => {
     for (const role of ROLES) {
       const ids = invited.filter((i) => i.role === role).map((i) => i.workerId);
       if (!ids.length) continue;

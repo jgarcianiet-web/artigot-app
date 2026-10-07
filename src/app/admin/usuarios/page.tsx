@@ -2,6 +2,7 @@ import { toggleAdminUser } from "@/app/actions";
 import { SubmitButton } from "@/components/client";
 import { currentAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { mailEnabled } from "@/lib/mail";
 import { ChangeMyPasswordForm, NewUserForm, ResetPasswordForm } from "./UserForms";
 
 const when = new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", dateStyle: "short", timeStyle: "short" });
@@ -14,6 +15,11 @@ export default async function AdminUsers() {
       <div>
         <h1>Usuarios de RRHH</h1>
         <p className="text-sm text-stone-500">Todos los usuarios de RRHH tienen acceso completo a la aplicación.</p>
+        {mailEnabled() ? (
+          <p className="mt-1 text-sm text-emerald-800">🔒 Verificación en dos pasos activada: al entrar desde un navegador nuevo se pide un código que llega por email.</p>
+        ) : (
+          <p className="mt-1 text-sm text-amber-800">🔓 Verificación en dos pasos pendiente: se activa sola cuando configuréis el envío de emails (SMTP).</p>
+        )}
       </div>
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <div className="card overflow-x-auto p-0">

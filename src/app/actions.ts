@@ -4,11 +4,13 @@ import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { testPush } from "@/lib/push";
 import { mergeWorkers } from "@/lib/mergeWorkers";
+import { saveConvocationSettings } from "@/lib/convocation";
 import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import {
   adminLogin,
+  verifyAdminCode,
   checkSetupKey,
   createAdminSession,
   currentAdmin,
@@ -31,7 +33,7 @@ import { addDocument } from "@/lib/documents";
 import { createIncident, type IncidentResult } from "@/lib/incidents";
 import { DOC_LABEL, lines, validDniNie, validIban } from "@/lib/staff";
 import { checkIdentityDocs, storeIdentityDocs } from "@/lib/identityDocs";
-import { EVENT_TYPE_LABEL, EVENT_TYPES, formatDate, isRole, LEAD_ROLES, OWN_RATE_ROLES, ROLE_LABEL, ROLES, type Role } from "@/lib/domain";
+import { addDays, EVENT_TYPE_LABEL, EVENT_TYPES, formatDate, isRole, LEAD_ROLES, OWN_RATE_ROLES, ROLE_LABEL, ROLES, type Role } from "@/lib/domain";
 import { notify } from "@/lib/push";
 import { autoReplace, candidatesFor, fillGaps, notifyInvited } from "@/lib/staffing";
 import { deleteStoredFile } from "@/lib/files";
@@ -55,13 +57,29 @@ const optCoord = (max: number) =>
 
 // ---------- Sesión ----------
 
-export async function login(_prev: string | null, form: FormData) {
+export type LoginState = { error?: string; code?: boolean; email?: string } | null;
+
+export async function login(_prev: LoginState, form: FormData): Promise<LoginState> {
   const email = String(form.get("email") ?? "").trim().toLowerCase();
-  const error = await adminLogin(email, String(form.get("password") ?? ""));
-  await auditAdmin(email || "(sin email)", "Acceso", error ? "Acceso fallido" : "Acceso", error ? `Intento de acceso fallido: ${error}` : "Ha entrado en la gestión");
+  const r = await adminLogin(email, String(form.get("password") ?? ""));
+  if ("error" in r) {
+    await auditAdmin(email || "(sin email)", "Acceso", "Acceso fallido", `Intento de acceso fallido: ${r.error}`);
+    await new Promise((res) => setTimeout(res, 800)); // frena intentos por fuerza bruta
+    return { error: r.error };
+  }
+  if ("code" in r) return { code: true, email: r.email };
+  await auditAdmin(email, "Acceso", "Acceso", "Ha entrado en la gestión");
+  redirect("/admin");
+}
+
+/** Segundo paso del acceso de RRHH: el código que llega por email. */
+export async function loginCode(_prev: LoginState, form: FormData): Promise<LoginState> {
+  const email = String(form.get("email") ?? "");
+  const error = await verifyAdminCode(String(form.get("code") ?? ""), form.get("trust") === "1");
+  await auditAdmin(email || "(sin email)", "Acceso", error ? "Acceso fallido" : "Acceso", error ? `Código de verificación: ${error}` : "Ha entrado en la gestión (con código por email)");
   if (error) {
-    await new Promise((r) => setTimeout(r, 800)); // frena intentos por fuerza bruta
-    return error;
+    await new Promise((res) => setTimeout(res, 800));
+    return { code: true, email, error };
   }
   redirect("/admin");
 }
@@ -1084,4 +1102,91 @@ export async function confirmDraft(draftId: string, _prev: string | null): Promi
 export async function testWorkerPush(workerId: string) {
   await requireAdmin();
   return testPush({ workerId });
+}
+
+// ---------- Convocatorias sin respuesta ----------
+
+export async function saveConvocationAction(_prev: string | null, form: FormData) {
+  const by = await requireAdmin();
+  const n = (k: string, max: number) => Math.min(max, Math.max(1, Math.round(Number(form.get(k)) || 0)));
+  const value = { remindHours: n("remindHours", 168), rrhhHours: n("rrhhHours", 168), replace: form.get("replace") === "1", replaceHours: n("replaceHours", 336) };
+  if (value.replace && value.replaceHours <= value.remindHours) return "Pasar al siguiente tiene que ser más tarde que el recordatorio al trabajador.";
+  await saveConvocationSettings(value);
+  await auditAdmin(by, "Ajustes", "Convocatorias", `Recordatorio a las ${value.remindHours} h, aviso a RRHH a las ${value.rrhhHours} h, ${value.replace ? `pasar al siguiente a las ${value.replaceHours} h` : "sin pasar al siguiente"}`);
+  revalidatePath("/admin/ajustes/convocatorias");
+  return "Guardado.";
+}
+
+// ---------- Copiar en el cuadrante ----------
+
+/** Campos del formulario de un evento (para copiarlo como borrador). */
+function eventToForm(e: { name: string; type: string; date: string; startTime: string; endTime: string | null; unloadTime: string | null; venue: string; lat: number | null; lng: number | null; client: string | null; salesRep: string | null; budget: number | null; budgetNote: string | null; notes: string | null; checklist: string | null; needCamareros: number; needMaitres: number; needResponsables: number; needMozos: number; autoReplace: boolean; venueId: string | null; clientId: string | null }) {
+  const str = (v: unknown) => (v == null ? "" : String(v));
+  return {
+    name: e.name, type: e.type, date: e.date, startTime: e.startTime, endTime: str(e.endTime), unloadTime: str(e.unloadTime), venue: e.venue,
+    lat: str(e.lat), lng: str(e.lng), client: str(e.client), salesRep: str(e.salesRep), budget: str(e.budget), budgetNote: str(e.budgetNote),
+    notes: str(e.notes), checklist: str(e.checklist), needCamareros: str(e.needCamareros), needMaitres: str(e.needMaitres),
+    needResponsables: str(e.needResponsables), needMozos: str(e.needMozos), venueId: str(e.venueId), clientId: str(e.clientId), ...(e.autoReplace && { autoReplace: "1" }),
+  };
+}
+
+/** Lo que se copia de un evento o de un borrador: el formulario y su personal. */
+async function copySource(kind: string, id: string) {
+  if (kind === "evento") {
+    const e = await db.event.findUnique({ where: { id }, include: { assignments: { where: { status: { in: ["CONVOCADO", "CONFIRMADO"] } }, select: { workerId: true, role: true } } } });
+    return e && { name: e.name, date: e.date, form: eventToForm(e) as Record<string, string>, staff: e.assignments.map((a) => ({ workerId: a.workerId, role: a.role })) };
+  }
+  const d = await db.eventDraft.findUnique({ where: { id } });
+  return d && { name: d.name, date: d.date, form: d.form as Record<string, string>, staff: draftStaff(d.staff) };
+}
+
+/** Copia un evento o un borrador como borrador en otro día (y, si se pide, las semanas siguientes). */
+export async function copyToDraft(kind: string, id: string, _prev: string | null, form: FormData): Promise<string | null> {
+  const by = await requireAdmin();
+  const src = await copySource(kind, id);
+  if (!src) return "Ya no existe.";
+  const first = String(form.get("date") ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(first)) return "Elige el día.";
+  const weeks = Math.min(12, Math.max(1, Number(form.get("weeks")) || 1));
+  const withStaff = form.get("staff") === "1";
+  const all = Array.from({ length: weeks }, (_, i) => addDays(first, i * 7));
+  // Donde ya hay un borrador igual (p. ej. de «Repetir semana») no se vuelve a crear
+  const taken = new Set((await db.eventDraft.findMany({ where: { name: src.name, date: { in: all } }, select: { date: true } })).map((d) => d.date));
+  const dates = all.filter((d) => !taken.has(d));
+  if (!dates.length) return "Ya hay un borrador igual en esos días.";
+  let lastId = "";
+  for (const date of dates) {
+    const d = await db.eventDraft.create({ data: { name: src.name, date, form: { ...src.form, date }, staff: withStaff ? src.staff : [], createdBy: by } });
+    lastId = d.id;
+  }
+  await auditAdmin(by, "Evento", "Copiado", `«${src.name}» copiado como borrador el ${dates.map((d) => formatDate(d)).join(", ")}${withStaff ? " con su personal" : ""}`);
+  revalidatePath("/admin/cuadrante", "layout");
+  redirect(dates.length === 1 ? `/admin/cuadrante/borrador/${lastId}` : `/admin/cuadrante?semana=${first}`);
+}
+
+/** Repite la semana del cuadrante en la siguiente: cada evento y borrador pasa a borrador 7 días después. */
+export async function repeatWeek(monday: string) {
+  const by = await requireAdmin();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(monday)) return;
+  const sunday = addDays(monday, 6);
+  const [events, drafts, existing] = await Promise.all([
+    db.event.findMany({ where: { date: { gte: monday, lte: sunday }, status: { not: "CANCELADO" } }, include: { assignments: { where: { status: { in: ["CONVOCADO", "CONFIRMADO"] } }, select: { workerId: true, role: true } } } }),
+    db.eventDraft.findMany({ where: { date: { gte: monday, lte: sunday } } }),
+    db.eventDraft.findMany({ where: { date: { gte: addDays(monday, 7), lte: addDays(sunday, 7) } }, select: { name: true, date: true } }),
+  ]);
+  const taken = new Set(existing.map((d) => `${d.date}|${d.name}`));
+  const items = [
+    ...events.map((e) => ({ name: e.name, date: addDays(e.date, 7), form: eventToForm(e) as Record<string, string>, staff: e.assignments.map((a) => ({ workerId: a.workerId, role: a.role })) })),
+    ...drafts.map((d) => ({ name: d.name, date: addDays(d.date, 7), form: d.form as Record<string, string>, staff: draftStaff(d.staff) })),
+  ].filter((x) => !taken.has(`${x.date}|${x.name}`));
+  for (const x of items) await db.eventDraft.create({ data: { name: x.name, date: x.date, form: { ...x.form, date: x.date }, staff: x.staff, createdBy: by } });
+  if (items.length) await auditAdmin(by, "Evento", "Semana repetida", `Semana del ${formatDate(monday)} repetida en la siguiente: ${items.length} borradores`);
+  revalidatePath("/admin/cuadrante", "layout");
+  redirect(`/admin/cuadrante?semana=${addDays(monday, 7)}&repetida=${items.length}`);
+}
+
+/** Apunta que se le ha pedido por WhatsApp que active los avisos. */
+export async function markPushAsked(workerId: string) {
+  await requireAdmin();
+  await db.worker.update({ where: { id: workerId }, data: { pushAskedAt: new Date() } });
 }

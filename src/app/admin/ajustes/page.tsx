@@ -12,6 +12,7 @@ export default async function Settings() {
     { href: "/admin/fincas", title: "Fincas y lugares", text: "Dirección, punto de fichaje e indicaciones de acceso para el personal", n: venues },
     { href: "/admin/clientes", title: "Clientes", text: "Contacto y notas de cada cliente", n: clients },
     { href: "/admin/plantillas", title: "Plantillas de evento", text: "Personal, horario y notas habituales para crear eventos en segundos", n: templates },
+    { href: "/admin/ajustes/convocatorias", title: "Convocatorias sin respuesta", text: "Cuándo se recuerda al trabajador, cuándo se avisa a RRHH y cuándo se pasa al siguiente" },
     { href: "/admin/ajustes/uniforme", title: "Uniforme por puesto", text: "Lo que cada puesto debe llevar siempre (lista «Qué llevar» de la app)" },
     { href: "/admin/ajustes/empresa", title: "Empresa y protección de datos", text: "Razón social, CIF y cláusula de protección de datos que firma el personal" },
     { href: "/admin/ajustes/pagos", title: "Pagos y remesas", text: "Neto (Seguridad Social e IRPF), días de pago de cada quincena y cuenta para las remesas SEPA" },
