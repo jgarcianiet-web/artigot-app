@@ -78,8 +78,7 @@ export async function monthLlamamientos(from: string, to: string) {
 const date = (iso: string) => new Date(`${iso}T00:00:00Z`);
 /** Lunes = 0 … domingo = 6 */
 const weekday = (iso: string) => (date(iso).getUTCDay() + 6) % 7;
-/** Como los exporta A3: todo en texto, fechas «dd/mm/aaaa» y el código del trabajador con 6 cifras */
-const text = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+/** Como en los Excel que A3 ha importado bien: empresa y código del trabajador (6 cifras) en texto, fechas como fecha */
 const code6 = (c: string) => (/^\d+$/.test(c) ? c.padStart(6, "0") : c);
 const col = (n: number) => (n < 26 ? String.fromCharCode(65 + n) : `A${String.fromCharCode(65 + n - 26)}`);
 
@@ -91,7 +90,9 @@ async function fill(template: string, rows: Record<string, ExcelJS.CellValue>[])
     const row = ws.getRow(3 + i);
     for (const [c, v] of Object.entries(values)) {
       if (v == null || v === "") continue;
-      row.getCell(c).value = v;
+      const cell = row.getCell(c);
+      cell.value = v;
+      if (v instanceof Date) cell.numFmt = "dd/mm/yyyy";
     }
     row.commit();
   });
@@ -115,20 +116,23 @@ function calendarRows(l: Llamamiento) {
   return out;
 }
 
-/** Los 4 Excel de A3, en el orden en que se importan (con los mismos valores que pone A3 al exportarlos). */
+/**
+ * Los 4 Excel de A3, en el orden en que se importan, con los mismos valores que los que RRHH rellenó a mano y A3
+ * importó bien: «Vida Laboral» Sí solo en Contratación-Fechas (con vigencia = alta) y No en el resto.
+ */
 export async function nominaWorkbooks(list: Llamamiento[]) {
   const [a3, cfg] = await Promise.all([getA3(), getA3Alta()]);
   const head = (l: Llamamiento) => ({ A: String(a3.companyCode), B: code6(l.code), C: a3Name(l.w) });
   const contratacion = await fill("a3-contratacion-fechas.xlsx", list.map((l) => ({
-    ...head(l), D: "Si", E: "Automática", F: text(l.alta), G: text(l.baja), H: MOTIVO,
+    ...head(l), D: "Si", E: date(l.alta), F: date(l.alta), G: date(l.baja), H: MOTIVO,
   })));
   const contractuales = await fill("a3-datos-contractuales.xlsx", list.map((l) => ({
-    ...head(l), D: "Si", E: "Automática", F: CONTRATO, G: "Tipo General", J: text(l.alta), K: text(l.baja),
+    ...head(l), D: "No", E: "Automática", F: CONTRATO, G: "Tipo General", J: date(l.alta), K: date(l.baja),
     L: 2, M: "Meses", N: 15, S: cfg.occupation[l.w.role as Role] ?? cfg.occupation.CAMARERO,
   })));
   // Calendario: un tramo por llamamiento (del alta a la baja), con los días trabajados laborables y sus horas
   const calendario = await fill("a3-plantillas-calendario.xlsx", list.flatMap((l) => calendarRows(l).map((c) => {
-    const row: Record<string, ExcelJS.CellValue> = { ...head(l), D: "No", E: text(c.from), F: text(c.to), G: "Jornada parcial" };
+    const row: Record<string, ExcelJS.CellValue> = { ...head(l), D: "No", E: date(c.from), F: date(c.to), G: "Jornada parcial" };
     c.byWeekday.forEach((h, i) => {
       row[col(7 + i)] = h != null ? "Laborable" : "Vacío"; // H…N
       row[col(14 + i)] = h ?? 0; // O…U
@@ -139,7 +143,7 @@ export async function nominaWorkbooks(list: Llamamiento[]) {
   const flags: Record<string, string> = { I: "Si", N: "Si", O: "Si", P: "Si" };
   for (let i = 16; i <= 27; i++) flags[col(i)] = "No"; // Q…AB
   const ajuste = await fill("a3-ajuste-salarial.xlsx", list.map((l) => ({
-    ...head(l), D: "Si", E: "Automática", F: "Líquido", G: l.net, H: `${cfg.adjustConcept || "22"}=100,00%`, ...flags,
+    ...head(l), D: "No", E: "Automática", F: "Líquido", G: l.net, H: `${cfg.adjustConcept || "22"}=100,00%`, ...flags,
   })));
   return [
     { name: "1_contratacion_fechas.xlsx", label: "Contratación-Fechas", data: contratacion },
