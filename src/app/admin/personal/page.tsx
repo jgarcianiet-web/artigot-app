@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Empty, RoleBadge, ScoreBadge } from "@/components/ui";
 import { db } from "@/lib/db";
 import { duplicateGroups } from "@/lib/mergeWorkers";
-import { isFixed, isRole, ROLE_PLURAL, ROLES, today } from "@/lib/domain";
+import { CENTER_LABEL, isFixed, isRole, ROLE_PLURAL, ROLES, today } from "@/lib/domain";
 import { computeScores, explainScore } from "@/lib/scoring";
 import { incompleteWorkers } from "@/lib/completeness";
 import { BulkBar, SelectAll } from "./BulkBar";
@@ -10,14 +10,16 @@ import { BulkBar, SelectAll } from "./BulkBar";
 export default async function StaffList({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; role?: string; inactivos?: string; orden?: string; incompletos?: string; sinavisos?: string }>;
+  searchParams: Promise<{ q?: string; role?: string; inactivos?: string; orden?: string; incompletos?: string; sinavisos?: string; centro?: string }>;
 }) {
-  const { q = "", role = "", inactivos, orden = "puntuacion", incompletos, sinavisos } = await searchParams;
+  const { q = "", role = "", inactivos, orden = "puntuacion", incompletos, sinavisos, centro = "" } = await searchParams;
   const t = today();
   const workers = await db.worker.findMany({
     where: {
       active: inactivos ? undefined : true,
       role: isRole(role) ? role : undefined,
+      // Centro de A3: «sin» = sin indicar (se les aplica el convenio de Madrid)
+      AND: centro === "sin" ? [{ OR: [{ a3Center: null }, { a3Center: "" }] }] : centro ? [{ a3Center: centro }] : [],
       OR: q ? [
             { name: { contains: q, mode: "insensitive" } },
             { phone: { contains: q } },
@@ -36,6 +38,7 @@ export default async function StaffList({
   if (incompletos) workers.splice(0, workers.length, ...workers.filter((w) => incomplete.has(w.id)));
   if (sinavisos) workers.splice(0, workers.length, ...workers.filter((w) => w._count.devices === 0));
   const noPush = await db.worker.count({ where: { active: true, devices: { none: {} } } });
+  const noCenter = await db.worker.count({ where: { active: true, OR: [{ a3Center: null }, { a3Center: "" }] } });
   const scores = await computeScores(workers.map((w) => w.id), t);
   if (orden === "puntuacion") {
     workers.sort((a, b) => a.role.localeCompare(b.role) || scores.get(b.id)!.score - scores.get(a.id)!.score);
@@ -71,6 +74,13 @@ export default async function StaffList({
           {ROLES.map((r) => (
             <option key={r} value={r}>{ROLE_PLURAL[r]}</option>
           ))}
+        </select>
+        <select name="centro" defaultValue={centro} className="input w-auto" aria-label="Centro">
+          <option value="">Todos los centros</option>
+          {Object.entries(CENTER_LABEL).map(([k, v]) => (
+            <option key={k} value={k}>{v}</option>
+          ))}
+          <option value="sin">Sin centro ({noCenter})</option>
         </select>
         <select name="orden" defaultValue={orden} className="input w-auto">
           <option value="puntuacion">Por puntuación</option>

@@ -23,6 +23,7 @@ type Worker = {
   birthDate: string | null;
   address: string | null;
   a3Code: string | null;
+  a3Center?: string | null;
   customRates?: unknown;
   contractCode?: string | null;
   noClock?: boolean;
@@ -135,6 +136,12 @@ export function WorkerForm({ worker, docs = {} }: { worker?: Worker; docs?: DocS
           <div className="mb-3"><ContractFields worker={worker} /></div>
           <label className="label" htmlFor="a3Code">Código de trabajador en A3</label>
           <input id="a3Code" name="a3Code" className="input" defaultValue={worker?.a3Code ?? ""} />
+          <label className="label mt-3" htmlFor="a3Center">Centro en A3 (decide el convenio)</label>
+          <select id="a3Center" name="a3Center" className="input" defaultValue={worker?.a3Center ?? ""}>
+            <option value="">Sin indicar (se usa el 1 · Madrid)</option>
+            <option value="1">1 · Madrid</option>
+            <option value="2">2 · Segovia</option>
+          </select>
           <div className="mt-3">
             <span className="label">Tarifa propia (€/hora, opcional)</span>
             <div className="grid grid-cols-[auto_1fr_1fr_1fr] items-center gap-x-3 gap-y-2 text-sm">

@@ -184,13 +184,14 @@ const workerSchema = z.object({
   birthDate: optText,
   address: optText,
   a3Code: optText,
+  a3Center: optText,
   contractCode: z.enum(["300", "100", "200"]).default("300"),
   monthlySalary: z.preprocess((v) => (String(v ?? "").trim() === "" ? null : Number(String(v).replace(",", "."))), z.number().min(0, "Nómina no válida").max(20000, "Nómina no válida").nullable()),
 });
 
 const WORKER_LABELS = {
   name: "Nombre", phone: "Teléfono", email: "Email", role: "Puesto", roles: "Puestos", rating: "Valoración", zone: "Zona",
-  dni: "DNI", nss: "NSS", iban: "IBAN", birthDate: "Nacimiento", address: "Dirección", a3Code: "Código A3", carSeats: "Plazas en coche", customRates: "Tarifa propia",
+  dni: "DNI", nss: "NSS", iban: "IBAN", birthDate: "Nacimiento", address: "Dirección", a3Code: "Código A3", a3Center: "Centro A3", carSeats: "Plazas en coche", customRates: "Tarifa propia",
   contractCode: "Contrato", noClock: "No ficha", monthlySalary: "Nómina mensual",
 };
 
