@@ -50,7 +50,7 @@ export function AltaTable({ rows, next, countries }: { rows: Row[]; next: number
         setMsg(((await res.json().catch(() => null)) as { error?: string } | null)?.error ?? "No se ha podido generar el Excel.");
         return;
       }
-      const data = (await res.json()) as { files: { name: string; label: string; base64: string }[]; missingImputation: boolean };
+      const data = (await res.json()) as { files: { name: string; label: string; base64: string }[]; missingImputation: boolean; missingBank: boolean };
       const list = data.files.map((f) => {
         const bytes = Uint8Array.from(atob(f.base64), (c) => c.charCodeAt(0));
         return { ...f, url: URL.createObjectURL(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })) };
@@ -65,7 +65,8 @@ export function AltaTable({ rows, next, countries }: { rows: Row[]; next: number
       }
       setMsg(
         `${list.length === 1 ? "Excel descargado" : `${list.length} Excel descargados`} con ${codes.size} altas. Ya tienen su código de A3; impórtalos en A3 en este orden: ${list.map((f) => `«${f.label}»`).join(", ")}.` +
-          (data.missingImputation ? " (El de imputación no se genera hasta que pongas el código en Ajustes → A3.)" : ""),
+          (data.missingImputation ? " (El de imputación no se genera hasta que pongas el código en Ajustes → A3.)" : "") +
+          (data.missingBank ? " (El de «Datos Banco de Pago» no se genera hasta que pongas la cuenta de la empresa en Ajustes → Pagos.)" : ""),
       );
       router.refresh();
     } finally {

@@ -35,6 +35,8 @@ export type A3AltaConfig = {
   imputationPct: number;
   /** «Camareros extras (AMP)»: campo de A3 que se marca a cada extra nuevo */
   ampExtra: boolean;
+  /** Concepto al que A3 lleva lo que sobra del líquido pactado (22 «Complement personal absorbible») */
+  adjustConcept: string;
 };
 
 // Los valores de la exportación de A3 que nos pasó RRHH
@@ -64,6 +66,7 @@ export const A3_ALTA_DEFAULTS: A3AltaConfig = {
   imputationMozo: "14 ALMACEN EVENTOS",
   imputationPct: 100,
   ampExtra: true,
+  adjustConcept: "22",
 };
 
 export async function getA3Alta(): Promise<A3AltaConfig> {
@@ -433,3 +436,9 @@ export const buildImputacionWorkbook = (rows: NewHire[], companyCode: string, cf
 /** «Formato Camareros extras (AMP)»: marca en A3 a cada camarero extra nuevo (los mozos no), desde su fecha de alta. */
 export const buildAmpWorkbook = (rows: NewHire[], companyCode: string) =>
   fillSimple(AMP_TEMPLATE, rows, companyCode, (r) => ({ D: "No", E: date(r.startDate), F: "Sí" }));
+
+export const BANCO_PAGO_TEMPLATE = path.join(process.cwd(), "templates", "a3-banco-pago.xlsx");
+
+/** «Datos Banco de Pago»: la cuenta de la empresa desde la que se paga a cada alta nueva. */
+export const buildBancoPagoWorkbook = (rows: NewHire[], companyCode: string, iban: string) =>
+  fillSimple(BANCO_PAGO_TEMPLATE, rows, companyCode, () => ({ D: iban.toUpperCase().replace(/\s/g, "") }));

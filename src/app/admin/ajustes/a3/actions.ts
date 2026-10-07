@@ -44,13 +44,14 @@ export async function saveA3AltaAction(_prev: string | null, form: FormData) {
     imputationMozo: get("imputationMozo").slice(0, 40),
     imputationPct: Math.min(100, Math.max(0, Number(String(form.get("imputationPct") ?? "100").replace(",", ".")) || 100)),
     ampExtra: form.get("ampExtra") === "1",
+    adjustConcept: String(form.get("adjustConcept") ?? "").replace(/\D/g, "") || "22",
   };
   await saveA3Alta(value);
   const d = diff({ ...before, occupation: JSON.stringify(before.occupation) }, { ...value, occupation: JSON.stringify(value.occupation) }, {
     center: "Centro", agreement: "Convenio", category: "Categoría", position: "Puesto", regime: "Régimen", tariffGroup: "Grupo de tarifa",
     paymentType: "Tipo de cobro", contractType: "Contrato", contributionType: "Cotización", grossType: "Bruto anual", occupation: "Ocupación",
     education: "Nivel formativo", nationality: "Nacionalidad", lastCode: "Último código", bajaReason: "Motivo de baja", bajaInactivity: "Inactividad",
-    imputation: "Imputación camareros", imputationMozo: "Imputación mozos", imputationPct: "% imputación", ampExtra: "Camareros extras (AMP)",
+    imputation: "Imputación camareros", imputationMozo: "Imputación mozos", imputationPct: "% imputación", ampExtra: "Camareros extras (AMP)", adjustConcept: "Concepto del ajuste salarial",
   });
   if (d.changed) await auditAdmin(by, "Ajustes", "Alta A3", d.text, { data: d.data });
   revalidatePath("/admin/ajustes/a3");
