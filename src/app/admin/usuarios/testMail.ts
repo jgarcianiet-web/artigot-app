@@ -22,7 +22,7 @@ export async function sendTestMail(_prev: TestMailResult, form: FormData): Promi
     const hint =
       err.code === "EAUTH" || err.responseCode === 535
         ? " → Usuario o contraseña incorrectos. Con Gmail hay que usar una «contraseña de aplicación»."
-        : err.code === "ETIMEDOUT" || err.code === "ECONNECTION" || err.code === "ESOCKET" || /timeout/i.test(err.message ?? "")
+        : err.code === "ETIMEDOUT" || err.code === "ECONNECTION" || err.code === "ESOCKET" || /timeout|ENETUNREACH/i.test(err.message ?? "")
           ? " → El servidor de correo no responde. Si SMTP_HOST y SMTP_PORT están bien, Railway está bloqueando el SMTP (lo hace en los planes Free, Trial y Hobby): usad Brevo con BREVO_API_KEY, que va por HTTPS."
           : "";
     return { ok: false, message: `No se ha podido enviar por ${mailVia()}: ${err.message ?? String(e)}${hint}` };
