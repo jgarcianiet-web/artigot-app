@@ -364,10 +364,6 @@ model AdminUser {
   failedLogins   Int       @default(0)
   lockedUntil    DateTime?
   lastLoginAt    DateTime?
-  // Verificación en dos pasos: código de un solo uso enviado por email al entrar desde un navegador nuevo
-  loginCodeHash    String?
-  loginCodeExpires DateTime?
-  loginCodeTries   Int       @default(0)
   createdAt      DateTime  @default(now())
   staffRooms     StaffRoomMember[]
 }
