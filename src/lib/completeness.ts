@@ -40,6 +40,7 @@ export async function incompleteWorkers(workerIds?: string[]): Promise<Incomplet
       if (!w[d.field]) missing.push(LABEL[d.field]);
       else if (!docs.has(d.type)) missing.push(DOC_NAME[d.type]);
     }
+    if (!w.email) missing.push("email");
     if (missing.length) out.push({ id: w.id, name: w.name, phone: w.phone, email: w.email, devices: w._count.devices, missing, upcoming: w.assignments.length > 0 });
   }
   return out;

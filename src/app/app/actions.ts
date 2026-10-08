@@ -310,7 +310,8 @@ export async function saveMyData(_prev: FormResult, form: FormData): Promise<For
   if (!validIban(iban)) return { ok: false, message: "El IBAN no es correcto." };
   if (nss.length !== 12) return { ok: false, message: "El número de la Seguridad Social tiene 12 cifras." };
   if (birthDate && !/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) return { ok: false, message: "Fecha de nacimiento no válida." };
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, message: "Email no válido." };
+  if (!email) return { ok: false, message: "Escribe tu email." };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, message: "Email no válido." };
   const before = await db.worker.findUniqueOrThrow({ where: { id: me.id } });
   // Quien entró con su email puede añadir su móvil (una sola vez; después lo cambia RRHH)
   let phoneData = {};

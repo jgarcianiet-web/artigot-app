@@ -50,7 +50,7 @@ export function MyDataForm({ action, data, docs }: { action: Action; data: Data;
           </select>
         </label>
         <label className="text-sm">Nacionalidad<input name="nationality" className="input mt-1 text-base" defaultValue={data.nationality ?? ""} placeholder="España" /></label>
-        <label className="text-sm">Email<input name="email" type="email" className="input mt-1 text-base" defaultValue={data.email ?? ""} /></label>
+        <label className="text-sm">Email<input name="email" type="email" className="input mt-1 text-base" defaultValue={data.email ?? ""} required /></label>
         <label className="text-sm sm:col-span-2">Dirección<input name="address" className="input mt-1 text-base" defaultValue={data.address ?? ""} /></label>
       </div>
       <Message r={r} />

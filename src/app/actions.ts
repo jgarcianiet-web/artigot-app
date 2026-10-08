@@ -202,8 +202,10 @@ export async function saveWorker(_prev: string | null, form: FormData) {
   const id = form.get("id") ? String(form.get("id")) : null;
   const key = parsed.data.phone ? phoneKey(parsed.data.phone) : null;
   if (key !== null && key.length < 9) return "El teléfono debe tener al menos 9 cifras";
-  if (!key && !parsed.data.email) return "Pon el teléfono o, si no tiene, el email (para que pueda entrar en la app)";
-  if (parsed.data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(parsed.data.email)) return "El email no es válido";
+  // Teléfono y email son obligatorios: con el teléfono entra en la app y por email le llegan los avisos de respaldo y las nóminas
+  if (!key) return "El teléfono es obligatorio";
+  if (!parsed.data.email) return "El email es obligatorio";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(parsed.data.email)) return "El email no es válido";
   if (parsed.data.dni) parsed.data.dni = parsed.data.dni.toUpperCase().replace(/[\s-]/g, "");
   if (parsed.data.iban) parsed.data.iban = parsed.data.iban.toUpperCase().replace(/\s/g, "");
   if (parsed.data.nss) parsed.data.nss = parsed.data.nss.replace(/\D/g, "");
