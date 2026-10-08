@@ -12,7 +12,6 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import {
   adminLogin,
-  verifyAdminCode,
   checkSetupKey,
   createAdminSession,
   currentAdmin,
@@ -59,7 +58,7 @@ const optCoord = (max: number) =>
 
 // ---------- Sesión ----------
 
-export type LoginState = { error?: string; code?: boolean; email?: string } | null;
+export type LoginState = { error?: string } | null;
 
 export async function login(_prev: LoginState, form: FormData): Promise<LoginState> {
   const email = String(form.get("email") ?? "").trim().toLowerCase();
@@ -69,20 +68,7 @@ export async function login(_prev: LoginState, form: FormData): Promise<LoginSta
     await new Promise((res) => setTimeout(res, 800)); // frena intentos por fuerza bruta
     return { error: r.error };
   }
-  if ("code" in r) return { code: true, email: r.email };
   await auditAdmin(email, "Acceso", "Acceso", "Ha entrado en la gestión");
-  redirect("/admin");
-}
-
-/** Segundo paso del acceso de RRHH: el código que llega por email. */
-export async function loginCode(_prev: LoginState, form: FormData): Promise<LoginState> {
-  const email = String(form.get("email") ?? "");
-  const error = await verifyAdminCode(String(form.get("code") ?? ""), form.get("trust") === "1");
-  await auditAdmin(email || "(sin email)", "Acceso", error ? "Acceso fallido" : "Acceso", error ? `Código de verificación: ${error}` : "Ha entrado en la gestión (con código por email)");
-  if (error) {
-    await new Promise((res) => setTimeout(res, 800));
-    return { code: true, email, error };
-  }
   redirect("/admin");
 }
 

@@ -2,7 +2,6 @@ import { createHmac, randomBytes, randomInt, scryptSync, timingSafeEqual } from 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "./db";
-import { mailEnabled, sendMail } from "./mail";
 
 const COOKIE = "session";
 const ADMIN_MAX_AGE = 60 * 60 * 24 * 14; // 14 días
@@ -88,72 +87,7 @@ export async function createAdminSession(user: { id: string; sessionVersion: num
   await writeSession({ k: "a", id: user.id, v: user.sessionVersion, e: Date.now() + ADMIN_MAX_AGE * 1000 }, ADMIN_MAX_AGE);
 }
 
-// ---------- Verificación en dos pasos de RRHH ----------
-
-const TRUST_COOKIE = "rrhh_confianza";
-const PENDING_COOKIE = "rrhh_codigo";
-const TRUST_DAYS = 90;
-const CODE_MINUTES = 10;
-const CODE_TRIES = 5;
-
-async function writeSigned(name: string, payload: object, maxAge: number) {
-  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  (await cookies()).set(name, `${body}.${sign(body)}`, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", maxAge, path: "/" });
-}
-
-async function readSigned<T extends { e: number }>(name: string): Promise<T | null> {
-  const raw = (await cookies()).get(name)?.value;
-  const [body, sig] = (raw ?? "").split(".");
-  if (!body || !sig || !safeEqual(sig, sign(body))) return null;
-  try {
-    const p = JSON.parse(Buffer.from(body, "base64url").toString()) as T;
-    return p.e > Date.now() ? p : null;
-  } catch {
-    return null;
-  }
-}
-
-const codeHash = (userId: string, code: string) => createHmac("sha256", secret()).update(`login-code:${userId}:${code}`).digest("base64url");
-
-/** ¿Este navegador ya pasó la verificación de esta persona? (se anula al cerrar sus sesiones) */
-async function trustedBrowser(user: { id: string; sessionVersion: number }) {
-  const t = await readSigned<{ id: string; v: number; e: number }>(TRUST_COOKIE);
-  return !!t && t.id === user.id && t.v === user.sessionVersion;
-}
-
-export type LoginResult = { error: string } | { code: true; email: string } | { ok: true };
-
-/** Comprueba el código enviado por email y abre la sesión. */
-export async function verifyAdminCode(code: string, trust: boolean): Promise<string | null> {
-  const pending = await readSigned<{ id: string; e: number }>(PENDING_COOKIE);
-  if (!pending) return "El código ha caducado. Vuelve a entrar con tu email y contraseña.";
-  const user = await db.adminUser.findUnique({ where: { id: pending.id } });
-  if (!user?.active || !user.loginCodeHash || !user.loginCodeExpires || user.loginCodeExpires < new Date()) {
-    return "El código ha caducado. Vuelve a entrar con tu email y contraseña.";
-  }
-  if (user.loginCodeTries >= CODE_TRIES) return "Demasiados intentos. Vuelve a entrar con tu email y contraseña para recibir otro código.";
-  const clean = code.replace(/\D/g, "");
-  if (!safeEqual(codeHash(user.id, clean), user.loginCodeHash)) {
-    await db.adminUser.update({ where: { id: user.id }, data: { loginCodeTries: { increment: 1 } } });
-    return "Código incorrecto.";
-  }
-  await db.adminUser.update({ where: { id: user.id }, data: { loginCodeHash: null, loginCodeExpires: null, loginCodeTries: 0, lastLoginAt: new Date() } });
-  (await cookies()).delete(PENDING_COOKIE);
-  if (trust) await writeSigned(TRUST_COOKIE, { id: user.id, v: user.sessionVersion, e: Date.now() + TRUST_DAYS * 864e5 }, TRUST_DAYS * 86_400);
-  await createAdminSession(user);
-  return null;
-}
-
-async function sendLoginCode(user: { id: string; name: string; email: string }) {
-  const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
-  await db.adminUser.update({ where: { id: user.id }, data: { loginCodeHash: codeHash(user.id, code), loginCodeExpires: new Date(Date.now() + CODE_MINUTES * 60_000), loginCodeTries: 0 } });
-  await sendMail(
-    user.email,
-    `Código para entrar en Artigot: ${code}`,
-    `Hola ${user.name.split(" ")[0]},\n\nTu código para entrar en la gestión de Artigot es: ${code}\n\nCaduca en ${CODE_MINUTES} minutos. Si no has sido tú, cambia tu contraseña y avisa al resto de RRHH.`,
-  );
-  await writeSigned(PENDING_COOKIE, { id: user.id, e: Date.now() + CODE_MINUTES * 60_000 }, CODE_MINUTES * 60);
-}
+export type LoginResult = { error: string } | { ok: true };
 
 export async function adminLogin(email: string, password: string): Promise<LoginResult> {
   const user = await db.adminUser.findUnique({ where: { email: normalizeEmail(email) } });
@@ -172,16 +106,6 @@ export async function adminLogin(email: string, password: string): Promise<Login
     return generic;
   }
   await db.adminUser.update({ where: { id: user.id }, data: { failedLogins: 0, lockedUntil: null } });
-  // Desde un navegador nuevo, segundo paso: código por email (solo si el correo está configurado)
-  if (mailEnabled() && !(await trustedBrowser(user))) {
-    try {
-      await sendLoginCode(user);
-      return { code: true, email: user.email };
-    } catch (e) {
-      console.error("código de acceso", e);
-      return { error: "No se ha podido enviar el código por email. Inténtalo de nuevo en un momento." };
-    }
-  }
   await db.adminUser.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
   await createAdminSession(user);
   return { ok: true };

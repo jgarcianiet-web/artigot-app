@@ -2,12 +2,11 @@
 
 import { ActionForm } from "@/components/client";
 import { useActionState } from "react";
-import { login, loginCode, setupFirstAdmin } from "../actions";
+import { login, setupFirstAdmin } from "../actions";
 import { Logo } from "@/components/Logo";
 
 export function LoginForm() {
   const [state, action, pending] = useActionState(login, null);
-  if (state?.code) return <CodeForm email={state.email ?? ""} />;
   return (
     <ActionForm action={action} className="card w-full max-w-sm space-y-4">
       <div className="space-y-3 text-center">
@@ -27,29 +26,6 @@ export function LoginForm() {
       <p className="text-center text-xs text-stone-400">
         ¿Eres camarero, maître o mozo? <a href="/entrar" className="hover:underline">Entra aquí</a>
       </p>
-    </ActionForm>
-  );
-}
-
-/** Segundo paso: el código de 6 cifras que llega por email al entrar desde un navegador nuevo. */
-function CodeForm({ email }: { email: string }) {
-  const [state, action, pending] = useActionState(loginCode, null);
-  return (
-    <ActionForm action={action} className="card w-full max-w-sm space-y-4">
-      <div className="space-y-3 text-center">
-        <Logo height={56} className="mx-auto" />
-        <h1 className="text-base font-medium text-stone-600">Código de verificación</h1>
-        <p className="text-sm text-stone-600">Te hemos enviado un código de 6 cifras a <strong>{email}</strong>. Caduca en 10 minutos.</p>
-      </div>
-      <input type="hidden" name="email" value={email} />
-      <input name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9 ]{6,7}" maxLength={7} className="input text-center text-2xl tracking-[0.4em]" placeholder="000000" required autoFocus aria-label="Código" />
-      <label className="flex items-start gap-2 text-sm">
-        <input type="checkbox" name="trust" value="1" defaultChecked className="mt-0.5 size-4 shrink-0" />
-        <span>Confiar en este navegador durante 90 días (no lo marques en un ordenador compartido)</span>
-      </label>
-      {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
-      <button className="btn btn-primary w-full" disabled={pending}>{pending ? "Comprobando…" : "Entrar"}</button>
-      <p className="text-center text-xs text-stone-400"><a href="/login" className="hover:underline">Volver a empezar</a></p>
     </ActionForm>
   );
 }
