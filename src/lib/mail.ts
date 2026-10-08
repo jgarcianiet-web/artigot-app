@@ -1,3 +1,4 @@
+import { lookup } from "node:dns/promises";
 import nodemailer from "nodemailer";
 import { appUrl } from "./domain";
 
@@ -13,13 +14,20 @@ import { appUrl } from "./domain";
 export const mailEnabled = () => !!process.env.BREVO_API_KEY || !!process.env.SMTP_HOST;
 export const mailVia = () => (process.env.BREVO_API_KEY ? "Brevo" : process.env.SMTP_HOST ? `SMTP (${process.env.SMTP_HOST}:${process.env.SMTP_PORT || 587})` : null);
 
-let transport: ReturnType<typeof nodemailer.createTransport> | null = null;
-function transporter() {
-  if (!transport) {
+/**
+ * Conexión SMTP siempre por IPv4: servidores como Railway no tienen salida por IPv6 y, si el DNS devuelve antes la
+ * dirección IPv6 (Gmail lo hace), la conexión falla con ENETUNREACH. El certificado se comprueba con el nombre real.
+ */
+async function transporter() {
+  {
     const port = Number(process.env.SMTP_PORT || 587);
-    transport = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
+    const host = process.env.SMTP_HOST!;
+    const ipv4 = await lookup(host, { family: 4 }).then((r) => r.address).catch(() => host);
+    // Se crea en cada envío para resolver la dirección cada vez (las IP de Gmail cambian)
+    return nodemailer.createTransport({
+      host: ipv4,
       port,
+      tls: { servername: host },
       secure: port === 465,
       // Si el servidor de correo no responde (p. ej. el puerto está bloqueado), fallar enseguida en vez de esperar minutos
       connectionTimeout: 15_000,
@@ -28,7 +36,6 @@ function transporter() {
       auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
     });
   }
-  return transport;
 }
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -41,7 +48,7 @@ export async function sendMail(to: string, subject: string, text: string) {
     .join("")}</div>`;
   const from = process.env.MAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || "";
   if (process.env.BREVO_API_KEY) return sendBrevo(from, to, subject, text, html);
-  await transporter().sendMail({ from, to, subject, text, html });
+  await (await transporter()).sendMail({ from, to, subject, text, html });
 }
 
 /** «Artigot RRHH <rrhh@artigot.com>» → { name, email } */
