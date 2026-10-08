@@ -212,6 +212,7 @@ Sin ubicación fijada, el evento muestra un aviso y el personal no puede fichar.
    | `S3_ENDPOINT`, `S3_REGION` | URL del almacén (vacío para Amazon S3) y región (`auto` en R2) |
    | `FILES_ENCRYPTION_KEY` | clave de cifrado de archivos y copias: `openssl rand -base64 32`. **Guárdala aparte**: sin ella no se pueden leer las copias |
    | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | envío de emails (códigos de acceso y recordatorios). Con Gmail o Google Workspace: `smtp.gmail.com`, `587` y una «contraseña de aplicación» |
+   | `BREVO_API_KEY`, `MAIL_FROM` | envío de emails por la API de Brevo (va por HTTPS; úsalo si Railway bloquea el SMTP, como en sus planes Free, Trial y Hobby). `MAIL_FROM` = «Artigot RRHH <rrhh@artigot.com>», con ese remitente verificado en Brevo. Si está, tiene prioridad sobre el SMTP |
 
 5. **Settings → Networking → Generate Domain** para obtener la URL pública, o conecta un dominio propio. Pon esa URL en `APP_URL`.
 6. Al desplegar se aplican las migraciones solas y se crean las tarifas por defecto. Entra en `/login`: la primera vez pide la clave de instalación para crear tu usuario. Después da de alta al resto de RRHH en Ajustes → Usuarios, importa al personal y dales su teléfono y código (botón **Copiar instrucciones de acceso** en cada ficha o **Exportar códigos**).

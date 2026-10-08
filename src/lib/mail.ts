@@ -2,12 +2,16 @@ import nodemailer from "nodemailer";
 import { appUrl } from "./domain";
 
 /**
- * Envío de emails por SMTP (Gmail/Google Workspace, Office 365, IONOS… o un servicio como Brevo).
- * Variables: SMTP_HOST, SMTP_PORT (587 por defecto; 465 = SSL), SMTP_USER, SMTP_PASS y SMTP_FROM
- * («Artigot <rrhh@artigot.com>»). Sin SMTP_HOST no se envía nada y RRHH copia los datos a mano.
+ * Envío de emails, de dos formas:
+ * - Por la API de Brevo (BREVO_API_KEY), que va por HTTPS: funciona aunque el servidor bloquee el SMTP (Railway lo
+ *   bloquea en sus planes Free, Trial y Hobby). Remitente: MAIL_FROM o SMTP_FROM («Artigot <rrhh@artigot.com>»).
+ * - Por SMTP (Gmail/Google Workspace, Office 365, IONOS…): SMTP_HOST, SMTP_PORT (587 por defecto; 465 = SSL),
+ *   SMTP_USER, SMTP_PASS y SMTP_FROM.
+ * Sin ninguna de las dos no se envía nada y RRHH copia los datos a mano.
  */
 
-export const mailEnabled = () => !!process.env.SMTP_HOST;
+export const mailEnabled = () => !!process.env.BREVO_API_KEY || !!process.env.SMTP_HOST;
+export const mailVia = () => (process.env.BREVO_API_KEY ? "Brevo" : process.env.SMTP_HOST ? `SMTP (${process.env.SMTP_HOST}:${process.env.SMTP_PORT || 587})` : null);
 
 let transport: ReturnType<typeof nodemailer.createTransport> | null = null;
 function transporter() {
@@ -17,6 +21,10 @@ function transporter() {
       host: process.env.SMTP_HOST,
       port,
       secure: port === 465,
+      // Si el servidor de correo no responde (p. ej. el puerto está bloqueado), fallar enseguida en vez de esperar minutos
+      connectionTimeout: 15_000,
+      greetingTimeout: 15_000,
+      socketTimeout: 30_000,
       auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
     });
   }
@@ -31,7 +39,27 @@ export async function sendMail(to: string, subject: string, text: string) {
     .split("\n")
     .map((l) => (l ? `<p style="margin:0 0 8px">${l.replace(/(https?:\/\/\S+)/g, '<a href="$1">$1</a>')}</p>` : ""))
     .join("")}</div>`;
-  await transporter().sendMail({ from: process.env.SMTP_FROM || process.env.SMTP_USER, to, subject, text, html });
+  const from = process.env.MAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || "";
+  if (process.env.BREVO_API_KEY) return sendBrevo(from, to, subject, text, html);
+  await transporter().sendMail({ from, to, subject, text, html });
+}
+
+/** «Artigot RRHH <rrhh@artigot.com>» → { name, email } */
+function parseFrom(from: string) {
+  const m = from.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/);
+  return m ? { name: m[1].trim() || undefined, email: m[2].trim() } : { email: from.trim() };
+}
+
+async function sendBrevo(from: string, to: string, subject: string, text: string, html: string) {
+  const sender = parseFrom(from);
+  if (!sender.email) throw new Error("Falta el remitente: pon MAIL_FROM (p. ej. «Artigot RRHH <rrhh@artigot.com>») en Railway.");
+  const res = await fetch(process.env.BREVO_API_URL || "https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: { "api-key": process.env.BREVO_API_KEY!, "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify({ sender, to: [{ email: to }], subject, textContent: text, htmlContent: html }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!res.ok) throw new Error(`Brevo respondió ${res.status}: ${(await res.text()).slice(0, 300)}`);
 }
 
 type AccessWorker = { name: string; phone: string | null; email: string | null; accessCode: string };
