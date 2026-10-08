@@ -4,6 +4,7 @@ import { currentAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { mailEnabled } from "@/lib/mail";
 import { ChangeMyPasswordForm, NewUserForm, ResetPasswordForm } from "./UserForms";
+import { TestMailForm } from "./TestMailForm";
 
 const when = new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", dateStyle: "short", timeStyle: "short" });
 
@@ -21,6 +22,7 @@ export default async function AdminUsers() {
           <p className="mt-1 text-sm text-amber-800">🔓 Verificación en dos pasos pendiente: se activa sola cuando configuréis el envío de emails (SMTP).</p>
         )}
       </div>
+      <TestMailForm email={me.email} />
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <div className="card overflow-x-auto p-0">
           <table className="table">

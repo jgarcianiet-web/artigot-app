@@ -78,11 +78,11 @@ export function WorkerForm({ worker, docs = {} }: { worker?: Worker; docs?: DocS
         </div>
         <div>
           <label className="label">Teléfono (WhatsApp)</label>
-          <input name="phone" type="tel" className="input" defaultValue={worker?.phone ?? ""} placeholder="600 123 456" />
+          <input name="phone" type="tel" className="input" defaultValue={worker?.phone ?? ""} placeholder="600 123 456" required />
         </div>
         <div>
-          <label className="label">Email (opcional)</label>
-          <input name="email" type="email" className="input" defaultValue={worker?.email ?? ""} />
+          <label className="label">Email</label>
+          <input name="email" type="email" className="input" defaultValue={worker?.email ?? ""} required />
         </div>
         <div>
           <label className="label">Puesto principal</label>
