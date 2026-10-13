@@ -25,7 +25,7 @@ export function OfflineClockSync() {
       for (const item of q) {
         let r;
         try {
-          r = await clockOffline(item.assignmentId, item.kind, { lat: item.lat, lng: item.lng, accuracy: item.accuracy }, item.capturedAt, Date.now());
+          r = await clockOffline(item.assignmentId, item.kind, { lat: item.lat, lng: item.lng, accuracy: item.accuracy }, item.capturedAt, Date.now(), item.reason);
         } catch {
           break; // sigue sin conexión: se reintenta más tarde
         }

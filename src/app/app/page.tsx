@@ -44,7 +44,7 @@ export default async function WorkerHome() {
     (a) =>
       clocksIn(worker) &&
       a.status === "CONFIRMADO" &&
-      (a.event.date === t || (a.event.date === addDays(t, -1) && now <= clockWindow(a.event, a.role, a.group).closesAt)),
+      (a.event.date === t || (a.event.date === addDays(t, -1) && now <= clockWindow(a.event, a.role, a.group).lastAt)),
   );
   const pending = worker.assignments.filter((a) => a.status === "CONVOCADO" && a.event.date >= t);
   const upcoming = worker.assignments.filter((a) => a.status === "CONFIRMADO" && a.event.date >= t && !clockable.includes(a));
@@ -119,11 +119,11 @@ export default async function WorkerHome() {
             checkOut={a.checkOut}
             windowText={(() => {
               const w = clockWindow(a.event, a.role, a.group);
-              return `Fichaje con ubicación: de ${hhmm(w.opensAt)} a ${hhmm(w.closesAt)}, a menos de ${CLOCK_RADIUS_M} m del evento.`;
+              return `Ficha a menos de ${CLOCK_RADIUS_M} m del evento. Horario normal: de ${hhmm(w.opensAt)} a ${hhmm(w.closesAt)}; si fichas fuera de ese horario, te pediremos el motivo.`;
             })()}
             rules={(() => {
               const w = clockWindow(a.event, a.role, a.group);
-              return { opensAt: w.opensAt.toISOString(), closesAt: w.closesAt.toISOString(), lat: a.event.lat, lng: a.event.lng, radius: CLOCK_RADIUS_M };
+              return { opensAt: w.opensAt.toISOString(), closesAt: w.closesAt.toISOString(), firstAt: w.firstAt.toISOString(), lastAt: w.lastAt.toISOString(), lat: a.event.lat, lng: a.event.lng, radius: CLOCK_RADIUS_M };
             })()}
           />
           <ChatLink eventId={a.eventId} />

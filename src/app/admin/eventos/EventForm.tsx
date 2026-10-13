@@ -198,7 +198,7 @@ export function EventForm({
       <fieldset className="rounded-lg border border-stone-200 p-4">
         <legend className="px-1 text-sm font-semibold">Ubicación para el fichaje</legend>
         <p className="mb-2 text-xs text-stone-500">
-          El personal solo puede fichar a menos de {radius} m de este punto, desde 30 min antes de su citación hasta 30 min después de la hora de fin.
+          El personal solo puede fichar a menos de {radius} m de este punto. Si ficha más de 30 min antes de su citación o más de 30 min después de la hora de fin, tiene que escribir el motivo.
         </p>
         <LocationPicker key={pickerKey} initial={point} radius={radius} />
       </fieldset>

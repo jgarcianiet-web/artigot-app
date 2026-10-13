@@ -3,12 +3,15 @@ import { addDays, callTime, type GroupTime } from "./domain";
 /**
  * Reglas del fichaje:
  *  - Distancia máxima al lugar del evento: CLOCK_RADIUS_M (200 m por defecto).
- *  - Ventana horaria: desde CLOCK_MARGIN_MIN antes de la hora de citación del puesto
- *    hasta CLOCK_MARGIN_MIN después de la hora de fin del evento.
+ *  - Horario normal: desde CLOCK_MARGIN_MIN antes de la hora de citación del puesto hasta CLOCK_MARGIN_MIN
+ *    después de la hora de fin del evento. Fuera de ese horario se puede fichar, pero hay que escribir el motivo
+ *    (entrada antes de tiempo o salida tarde), que ve RRHH.
+ *  - Límite: no se ficha más de CLOCK_LIMIT_H horas antes de la citación ni después del fin (otro día/otro evento).
  * Todo se valida en el servidor con su propia hora; el móvil solo aporta la posición.
  */
 export const CLOCK_RADIUS_M = Number(process.env.CLOCK_RADIUS_M ?? 200);
 export const CLOCK_MARGIN_MIN = 30;
+export const CLOCK_LIMIT_H = 12;
 /** Si el GPS da una precisión peor que esto, no se puede asegurar la distancia. */
 export const MAX_ACCURACY_M = 200;
 /** Eventos antiguos sin hora de fin: se asume esta duración. */
@@ -63,10 +66,34 @@ export function serviceSpan(event: EventTimes, role: string, group?: GroupTime) 
   return { start, end };
 }
 
+/**
+ * opensAt/closesAt: horario normal (sin motivo). firstAt/lastAt: lo antes y lo más tarde que se puede fichar.
+ */
 export function clockWindow(event: EventTimes, role: string, group?: GroupTime) {
   const { start, end } = serviceSpan(event, role, group);
   const margin = CLOCK_MARGIN_MIN * 60_000;
-  return { opensAt: new Date(start.getTime() - margin), closesAt: new Date(end.getTime() + margin) };
+  const limit = CLOCK_LIMIT_H * 3_600_000;
+  return {
+    opensAt: new Date(start.getTime() - margin),
+    closesAt: new Date(end.getTime() + margin),
+    firstAt: new Date(start.getTime() - limit),
+    lastAt: new Date(end.getTime() + limit),
+  };
+}
+
+export type Unusual = "early" | "late" | null;
+
+/** ¿Este fichaje está fuera del horario normal? (entrada antes de tiempo, o fichaje después del fin) */
+export function unusualClock(kind: "in" | "out", at: Date, w: { opensAt: Date; closesAt: Date }): Unusual {
+  if (kind === "in" && at < w.opensAt) return "early";
+  if (at > w.closesAt) return "late";
+  return null;
+}
+
+/** Texto de la pregunta del motivo. */
+export function reasonQuestion(kind: "in" | "out", unusual: Unusual, w: { opensAt: Date; closesAt: Date }) {
+  if (unusual === "early") return `Estás fichando la entrada antes de tiempo (el horario normal empieza a las ${hhmm(w.opensAt)}). ¿Por qué entras antes?`;
+  return `Estás fichando la ${kind === "in" ? "entrada" : "salida"} tarde (el horario normal termina a las ${hhmm(w.closesAt)}). ¿Por qué ${kind === "in" ? "entras" : "sales"} más tarde?`;
 }
 
 /** Distancia en metros entre dos coordenadas (fórmula del semiverseno). */
@@ -83,13 +110,14 @@ export const hhmm = (d: Date) =>
   new Intl.DateTimeFormat("es-ES", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(d);
 
 export type ClockCheck =
-  | { ok: true; distance: number }
+  | { ok: true; distance: number; unusual: Unusual; question: string | null }
   | { ok: false; reason: string };
 
 /** Comprueba todas las reglas para fichar en este momento desde esta posición. */
 export function checkClock(opts: {
   event: EventTimes & { lat: number | null; lng: number | null };
   role: string;
+  kind: "in" | "out";
   group?: GroupTime;
   position: { lat: number; lng: number; accuracy: number };
   now?: Date;
@@ -99,12 +127,12 @@ export function checkClock(opts: {
   if (event.lat == null || event.lng == null) {
     return { ok: false, reason: "RRHH aún no ha fijado la ubicación de este evento. Avísales para poder fichar." };
   }
-  const { opensAt, closesAt } = clockWindow(event, role, opts.group);
-  if (now < opensAt) {
-    return { ok: false, reason: `Todavía no se puede fichar: el fichaje abre a las ${hhmm(opensAt)} (30 min antes de tu citación).` };
+  const w = clockWindow(event, role, opts.group);
+  if (now < w.firstAt) {
+    return { ok: false, reason: `Todavía es pronto para fichar en este evento: se puede desde las ${hhmm(w.firstAt)}.` };
   }
-  if (now > closesAt) {
-    return { ok: false, reason: `El fichaje cerró a las ${hhmm(closesAt)} (30 min después del fin del evento). Habla con RRHH.` };
+  if (now > w.lastAt) {
+    return { ok: false, reason: `El fichaje de este evento ya está cerrado. Habla con RRHH para que te apunten la hora.` };
   }
   if (!Number.isFinite(position.lat) || !Number.isFinite(position.lng) || Math.abs(position.lat) > 90 || Math.abs(position.lng) > 180) {
     return { ok: false, reason: "No se ha podido leer tu ubicación." };
@@ -120,5 +148,6 @@ export function checkClock(opts: {
     const km = distance >= 1000 ? `${(distance / 1000).toFixed(1).replace(".", ",")} km` : `${distance} m`;
     return { ok: false, reason: `Estás a ${km} del evento. Tienes que estar a menos de ${CLOCK_RADIUS_M} m para fichar.` };
   }
-  return { ok: true, distance };
+  const unusual = unusualClock(opts.kind, now, w);
+  return { ok: true, distance, unusual, question: unusual ? reasonQuestion(opts.kind, unusual, w) : null };
 }
