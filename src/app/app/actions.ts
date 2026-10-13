@@ -90,18 +90,36 @@ export async function respond(assignmentId: string, accept: boolean) {
   revalidatePath("/app", "layout");
 }
 
-export type ClockResult = { ok: boolean; message: string };
+export type ClockResult = { ok: boolean; message: string; /** Fuera del horario normal: hay que escribir el motivo */ needReason?: string };
+
+const MAX_REASON = 300;
+const cleanReason = (r: unknown) => String(r ?? "").trim().replace(/\s+/g, " ").slice(0, MAX_REASON);
+
+/** Avisa a RRHH de un fichaje fuera del horario normal, con su motivo. */
+function notifyUnusual(a: { id: string; eventId: string; event: { name: string } }, who: string, kind: "in" | "out", time: string, reason: string) {
+  after(() =>
+    notify({
+      admins: true,
+      adminUrl: `/admin/eventos/${a.eventId}?tab=horas`,
+      title: kind === "in" ? "⏰ Entrada antes de tiempo" : "⏰ Fichaje fuera de hora",
+      body: `${who} ficha la ${kind === "in" ? "entrada" : "salida"} a las ${time} en ${a.event.name}. Motivo: ${reason}`,
+      tag: `motivo-${a.id}-${kind}`,
+    }),
+  );
+}
 
 /**
- * Fichaje con geolocalización. El servidor comprueba con su propia hora que se está dentro
- * de la ventana (30 min antes de la citación → 30 min después del fin) y a menos de 200 m.
+ * Fichaje con geolocalización. El servidor comprueba con su propia hora la distancia (menos de 200 m) y si se
+ * ficha fuera del horario normal (más de 30 min antes de la citación o después del fin): entonces hace falta
+ * el motivo, que se guarda y se avisa a RRHH.
  */
 export async function clock(
   assignmentId: string,
   kind: "in" | "out",
   position: { lat: number; lng: number; accuracy: number },
+  reasonText?: string,
 ): Promise<ClockResult> {
-  const { a } = await ownAssignment(assignmentId);
+  const { a, worker } = await ownAssignment(assignmentId);
   if (!clocksIn(a.worker)) return { ok: false, message: "No necesitas fichar: tus horas van en tu nómina." };
   if (a.status !== "CONFIRMADO") return { ok: false, message: "Solo puede fichar el personal confirmado." };
   if (kind === "in" && a.checkIn) return { ok: false, message: `Ya fichaste la entrada a las ${a.checkIn}.` };
@@ -109,8 +127,10 @@ export async function clock(
   if (kind === "out" && a.checkOut) return { ok: false, message: `Ya fichaste la salida a las ${a.checkOut}.` };
 
   const pos = { lat: Number(position?.lat), lng: Number(position?.lng), accuracy: Number(position?.accuracy) };
-  const check = checkClock({ event: a.event, role: a.role, group: a.group, position: pos });
+  const check = checkClock({ event: a.event, role: a.role, kind, group: a.group, position: pos });
   if (!check.ok) return { ok: false, message: check.reason };
+  const reason = check.unusual ? cleanReason(reasonText) : null;
+  if (check.unusual && (!reason || reason.length < 3)) return { ok: false, needReason: check.question!, message: check.question! };
 
   const time = nowTime();
   const accuracy = Math.round(pos.accuracy);
@@ -118,9 +138,10 @@ export async function clock(
     where: { id: a.id },
     data:
       kind === "in"
-        ? { checkIn: time, checkInLat: pos.lat, checkInLng: pos.lng, checkInDistance: check.distance, checkInAccuracy: accuracy, checkInManual: false }
-        : { checkOut: time, checkOutLat: pos.lat, checkOutLng: pos.lng, checkOutDistance: check.distance, checkOutAccuracy: accuracy, checkOutManual: false },
+        ? { checkIn: time, checkInLat: pos.lat, checkInLng: pos.lng, checkInDistance: check.distance, checkInAccuracy: accuracy, checkInManual: false, checkInReason: reason }
+        : { checkOut: time, checkOutLat: pos.lat, checkOutLng: pos.lng, checkOutDistance: check.distance, checkOutAccuracy: accuracy, checkOutManual: false, checkOutReason: reason },
   });
+  if (reason) notifyUnusual(a, worker.name, kind, time, reason);
   revalidatePath("/app", "layout");
   revalidatePath(`/admin/eventos/${a.eventId}`);
   // Al terminar, se recuerda al maître que valore a su equipo
@@ -153,6 +174,7 @@ export async function clockOffline(
   position: { lat: number; lng: number; accuracy: number },
   capturedAt: number,
   sentAt: number,
+  reasonText?: string,
 ): Promise<ClockResult & { done: boolean }> {
   const worker = await requireWorker();
   const a = await db.assignment.findUnique({ where: { id: assignmentId }, include: { event: true, group: true } });
@@ -173,7 +195,7 @@ export async function clockOffline(
     return { ok: false, done: true, message: `Tu fichaje de ${label} sin cobertura tiene más de 48 horas y ya no se puede registrar. Avisa a RRHH.` };
   }
   const pos = { lat: Number(position?.lat), lng: Number(position?.lng), accuracy: Number(position?.accuracy) };
-  const check = checkClock({ event: a.event, role: a.role, group: a.group, position: pos, now: at });
+  const check = checkClock({ event: a.event, role: a.role, kind, group: a.group, position: pos, now: at });
   if (!check.ok) {
     // RRHH lo revisa: el trabajador estuvo pero el fichaje no cumple las reglas (lejos, fuera de hora…)
     after(() =>
@@ -189,13 +211,16 @@ export async function clockOffline(
   }
   const time = hhmm(at);
   const accuracy = Math.round(pos.accuracy);
+  // El motivo se escribe en el móvil antes de guardar el fichaje; si no llegó (móvil con otra hora), queda indicado
+  const reason = check.unusual ? cleanReason(reasonText) || "Sin motivo (fichado sin cobertura)" : null;
   await db.assignment.update({
     where: { id: a.id },
     data:
       kind === "in"
-        ? { checkIn: time, checkInLat: pos.lat, checkInLng: pos.lng, checkInDistance: check.distance, checkInAccuracy: accuracy, checkInManual: false, checkInOffline: true }
-        : { checkOut: time, checkOutLat: pos.lat, checkOutLng: pos.lng, checkOutDistance: check.distance, checkOutAccuracy: accuracy, checkOutManual: false, checkOutOffline: true },
+        ? { checkIn: time, checkInLat: pos.lat, checkInLng: pos.lng, checkInDistance: check.distance, checkInAccuracy: accuracy, checkInManual: false, checkInOffline: true, checkInReason: reason }
+        : { checkOut: time, checkOutLat: pos.lat, checkOutLng: pos.lng, checkOutDistance: check.distance, checkOutAccuracy: accuracy, checkOutManual: false, checkOutOffline: true, checkOutReason: reason },
   });
+  if (reason) notifyUnusual(a, worker.name, kind, time, reason);
   await audit(worker.name, "Trabajador", "Horas", "Fichaje sin cobertura", `${worker.name}: ${label} ${time} en ${a.event.name}, enviada al recuperar la cobertura (desfase del reloj del móvil: ${Math.round(skew / 1000)} s)`, { entityId: a.eventId });
   revalidatePath("/app", "layout");
   revalidatePath(`/admin/eventos/${a.eventId}`);
@@ -268,7 +293,7 @@ export async function markArrival(assignmentId: string) {
   if (!a || a.status !== "CONFIRMADO" || a.checkIn || !(await isEventLead(a.eventId, me.id))) return;
   const w = clockWindow(a.event, a.role, a.group);
   const now = new Date();
-  if (now < w.opensAt || now > w.closesAt) return;
+  if (now < w.firstAt || now > w.lastAt) return;
   await db.assignment.update({
     where: { id: a.id },
     data: { checkIn: nowTime(), checkInManual: true, notes: `Llegada marcada por ${me.name}` },

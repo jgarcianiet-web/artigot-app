@@ -44,13 +44,18 @@ import { REVIEW_DAYS, reviewWindowOpen, teamOf } from "@/lib/reviews";
 import { CRITERIA, explainScore, reviewAverage } from "@/lib/scoring";
 import { candidatesFor, coverage, gaps } from "@/lib/staffing";
 
-function ClockTag({ distance, accuracy, manual, offline }: { distance: number | null; accuracy: number | null; manual: boolean; offline: boolean }) {
-  if (manual) return <div className="text-[11px] text-stone-500">✎ manual</div>;
-  if (distance == null) return null;
+function ClockTag({ distance, accuracy, manual, offline, reason }: { distance: number | null; accuracy: number | null; manual: boolean; offline: boolean; reason?: string | null }) {
+  // Fichado fuera del horario normal: el motivo que escribió el trabajador
+  const why = reason ? <div className="max-w-40 text-[11px] text-amber-800" title={reason}>⏰ {reason}</div> : null;
+  if (manual) return <><div className="text-[11px] text-stone-500">✎ manual</div>{why}</>;
+  if (distance == null) return why;
   return (
-    <div className="text-[11px] text-emerald-700" title={`Precisión del GPS: ±${accuracy ?? "?"} m${offline ? ". Fichado sin cobertura y enviado después" : ""}`}>
-      📍 {distance} m{offline && <span className="ml-1 text-amber-700">· sin cobertura</span>}
-    </div>
+    <>
+      <div className="text-[11px] text-emerald-700" title={`Precisión del GPS: ±${accuracy ?? "?"} m${offline ? ". Fichado sin cobertura y enviado después" : ""}`}>
+        📍 {distance} m{offline && <span className="ml-1 text-amber-700">· sin cobertura</span>}
+      </div>
+      {why}
+    </>
   );
 }
 
@@ -493,8 +498,9 @@ export default async function EventDetail({ params, searchParams }: { params: Pr
             <SubmitButton>Guardar horas</SubmitButton>
           </div>
           <p className="text-xs text-stone-500">
-            El personal ficha desde la app con su ubicación (a menos de {CLOCK_RADIUS_M} m, de {hhmm(clockWindow(event, "CAMARERO").opensAt)} a{" "}
-            {hhmm(clockWindow(event, "CAMARERO").closesAt)}; los mozos desde {hhmm(clockWindow(event, "MOZO").opensAt)}). 📍 = distancia
+            El personal ficha desde la app con su ubicación (a menos de {CLOCK_RADIUS_M} m). Horario normal de {hhmm(clockWindow(event, "CAMARERO").opensAt)} a{" "}
+            {hhmm(clockWindow(event, "CAMARERO").closesAt)} (los mozos desde {hhmm(clockWindow(event, "MOZO").opensAt)}); fuera de ese horario puede fichar, pero tiene que
+            escribir el motivo (⏰) y RRHH recibe un aviso. 📍 = distancia
             al evento al fichar. ✎ = hora corregida por RRHH. «Sin cobertura» = fichado sin señal con la hora del momento y enviado después. Las horas manuales tienen prioridad.
           </p>
           <div className="overflow-x-auto">
@@ -526,11 +532,11 @@ export default async function EventDetail({ params, searchParams }: { params: Pr
                       )}
                       <td>
                         <input type="time" name={`in_${a.id}`} defaultValue={a.checkIn ?? ""} className="input w-28" />
-                        <ClockTag distance={a.checkInDistance} accuracy={a.checkInAccuracy} manual={a.checkInManual} offline={a.checkInOffline} />
+                        <ClockTag distance={a.checkInDistance} accuracy={a.checkInAccuracy} manual={a.checkInManual} offline={a.checkInOffline} reason={a.checkInReason} />
                       </td>
                       <td>
                         <input type="time" name={`out_${a.id}`} defaultValue={a.checkOut ?? ""} className="input w-28" />
-                        <ClockTag distance={a.checkOutDistance} accuracy={a.checkOutAccuracy} manual={a.checkOutManual} offline={a.checkOutOffline} />
+                        <ClockTag distance={a.checkOutDistance} accuracy={a.checkOutAccuracy} manual={a.checkOutManual} offline={a.checkOutOffline} reason={a.checkOutReason} />
                       </td>
                       <td>
                         <input

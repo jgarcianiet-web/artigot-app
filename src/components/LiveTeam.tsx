@@ -39,6 +39,7 @@ export function LiveTeam({ live, markAction }: { live: Live; markAction?: (assig
                 {r.checkIn && (r.manual ? " (manual)" : r.distance != null ? ` · 📍 ${r.distance} m` : "")}
                 {r.checkOut && ` · salida ${r.checkOut}`}
               </div>
+              {r.reasons && <div className="text-xs text-amber-800">⏰ Fuera de hora — {r.reasons}</div>}
             </div>
             <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATE[r.state].cls}`}>{STATE[r.state].label}</span>
             {(r.state === "retraso" || r.state === "esperando") && r.phone && (

@@ -42,6 +42,7 @@ export async function liveTeam(eventId: string, now = new Date(), leadWorkerId?:
       checkOut: a.checkOut,
       distance: a.checkInDistance,
       manual: a.checkInManual,
+      reasons: [a.checkInReason && `entrada: ${a.checkInReason}`, a.checkOutReason && `salida: ${a.checkOutReason}`].filter(Boolean).join(" · ") || null,
       groupId: a.groupId,
       group: a.group?.name ?? null,
       state,

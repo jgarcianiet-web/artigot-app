@@ -191,6 +191,9 @@ model Assignment {
   // Fichado sin cobertura: se guardó en el móvil y se envió al recuperar la señal
   checkInOffline  Boolean @default(false)
   checkOutOffline Boolean @default(false)
+  // Motivo obligatorio si se ficha fuera del horario normal (entrada antes de tiempo o salida tarde)
+  checkInReason   String?
+  checkOutReason  String?
   hoursOverride Float?
   // Transporte: PROPIO (va por su cuenta), CONDUZCO (lleva coche) o NECESITO (necesita que le lleven)
   transport     String?

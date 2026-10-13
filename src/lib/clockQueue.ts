@@ -10,6 +10,8 @@ export type QueuedClock = {
   lng: number;
   accuracy: number;
   capturedAt: number;
+  /** Motivo si se fichó fuera del horario normal */
+  reason?: string;
 };
 
 const KEY = "artigot-clock-queue";
