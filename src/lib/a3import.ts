@@ -260,7 +260,7 @@ export async function completeFromFile(file: File, by: string, opts: A3ImportOpt
     const details = [
       ...list(opts.dryRun ? "Se darán de alta" : "Dados de alta", created),
       ...list("No se pueden dar de alta", cannot),
-      ...list("Sin teléfono ni email (no pueden entrar en la app hasta que se lo pongas en su ficha)", noAccess),
+      ...list("Sin teléfono ni email: entran en la app con su DNI y su código (mándales las instrucciones desde su ficha)", noAccess),
       ...(conflicts.length ? list("Con un código de A3 distinto en la app (no se cambia)", conflicts) : []),
     ];
     const summary =

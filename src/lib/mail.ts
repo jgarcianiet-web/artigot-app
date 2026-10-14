@@ -69,14 +69,14 @@ async function sendBrevo(from: string, to: string, subject: string, text: string
   if (!res.ok) throw new Error(`Brevo respondió ${res.status}: ${(await res.text()).slice(0, 300)}`);
 }
 
-type AccessWorker = { name: string; phone: string | null; email: string | null; accessCode: string };
+type AccessWorker = { name: string; phone: string | null; email: string | null; dni?: string | null; accessCode: string };
 
 /** Texto con los datos para entrar en la app (se copia o se envía por email). */
 export function accessText(w: AccessWorker) {
   return [
     `Hola ${w.name.split(" ")[0]}, ya tienes acceso a la app de Artigot para ver convocatorias, confirmar, fichar y hablar en el chat de cada evento.`,
     `Entra en ${loginUrl()} (o en la app) con:`,
-    w.phone ? `Teléfono: ${w.phone}` : `Email: ${w.email}`,
+    w.phone ? `Teléfono: ${w.phone}` : w.email ? `Email: ${w.email}` : `DNI: ${w.dni ?? "pídeselo a RRHH"}`,
     `Código: ${w.accessCode}`,
     process.env.ANDROID_APK_URL && `App Android: ${process.env.ANDROID_APK_URL}`,
     process.env.IOS_APP_URL && `App iPhone: ${process.env.IOS_APP_URL}`,

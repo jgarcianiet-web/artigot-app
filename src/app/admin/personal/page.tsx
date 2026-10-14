@@ -26,6 +26,8 @@ export default async function StaffList({
             { phone: { contains: q } },
             { dni: { contains: q.toUpperCase().replace(/[\s-]/g, "") } },
             { zone: { contains: q, mode: "insensitive" } },
+            // Código de A3: con o sin los ceros de delante (000123 = 123)
+            ...(/^\d+$/.test(q.trim()) ? [{ a3Code: { in: [...new Set([q.trim(), q.trim().replace(/^0+/, ""), q.trim().padStart(6, "0")])] } }] : []),
           ] : undefined,
     },
     include: {
@@ -71,7 +73,7 @@ export default async function StaffList({
       </div>
 
       <form className="flex flex-wrap items-end gap-2">
-        <input name="q" defaultValue={q} placeholder="Buscar nombre, DNI, teléfono o zona…" className="input max-w-xs" />
+        <input name="q" defaultValue={q} placeholder="Buscar nombre, DNI, código A3, teléfono o zona…" className="input max-w-xs" />
         <select name="role" defaultValue={role} className="input w-auto">
           <option value="">Todos los puestos</option>
           {ROLES.map((r) => (
