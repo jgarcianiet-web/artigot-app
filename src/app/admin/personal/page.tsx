@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Empty, RoleBadge, ScoreBadge } from "@/components/ui";
+import { Empty, NewBadge, RoleBadge, ScoreBadge } from "@/components/ui";
+import { newcomers, newcomerText } from "@/lib/newcomers";
 import { db } from "@/lib/db";
 import { duplicateGroups } from "@/lib/mergeWorkers";
 import { CENTER_LABEL, isFixed, isRole, ROLE_PLURAL, ROLES, today } from "@/lib/domain";
@@ -10,9 +11,9 @@ import { BulkBar, SelectAll } from "./BulkBar";
 export default async function StaffList({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; role?: string; inactivos?: string; orden?: string; incompletos?: string; sinavisos?: string; centro?: string }>;
+  searchParams: Promise<{ q?: string; role?: string; inactivos?: string; orden?: string; incompletos?: string; sinavisos?: string; centro?: string; nuevos?: string }>;
 }) {
-  const { q = "", role = "", inactivos, orden = "puntuacion", incompletos, sinavisos, centro = "" } = await searchParams;
+  const { q = "", role = "", inactivos, orden = "puntuacion", incompletos, sinavisos, centro = "", nuevos } = await searchParams;
   const t = today();
   const workers = await db.worker.findMany({
     where: {
@@ -36,6 +37,8 @@ export default async function StaffList({
 
   const incomplete = new Map((await incompleteWorkers(workers.map((w) => w.id))).map((w) => [w.id, w.missing]));
   if (incompletos) workers.splice(0, workers.length, ...workers.filter((w) => incomplete.has(w.id)));
+  const fresh = await newcomers(t);
+  if (nuevos) workers.splice(0, workers.length, ...workers.filter((w) => fresh.has(w.id)));
   if (sinavisos) workers.splice(0, workers.length, ...workers.filter((w) => w._count.devices === 0));
   const noPush = await db.worker.count({ where: { active: true, devices: { none: {} } } });
   const noCenter = await db.worker.count({ where: { active: true, OR: [{ a3Center: null }, { a3Center: "" }] } });
@@ -95,6 +98,9 @@ export default async function StaffList({
         <label className="flex items-center gap-1.5 text-sm" title="No han activado los avisos de la app en ningún móvil: no les llegan las convocatorias">
           <input type="checkbox" name="sinavisos" value="1" defaultChecked={!!sinavisos} /> Solo sin avisos ({noPush})
         </label>
+        <label className="flex items-center gap-1.5 text-sm" title="Dados de alta desde Candidatos que aún no han hecho sus primeras bodas y eventos">
+          <input type="checkbox" name="nuevos" value="1" defaultChecked={!!nuevos} /> Solo nuevos ({fresh.size})
+        </label>
         <button className="btn">Filtrar</button>
       </form>
 
@@ -131,7 +137,7 @@ export default async function StaffList({
                       <span className="ml-2 text-[11px] text-amber-700" title="No ha activado los avisos de la app: no le llegan las convocatorias">🔕 sin avisos</span>
                     )}
                   </td>
-                  <td><RoleBadge role={w.role} />{isFixed(w) && <span className="ml-1 rounded-full bg-sky-100 px-1.5 py-0.5 text-[11px] text-sky-800" title={w.noClock ? "Fijo, no ficha" : "Fijo"}>Fijo{w.noClock ? " · sin fichaje" : ""}</span>}</td>
+                  <td><RoleBadge role={w.role} />{fresh.has(w.id) && <NewBadge title={newcomerText(fresh.get(w.id)!)} />}{isFixed(w) && <span className="ml-1 rounded-full bg-sky-100 px-1.5 py-0.5 text-[11px] text-sky-800" title={w.noClock ? "Fijo, no ficha" : "Fijo"}>Fijo{w.noClock ? " · sin fichaje" : ""}</span>}</td>
                   <td><ScoreBadge score={scores.get(w.id)!.score} title={explainScore(scores.get(w.id)!)} /></td>
                   <td className="whitespace-nowrap">{w.phone ? <a href={`tel:${w.phone}`}>{w.phone}</a> : <span className="text-stone-400">—</span>}</td>
                   <td className="hidden text-stone-500 md:table-cell">{w.zone}</td>

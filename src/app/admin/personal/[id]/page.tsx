@@ -19,12 +19,14 @@ import {
   deleteWorker,
   regenerateAccessCode,
   removeUnavailability,
+  toggleNewcomer,
   toggleWorkerActive,
   testWorkerPush,
 } from "@/app/actions";
+import { newcomers, newcomerText } from "@/lib/newcomers";
 import { AdminPushTest } from "@/components/PushTest";
 import { ConfirmButton, CopyButton, SubmitButton } from "@/components/client";
-import { Empty, RoleBadge, ScoreBadge, Stars, StatusBadge } from "@/components/ui";
+import { Empty, NewBadge, RoleBadge, ScoreBadge, Stars, StatusBadge } from "@/components/ui";
 import { computeScores, CRITERIA, reviewAverage, SCORING } from "@/lib/scoring";
 import { DocumentUploadForm } from "@/components/StaffForms";
 import { DOC_LABEL, docState, formatIban } from "@/lib/staff";
@@ -60,6 +62,7 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
 
   const instructions = accessText(worker);
   const score = (await computeScores([worker.id], today())).get(worker.id)!;
+  const isNew = (await newcomers(today(), [worker.id])).get(worker.id);
   const criteriaAvg = CRITERIA.map((c) => {
     const vals = worker.reviews.map((r) => r[c.key]).filter((v): v is number => v != null);
     return { ...c, avg: vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null };
@@ -91,8 +94,12 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
           </div>
         <div>
           <h1>{worker.name}</h1>
+          {isNew && <p className="text-xs text-lime-800">{newcomerText(isNew)}</p>}
           <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-stone-600">
-            <RoleBadge role={worker.role} />
+            <span className="inline-flex items-center">
+              <RoleBadge role={worker.role} />
+              {isNew && <NewBadge title={newcomerText(isNew)} />}
+            </span>
             {worker.roles.filter((r) => r !== worker.role).map((r) => (
               <span key={r} className="opacity-70"><RoleBadge role={r} /></span>
             ))}
@@ -112,6 +119,9 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
           </div>
         <div className="flex flex-wrap gap-2">
           <Link href={`/admin/personal/${worker.id}/editar`} className="btn">Editar</Link>
+          <form action={toggleNewcomer.bind(null, worker.id)}>
+            <SubmitButton className="btn">{isNew ? "Quitar «Nuevo»" : "Marcar como nuevo"}</SubmitButton>
+          </form>
           <form action={toggleWorkerActive.bind(null, worker.id)}>
             <SubmitButton className="btn">{worker.active ? "Dar de baja" : "Reactivar"}</SubmitButton>
           </form>

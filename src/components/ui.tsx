@@ -29,6 +29,15 @@ export function RoleBadge({ role }: { role: string }) {
   );
 }
 
+/** Etiqueta «Nuevo» (personal recién incorporado desde Candidatos), con su progreso al pasar el ratón. */
+export function NewBadge({ title }: { title: string }) {
+  return (
+    <span className="ml-1 rounded-full bg-lime-100 px-1.5 py-0.5 text-[11px] font-medium text-lime-800" title={title}>
+      Nuevo
+    </span>
+  );
+}
+
 export function Stars({ value }: { value: number }) {
   return (
     <span className="whitespace-nowrap text-amber-500" title={`Valoración ${value}/5`}>
