@@ -36,7 +36,7 @@ export async function GET() {
   ws.getColumn("code").numFmt = "@";
   ws.getColumn("code").font = { name: "Consolas", bold: true };
   ws.addRow([]);
-  ws.addRow([`Acceso: ${loginUrl()} con el teléfono (o el email, o el DNI si no tiene ninguno) y el código. Documento confidencial.`]);
+  ws.addRow([`Acceso: ${loginUrl()} con el DNI como usuario (o el teléfono o email si aún no tiene DNI) y el código. Documento confidencial.`]);
   ws.views = [{ state: "frozen", ySplit: 1 }];
 
   const buffer = await wb.xlsx.writeBuffer();

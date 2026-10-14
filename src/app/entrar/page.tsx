@@ -18,11 +18,12 @@ export default function WorkerLogin() {
         <div className="space-y-3 text-center">
           <Logo height={56} className="mx-auto" />
           <h1 className="text-base font-medium text-stone-600">Área del personal</h1>
-          <p className="text-sm text-stone-500">Entra con tu teléfono (o tu email o DNI) y el código de 6 cifras que te ha dado RRHH.</p>
+          <p className="text-sm text-stone-500">Entra con tu DNI o NIE y el código de 6 cifras que te ha dado RRHH.</p>
         </div>
         <div>
-          <label className="label" htmlFor="phone">Teléfono, email o DNI</label>
-          <input id="phone" name="phone" type="text" inputMode="email" autoComplete="username" autoCapitalize="none" className="input text-base" required />
+          <label className="label" htmlFor="phone">DNI o NIE</label>
+          {/* También vale el teléfono o el email (para quien aún no tiene el DNI en la app) */}
+          <input id="phone" name="phone" type="text" autoComplete="username" autoCapitalize="characters" placeholder="12345678Z" className="input text-base uppercase placeholder:normal-case" required />
         </div>
         <div>
           <label className="label" htmlFor="code">Código de acceso</label>

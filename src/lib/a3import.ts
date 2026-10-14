@@ -16,7 +16,7 @@ import { validDniNie, validIban } from "./staff";
  * Con `dryRun` no guarda nada: solo dice qué haría. Lo que siga faltando se le pide al trabajador en la app.
  */
 
-type Col = "dni" | "name" | "surname" | "phone" | "email" | "code" | "nss" | "center" | "iban" | "birth" | "address" | "sex" | "nationality" | "zone" | "rateBODA" | "rateEVENTO" | "rateOTRO" | "rateAll" | "rateMAITRE:BODA" | "rateMAITRE:EVENTO" | "rateMAITRE:OTRO" | "rateMAITRE:ALL" | "contract" | "role";
+type Col = "dni" | "name" | "first" | "surname" | "surname2" | "phone" | "email" | "code" | "nss" | "center" | "iban" | "birth" | "address" | "sex" | "nationality" | "zone" | "rateBODA" | "rateEVENTO" | "rateOTRO" | "rateAll" | "rateMAITRE:BODA" | "rateMAITRE:EVENTO" | "rateMAITRE:OTRO" | "rateMAITRE:ALL" | "contract" | "role";
 
 function colFor(header: string): Col | null {
   const h = norm(header);
@@ -39,6 +39,7 @@ function colFor(header: string): Col | null {
   if (/^(nass|nss|naf|n ss|num ss|seguridad social|n seguridad social|numero seguridad social|n afiliacion|afiliacion)$/.test(h)) return "nss";
   if (/^(centro|cod centro|codigo centro)$/.test(h)) return "center";
   if (/^(iban|cuenta|cuenta bancaria|n cuenta|ccc)$/.test(h)) return "iban";
+  if (/^lugar/.test(h)) return null; // «Lugar de nacimiento»
   if (/(nacimiento|fecha nac)/.test(h)) return "birth";
   if (/^(direccion|domicilio)$/.test(h)) return "address";
   if (/^(sexo|genero)$/.test(h)) return "sex";
@@ -46,7 +47,10 @@ function colFor(header: string): Col | null {
   if (/^(zona|localidad|poblacion|ciudad|municipio)$/.test(h)) return "zone";
   if (/\b(telefono|movil|tlf|telf)\b/.test(h)) return "phone";
   if (/\b(email|e mail|correo|mail)\b/.test(h)) return "email";
-  if (/^(apellidos|apellido|primer apellido)$/.test(h)) return "surname";
+  if (/^(segundo apellido|apellido 2|2 apellido)$/.test(h)) return "surname2";
+  if (/^(apellidos|apellido|primer apellido|apellido 1|1 apellido)$/.test(h)) return "surname";
+  // A3 «Datos Identificativos»: «Nom. Trabajador» es el nombre de pila (los apellidos van aparte)
+  if (/^(nom trabajador|nombre de pila|nombre propio)$/.test(h)) return "first";
   if (/^(nombre|trabajador|nombre y apellidos|apellidos y nombre|nombre completo|empleado)$/.test(h)) return "name";
   return null;
 }
@@ -80,6 +84,13 @@ export function a3Name(raw: string) {
   return { name: [firstName, cap(surnames)].filter(Boolean).join(" "), firstName, surname1: s1, surname2: rest.join(" ") };
 }
 
+/** Nombre de pila y apellidos por separado (A3 «Datos Identificativos»), en mayúsculas → «Patricia Gomez Aparisi». */
+function a3Parts(first: string, s1: string, s2: string) {
+  const c = (x: string) => (x ? a3Name(x).name : "");
+  const [firstName, surname1, surname2] = [c(first), c(s1), c(s2)];
+  return { name: [firstName, surname1, surname2].filter(Boolean).join(" "), firstName, surname1, surname2 };
+}
+
 export type A3ImportOptions = { replaceRates?: boolean; create?: boolean; dryRun?: boolean; defaultRole?: Role };
 
 const rateValue = (v: string) => {
@@ -94,14 +105,15 @@ export async function completeFromFile(file: File, by: string, opts: A3ImportOpt
   let cols: (Col | null)[] = [];
   for (let i = 0; i < Math.min(10, table.length); i++) {
     const c = table[i].map(colFor);
-    const keys = ["dni", "phone", "email", "name"].filter((k) => c.includes(k as Col)).length;
+    const keys = ["dni", "phone", "email", "name", "first", "code"].filter((k) => c.includes(k as Col)).length;
     if (keys >= 1 && c.filter(Boolean).length >= 2) {
       headerIdx = i;
       cols = c;
       break;
     }
   }
-  if (headerIdx < 0) return { ok: false, message: "No reconozco las columnas. La primera fila debe tener cabeceras como «DNI», «Nombre», «Teléfono», «Email», «NSS», «IBAN» o «CÓDIGO»." };
+  if (headerIdx < 0)
+    return { ok: false, message: "No reconozco las columnas. Debe tener cabeceras como «DNI», «Cód. Trabajador», «Nom. Trabajador», «Primer Apellido», «NAF», «Cod. Centro», «Teléfono» o «Email»." };
   const at = (row: string[], c: Col) => cols.map((x, i) => (x === c ? (row[i] ?? "").trim() : "")).filter(Boolean).join(" ").trim();
 
   const workers = await db.worker.findMany({
@@ -120,6 +132,8 @@ export async function completeFromFile(file: File, by: string, opts: A3ImportOpt
     if (w.email) byEmail.set(w.email.toLowerCase(), byEmail.has(w.email.toLowerCase()) ? null : w);
   }
   const phoneOwners = new Set(byPhone.keys());
+  const codeKey = (c: string) => c.replace(/^0+/, "");
+  const byCode = new Map(workers.filter((w) => w.a3Code).map((w) => [codeKey(w.a3Code!), w]));
 
   let rows = 0;
   let maxCode = 0;
@@ -128,34 +142,46 @@ export async function completeFromFile(file: File, by: string, opts: A3ImportOpt
   const filled: Record<string, number> = {};
   const matched = new Set<string>();
   const created: string[] = [];
-  const noAccess: string[] = [];
   const cannot: string[] = [];
-  const seenDni = new Set<string>();
+  const seen = new Set<string>();
+  const noDni: string[] = [];
   for (const raw of table.slice(headerIdx + 1)) {
     const dni = cleanDni(at(raw, "dni"));
     const phone = at(raw, "phone");
     const email = at(raw, "email").toLowerCase();
-    const name = [at(raw, "name"), at(raw, "surname")].filter(Boolean).join(" ");
-    if (!dni && !phone && !email && !name) continue;
-    rows++;
+    // Nombre: «APELLIDOS, NOMBRE» en una columna, o nombre de pila y apellidos por separado (A3)
+    const first = at(raw, "first");
+    const name = (first ? [first, at(raw, "surname"), at(raw, "surname2")] : [at(raw, "name"), at(raw, "surname"), at(raw, "surname2")]).filter(Boolean).join(" ");
+    const parts = first ? a3Parts(first, at(raw, "surname"), at(raw, "surname2")) : null;
     const code = at(raw, "code");
+    if (!dni && !phone && !email && !name && !code) continue;
+    rows++;
     if (/^\d+$/.test(code)) maxCode = Math.max(maxCode, Number(code));
     const key = phone ? phoneKey(phone) : "";
     const w =
-      (dni && byDni.get(dni)) || (key.length >= 9 && byPhone.get(key)) || (email && byEmail.get(email)) || (name ? byName.get(nameKey(name)) : null);
+      (dni && byDni.get(dni)) ||
+      (/^\d+$/.test(code) && byCode.get(codeKey(code))) ||
+      (key.length >= 9 && byPhone.get(key)) ||
+      (email && byEmail.get(email)) ||
+      (name ? byName.get(nameKey(name)) : null);
     if (!w) {
-      // No está en la app: se da de alta (con el DNI como identificador para no duplicarla en la siguiente importación)
+      // No está en la app: se da de alta. Se identifica por su DNI o su código de A3, para no duplicarla en la siguiente importación.
       if (!opts.create || !name) continue;
-      if (!dni || !validDniNie(dni)) {
-        cannot.push(`${a3Name(name).name}: ${dni ? `DNI no válido (${dni})` : "sin DNI"}`);
+      const n = parts ?? a3Name(name);
+      if (dni && !validDniNie(dni)) {
+        cannot.push(`${n.name}: DNI no válido (${dni})`);
         continue;
       }
-      const n = a3Name(name);
-      if (seenDni.has(dni)) {
-        cannot.push(`${n.name}: DNI repetido en el archivo (${dni})`);
+      if (!dni && !/^\d+$/.test(code)) {
+        cannot.push(`${n.name}: sin DNI ni código de A3`);
         continue;
       }
-      seenDni.add(dni);
+      const id = dni || `A3:${codeKey(code)}`;
+      if (seen.has(id)) {
+        cannot.push(`${n.name}: ${dni ? `DNI repetido en el archivo (${dni})` : `código de A3 repetido en el archivo (${code})`}`);
+        continue;
+      }
+      seen.add(id);
       const okPhone = key.length >= 9 && !phoneOwners.has(key);
       const okEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
       if (okPhone) phoneOwners.add(key);
@@ -175,7 +201,7 @@ export async function completeFromFile(file: File, by: string, opts: A3ImportOpt
           data: {
             name: n.name,
             ...(n.firstName && { firstName: n.firstName, surname1: n.surname1, surname2: n.surname2 }),
-            dni,
+            ...(dni && { dni }),
             role,
             roles: [role],
             accessCode: newAccessCode(),
@@ -195,7 +221,7 @@ export async function completeFromFile(file: File, by: string, opts: A3ImportOpt
           },
         });
       created.push(n.name);
-      if (!okPhone && !okEmail) noAccess.push(n.name);
+      if (!dni) noDni.push(n.name);
       continue;
     }
     if (matched.has(w.id)) continue;
@@ -242,7 +268,8 @@ export async function completeFromFile(file: File, by: string, opts: A3ImportOpt
       }
     }
     if (ratesChanged) data.customRates = rates;
-    if (name.includes(",") && !w.firstName && !w.surname1) {
+    if (parts && !w.firstName && !w.surname1) Object.assign(data, { firstName: parts.firstName, surname1: parts.surname1, surname2: parts.surname2 });
+    else if (name.includes(",") && !w.firstName && !w.surname1) {
       const [surnames, first] = name.split(",").map((s) => s.trim());
       const [s1, ...rest] = surnames.split(/\s+/);
       if (first && s1) Object.assign(data, { firstName: first, surname1: s1, surname2: rest.join(" ") || "" });
@@ -260,7 +287,7 @@ export async function completeFromFile(file: File, by: string, opts: A3ImportOpt
     const details = [
       ...list(opts.dryRun ? "Se darán de alta" : "Dados de alta", created),
       ...list("No se pueden dar de alta", cannot),
-      ...list("Sin teléfono ni email: entran en la app con su DNI y su código (mándales las instrucciones desde su ficha)", noAccess),
+      ...list("Sin DNI: para entrar en la app necesitan su DNI (impórtalo desde A3 con un listado que lo incluya, o ponlo en su ficha)", noDni),
       ...(conflicts.length ? list("Con un código de A3 distinto en la app (no se cambia)", conflicts) : []),
     ];
     const summary =

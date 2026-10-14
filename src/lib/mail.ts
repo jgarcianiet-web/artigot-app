@@ -1,6 +1,6 @@
 import { lookup } from "node:dns/promises";
 import nodemailer from "nodemailer";
-import { loginUrl } from "./domain";
+import { loginId, loginUrl } from "./domain";
 
 /**
  * Envío de emails, de dos formas:
@@ -76,7 +76,10 @@ export function accessText(w: AccessWorker) {
   return [
     `Hola ${w.name.split(" ")[0]}, ya tienes acceso a la app de Artigot para ver convocatorias, confirmar, fichar y hablar en el chat de cada evento.`,
     `Entra en ${loginUrl()} (o en la app) con:`,
-    w.phone ? `Teléfono: ${w.phone}` : w.email ? `Email: ${w.email}` : `DNI: ${w.dni ?? "pídeselo a RRHH"}`,
+    (() => {
+      const id = loginId(w);
+      return id ? `Usuario (${id.label}): ${id.value}` : "Usuario: tu DNI (aún no lo tenemos: dáselo a RRHH)";
+    })(),
     `Código: ${w.accessCode}`,
     process.env.ANDROID_APK_URL && `App Android: ${process.env.ANDROID_APK_URL}`,
     process.env.IOS_APP_URL && `App iPhone: ${process.env.IOS_APP_URL}`,

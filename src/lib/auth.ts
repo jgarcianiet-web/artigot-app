@@ -152,7 +152,7 @@ const asDni = (v: string) => {
 
 /** Mensaje de error genérico según con qué intenta entrar (no dice si existe o no). */
 export const loginError = (login: string) =>
-  login.includes("@") ? "Email o código incorrectos" : asDni(login) ? "DNI o código incorrectos" : "Teléfono o código incorrectos";
+  login.includes("@") ? "Email o código incorrectos" : !asDni(login) && phoneKey(login).length >= 9 ? "Teléfono o código incorrectos" : "DNI o código incorrectos";
 
 async function findForLogin(login: string, code: string) {
   const v = login.trim();
