@@ -12,6 +12,8 @@ import { Checklist } from "@/components/StaffForms";
 import { checklistFor, getUniform } from "@/lib/staff";
 import { respond } from "../../actions";
 import { generalLead, GROUP_WITH_LEAD, groupLine } from "@/lib/groups";
+import { WithdrawForm } from "./WithdrawForm";
+import { canWithdrawFreely } from "@/lib/withdrawals";
 import { acceptBlock, sameDayBookings } from "@/lib/convocation";
 import { Transport } from "./Transport";
 
@@ -65,13 +67,17 @@ export default async function WorkerEvent({ params }: { params: Promise<{ id: st
               </form>
             </div>
           )}
-          {canRespond && confirmed && (
-            <div className="flex flex-wrap gap-2">
-              <form action={respond.bind(null, a.id, false)}>
-                <button className="btn btn-danger btn-sm">Ya no puedo ir</button>
-              </form>
-            </div>
+          {a.status === "RECHAZADO" && a.withdrew && (
+            <p className="rounded-lg bg-stone-100 p-2 text-sm text-stone-700">
+              Has cancelado tu asistencia a este evento{a.withdrawReason ? ` (motivo: ${a.withdrawReason})` : ""}.
+            </p>
           )}
+          {canRespond && confirmed && a.withdrawRequestedAt && (
+            <p className="rounded-lg bg-amber-50 p-2 text-sm text-amber-900">
+              ⏳ Has pedido no ir («{a.withdrawReason}»). RRHH tiene que aprobarlo: hasta entonces sigues confirmado.
+            </p>
+          )}
+          {canRespond && confirmed && !a.withdrawRequestedAt && <WithdrawForm assignmentId={a.id} free={canWithdrawFreely(a)} />}
         </div>
       </details>
 

@@ -203,6 +203,9 @@ model Assignment {
   passengers    Assignment[] @relation("rides")
   // El trabajador se retiró después de haber confirmado
   withdrew      Boolean   @default(false)
+  // No asistencia tras confirmar: motivo (obligatorio) y, a menos de 24 h, solicitud que aprueba RRHH
+  withdrawReason      String?
+  withdrawRequestedAt DateTime?
   notes         String?
   // Resultado del aviso de la última convocatoria («✓ Android · app 12:03», el error o sin móvil)
   notice        String?
