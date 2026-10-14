@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import { ActionForm, SubmitButton } from "@/components/client";
 import type { A3AltaConfig } from "@/lib/a3alta";
 import { ROLE_LABEL, ROLES } from "@/lib/domain";
-import { importA3DatabaseAction, saveA3AltaAction } from "./actions";
+import { saveA3AltaAction } from "./actions";
 
 type Lists = { bajaReasons: string[]; bajaInactivity: string[]; countries: string[]; education: string[]; contracts: string[]; occupations: string[]; tariffGroups: string[]; regimes: string[]; contributions: string[] };
 
@@ -92,41 +92,6 @@ export function A3AltaForm({ cfg, lists, next }: { cfg: A3AltaConfig; lists: Lis
       </label>
       {msg && <p className="text-sm text-stone-700">{msg}</p>}
       <SubmitButton>Guardar</SubmitButton>
-    </ActionForm>
-  );
-}
-
-export function A3ImportForm({ title = "Importar la base de datos de A3", text, rates = false }: { title?: string; text?: string; rates?: boolean }) {
-  const [res, run] = useActionState(importA3DatabaseAction, null);
-  return (
-    <ActionForm action={run} className="card max-w-3xl space-y-3">
-      <div>
-        <h2>{title}</h2>
-        <p className="text-sm text-stone-500">
-          {text ??
-            "Sube el Excel con la hoja «Base de Datos» (DNI, Nombre, CÓDIGO, NASS, CENTRO). Se busca a cada trabajador por DNI o por nombre y se completan su código de A3, NASS, centro y apellidos si no los tiene. No se cambia nada que ya esté relleno."}
-        </p>
-      </div>
-      <input type="file" name="file" accept=".xlsx,.xlsm,.csv" required className="block text-sm" />
-      {rates && (
-        <label className="flex items-start gap-2 text-sm">
-          <input type="checkbox" name="replaceRates" value="1" className="mt-0.5 size-4 shrink-0" />
-          <span>Sustituir las tarifas propias que ya tengan (si no, solo se rellenan las que falten)</span>
-        </label>
-      )}
-      {res && (
-        <div className={`rounded-lg p-3 text-sm ${res.ok ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-800"}`}>
-          <p>{res.message}</p>
-          {res.details && res.details.length > 0 && (
-            <ul className="mt-1 list-disc pl-5 text-xs">
-              {res.details.map((d) => (
-                <li key={d}>{d}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-      <SubmitButton>Importar</SubmitButton>
     </ActionForm>
   );
 }

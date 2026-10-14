@@ -1,25 +1,30 @@
 import Link from "next/link";
-import { A3ImportForm } from "@/app/admin/ajustes/a3/AltaForms";
-import { ImportForm } from "./ImportForm";
+import { ImportA3 } from "./ImportA3";
 
 export default function ImportStaff() {
   return (
     <div className="space-y-4">
       <div>
         <Link href="/admin/personal" className="text-sm text-stone-500 hover:underline">‹ Personal</Link>
-        <h1>Importar personal desde Excel</h1>
-        <p className="text-sm text-stone-500">
-          Sube vuestra lista actual. Primero verás qué se va a hacer con cada fila; no se guarda nada hasta que pulses «Importar».
-          Los trabajadores se identifican por el teléfono (o el email si no tienen teléfono), así que puedes volver a importar la lista sin crear duplicados.
-          Quien no tenga teléfono entra en la app con su email.
-        </p>
+        <h1>Importar personal desde A3</h1>
+        <div className="max-w-3xl space-y-2 text-sm text-stone-500">
+          <p>
+            Exporta de A3 el listado de trabajadores (la «Base de Datos») a Excel y súbelo aquí. Puedes hacerlo tantas veces como quieras
+            mientras sigáis dando de alta gente en A3: cada persona se busca por su DNI, así que no se duplica nadie.
+          </p>
+          <ul className="list-disc space-y-0.5 pl-5">
+            <li><strong>Quien no está en la app</strong> se da de alta con su código de acceso.</li>
+            <li><strong>Quien ya está</strong> solo se completa con lo que le falte (código de A3, NASS, centro, IBAN…); no se cambia nada que ya tenga.</li>
+            <li>
+              Columnas que se leen: DNI, Nombre (como en A3: «APELLIDOS, NOMBRE»), Código, NASS, Centro, IBAN y, si las añades al listado,
+              Teléfono, Email, Nacimiento, Domicilio, Sexo, Nacionalidad, Puesto o Tipo de contrato.
+            </li>
+            <li>Sin teléfono ni email no pueden entrar en la app: añádelo al listado de A3 o pónselo en su ficha.</li>
+          </ul>
+          <p>Primero pulsa «Revisar» para ver qué se va a hacer; no se guarda nada hasta que pulses «Importar».</p>
+        </div>
       </div>
-      <ImportForm />
-      <A3ImportForm
-        title="Completar los datos que faltan con otro Excel"
-        rates
-        text="Sube cualquier otro Excel o CSV (la base de datos de A3, un listado de la gestoría…) con columnas como DNI, Nombre, Teléfono, Email, NSS, IBAN, CÓDIGO, Nacimiento, Dirección o la tarifa propia de cada persona («Evento», «Boda», «Maître evento», «Maître boda»; o «Tarifa» para todos). Se busca a cada persona por DNI, teléfono, email o nombre y se rellena solo lo que le falta; no se cambia nada que ya esté puesto. Lo que siga faltando se le pide a cada trabajador en la app."
-      />
+      <ImportA3 />
     </div>
   );
 }
