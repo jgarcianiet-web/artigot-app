@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { waLink } from "@/lib/whatsapp";
+import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { notFound } from "next/navigation";
 import {
   autoFill,
@@ -349,12 +349,9 @@ export default async function EventDetail({ params, searchParams }: { params: Pr
                         <span className={`block text-xs ${a.noticeOk ? "text-emerald-700" : "text-amber-700"}`} title="Resultado del aviso de la convocatoria">{a.notice}</span>
                       )}
                     </span>
-                    {a.status === "CONVOCADO" && (() => {
-                      const wa = waLink(a.worker.phone, inviteText(a.worker.name, a.role));
-                      return wa && (
-                        <a href={wa} target="_blank" className="btn btn-sm border-emerald-300 text-emerald-800" title="Abre WhatsApp con la convocatoria ya escrita">WhatsApp</a>
-                      );
-                    })()}
+                    {a.status === "CONVOCADO" && (
+                      <WhatsAppButton phone={a.worker.phone} text={inviteText(a.worker.name, a.role)} className="btn btn-sm border-emerald-300 text-emerald-800" title="Abre WhatsApp con la convocatoria ya escrita">WhatsApp</WhatsAppButton>
+                    )}
                     <StatusBadge status={a.status} />
                     {a.status !== "CONFIRMADO" && (
                       <form action={setAssignmentStatus.bind(null, a.id, "CONFIRMADO")}>

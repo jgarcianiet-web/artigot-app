@@ -3,7 +3,6 @@ import { markPushAsked } from "@/app/actions";
 import { Empty } from "@/components/ui";
 import { db } from "@/lib/db";
 import { appUrl, formatDate } from "@/lib/domain";
-import { waLink } from "@/lib/whatsapp";
 import { AskButton } from "./AskButton";
 
 /** Pedir de golpe por WhatsApp que activen los avisos a quien no los tiene en ningún móvil. */
@@ -40,13 +39,12 @@ export default async function AskPush() {
             <thead><tr><th>Persona</th><th>Teléfono</th><th>Pedido</th><th /></tr></thead>
             <tbody>
               {workers.map((w) => {
-                const wa = waLink(w.phone, text(w.name, w.phone, w.accessCode));
                 return (
                   <tr key={w.id}>
                     <td><Link href={`/admin/personal/${w.id}`} className="link">{w.name}</Link>{w.zone && <div className="text-xs text-stone-500">{w.zone}</div>}</td>
                     <td className="whitespace-nowrap">{w.phone ?? <span className="text-stone-400">sin teléfono</span>}</td>
                     <td className="whitespace-nowrap text-xs text-stone-500">{w.pushAskedAt ? formatDate(w.pushAskedAt.toISOString().slice(0, 10)) : "—"}</td>
-                    <td className="text-right">{wa && <AskButton href={wa} action={markPushAsked.bind(null, w.id)} again={!!w.pushAskedAt} />}</td>
+                    <td className="text-right">{w.phone && <AskButton phone={w.phone} text={text(w.name, w.phone, w.accessCode)} action={markPushAsked.bind(null, w.id)} again={!!w.pushAskedAt} />}</td>
                   </tr>
                 );
               })}

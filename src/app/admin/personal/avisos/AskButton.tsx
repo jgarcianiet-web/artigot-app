@@ -1,21 +1,22 @@
 "use client";
 
 import { useState } from "react";
+import { WhatsAppButton } from "@/components/WhatsAppButton";
 
 /** Abre WhatsApp con las instrucciones y apunta que ya se le ha pedido. */
-export function AskButton({ href, action, again }: { href: string; action: () => Promise<void>; again: boolean }) {
+export function AskButton({ phone, text, action, again }: { phone: string; text: string; action: () => Promise<void>; again: boolean }) {
   const [done, setDone] = useState(false);
   return (
-    <a
-      href={href}
-      target="_blank"
+    <WhatsAppButton
+      phone={phone}
+      text={text}
       className={`btn btn-sm ${done ? "opacity-60" : "border-emerald-300 text-emerald-800"}`}
-      onClick={() => {
+      onOpen={() => {
         setDone(true);
         action().catch(() => {});
       }}
     >
       {done ? "✓ Enviado" : again ? "WhatsApp otra vez" : "WhatsApp"}
-    </a>
+    </WhatsAppButton>
   );
 }

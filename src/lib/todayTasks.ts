@@ -1,3 +1,4 @@
+import { hhmm, madridTime } from "./clockRules";
 import { db } from "./db";
 import { addDays, formatDate } from "./domain";
 import { getConvocationSettings } from "./convocation";
@@ -14,7 +15,7 @@ export type Task = { key: string; text: string; detail?: string; href: string; n
 export async function todayTasks(t: string): Promise<Task[]> {
   const conv = await getConvocationSettings();
   const remindBefore = new Date(Date.now() - conv.remindHours * 3_600_000);
-  const [noAlta, altas, bajas, noAnswer, events, drafts, docs, photos, candidates, incidents, withdrawals, openShifts] = await Promise.all([
+  const [noAlta, altas, bajas, noAnswer, events, drafts, docs, photos, candidates, incidents, withdrawals, openShifts, interviews] = await Promise.all([
     missingAltas(t, 7),
     // Altas de hoy y mañana sin comunicar (el alta va antes de empezar a trabajar)
     db.employment.findMany({ where: { startReported: false, startDate: { gte: addDays(t, -3), lte: addDays(t, 1) } }, select: { startDate: true } }),
@@ -43,6 +44,12 @@ export async function todayTasks(t: string): Promise<Task[]> {
     db.assignment.findMany({
       where: { status: "CONFIRMADO", checkIn: { not: null }, checkOut: null, hoursOverride: null, event: { date: { gte: addDays(t, -2), lt: t } } },
       select: { eventId: true, event: { select: { name: true } } },
+    }),
+    // Entrevistas de hoy
+    db.candidate.findMany({
+      where: { status: "ENTREVISTA", interviewAt: { gte: madridTime(t, "00:00"), lt: madridTime(addDays(t, 1), "00:00") } },
+      orderBy: { interviewAt: "asc" },
+      select: { name: true, interviewAt: true },
     }),
   ]);
   const uncovered = events
@@ -109,6 +116,13 @@ export async function todayTasks(t: string): Promise<Task[]> {
       href: `/admin/eventos/${openShifts[0]?.eventId}`,
     },
     { key: "documentos", n: docs + photos, text: `${docs + photos} ${docs + photos === 1 ? "documento o foto" : "documentos y fotos"} por revisar`, href: "/admin/documentos" },
+    {
+      key: "entrevistas",
+      n: interviews.length,
+      text: `${interviews.length} ${interviews.length === 1 ? "entrevista" : "entrevistas"} hoy`,
+      detail: interviews.map((c) => `${c.name} (${hhmm(c.interviewAt!)})`).join(", "),
+      href: "/admin/candidatos?estado=ENTREVISTA",
+    },
     { key: "candidatos", n: candidates, text: `${candidates} ${candidates === 1 ? "candidato nuevo" : "candidatos nuevos"} sin ver`, href: "/admin/candidatos" },
     { key: "incidencias", n: incidents, text: `${incidents} ${incidents === 1 ? "incidencia abierta" : "incidencias abiertas"}`, href: "/admin/incidencias" },
   ];

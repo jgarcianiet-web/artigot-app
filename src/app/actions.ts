@@ -1,6 +1,7 @@
 "use server";
 
 import { placeInGroup } from "@/lib/groups";
+import { madridTime } from "@/lib/clockRules";
 import { approveWithdrawal, rejectWithdrawal } from "@/lib/withdrawals";
 
 import { Prisma } from "@prisma/client";
@@ -26,7 +27,7 @@ import {
 import { auditAdmin, diff } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { forgetDevice } from "@/lib/devices";
-import { hireCandidate } from "@/lib/candidates";
+import { hireCandidate, OPEN_STATUSES } from "@/lib/candidates";
 import { DEFAULT_TEMPLATE, getCompany } from "@/lib/contracts";
 import { sendAccessEmail } from "@/lib/mail";
 import { reviewPhoto, uploadPhoto } from "@/lib/photo";
@@ -919,11 +920,16 @@ export async function updateCandidate(id: string, form: FormData) {
   await requireAdmin();
   const status = String(form.get("status") ?? "");
   const c = await db.candidate.findUniqueOrThrow({ where: { id } });
+  // Fecha de la entrevista: «2026-10-20T10:30» en hora de Madrid
+  const at = String(form.get("interviewAt") ?? "").match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/);
+  const rating = Number(form.get("rating"));
   await db.candidate.update({
     where: { id },
     data: {
       notes: String(form.get("notes") ?? "").trim() || null,
-      ...(c.status !== "CONTRATADO" && ["NUEVO", "CONTACTADO", "DESCARTADO"].includes(status) && { status }),
+      interviewAt: at ? madridTime(at[1], at[2]) : null,
+      rating: rating >= 1 && rating <= 5 ? rating : null,
+      ...(c.status !== "CONTRATADO" && [...OPEN_STATUSES, "DESCARTADO"].includes(status) && { status }),
     },
   });
   revalidatePath("/admin/candidatos", "layout");
@@ -933,7 +939,7 @@ export async function hireCandidateAction(id: string, form: FormData) {
   const by = await requireAdmin();
   const role = String(form.get("role") ?? "");
   if (!isRole(role)) return;
-  const worker = await hireCandidate(id, role);
+  const worker = await hireCandidate(id, role, by);
   await auditAdmin(by, "Trabajador", "Alta desde candidatos", `${worker.name} dado de alta desde Candidatos`, { entityId: worker.id });
   let email = "";
   if (form.get("sendEmail") === "1") {
@@ -948,7 +954,8 @@ export async function hireCandidateAction(id: string, form: FormData) {
 export async function deleteCandidate(id: string) {
   await requireAdmin();
   const c = await db.candidate.delete({ where: { id } });
-  if (c.fileId) await deleteStoredFile(c.fileId);
+  // Si ya trabaja con nosotros, su CV está entre sus documentos: no se borra
+  if (c.fileId && !c.workerId) await deleteStoredFile(c.fileId);
   revalidatePath("/admin/candidatos");
   redirect("/admin/candidatos");
 }

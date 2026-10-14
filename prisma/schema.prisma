@@ -206,6 +206,8 @@ model Assignment {
   // No asistencia tras confirmar: motivo (obligatorio) y, a menos de 24 h, solicitud que aprueba RRHH
   withdrawReason      String?
   withdrawRequestedAt DateTime?
+  // La baja fue a menos de 24 h (la aprobó RRHH): resta más puntos que una con tiempo
+  withdrawLate        Boolean   @default(false)
   notes         String?
   // Resultado del aviso de la última convocatoria («✓ Android · app 12:03», el error o sin móvil)
   notice        String?
@@ -504,6 +506,9 @@ model Candidate {
   createdAt    DateTime    @default(now())
   // Cuándo lo abrió RRHH por primera vez (hasta entonces cuenta como nuevo en el menú)
   seenAt       DateTime?
+  // Entrevista: cuándo (estado ENTREVISTA) y valoración de RRHH (1-5), que pasa a su ficha al darle de alta
+  interviewAt  DateTime?
+  rating       Int?
   file         StoredFile? @relation(fields: [fileId], references: [id], onDelete: SetNull)
   worker       Worker?     @relation(fields: [workerId], references: [id], onDelete: SetNull)
 
