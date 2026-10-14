@@ -2,7 +2,8 @@ import Link from "next/link";
 import { Empty, RoleBadge } from "@/components/ui";
 import { APPLY_ROLES, CANDIDATE_STATUS, OPEN_STATUSES } from "@/lib/candidates";
 import type { Prisma } from "@prisma/client";
-import { appUrl, ROLE_LABEL } from "@/lib/domain";
+import { ROLE_LABEL } from "@/lib/domain";
+import { requestUrl } from "@/lib/requestUrl";
 import { db } from "@/lib/db";
 import { CopyButton } from "@/components/client";
 
@@ -47,7 +48,7 @@ export default async function Candidates({ searchParams }: { searchParams: Promi
     ["DESCARTADO", `Descartados (${n("DESCARTADO")})`],
     ["todos", "Todos"],
   ];
-  const link = `${appUrl()}/trabaja-con-nosotros`;
+  const link = `${await requestUrl()}/trabaja-con-nosotros`;
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-2">
