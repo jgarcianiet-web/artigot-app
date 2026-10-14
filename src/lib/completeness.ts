@@ -12,7 +12,7 @@ import { getPrivacy } from "./privacy";
 const LABEL: Record<string, string> = { dni: "DNI", nss: "nº de la Seguridad Social", iban: "IBAN" };
 const DOC_NAME: Record<string, string> = { DNI: "foto del DNI", NSS: "tarjeta de la Seguridad Social", CUENTA: "certificado de la cuenta" };
 
-export type Incomplete = { id: string; name: string; phone: string | null; email: string | null; devices: number; missing: string[]; upcoming: boolean };
+export type Incomplete = { id: string; name: string; phone: string | null; email: string | null; dni: string | null; devices: number; missing: string[]; upcoming: boolean };
 
 export async function incompleteWorkers(workerIds?: string[]): Promise<Incomplete[]> {
   const t = today();
@@ -41,7 +41,7 @@ export async function incompleteWorkers(workerIds?: string[]): Promise<Incomplet
       else if (!docs.has(d.type)) missing.push(DOC_NAME[d.type]);
     }
     if (!w.email) missing.push("email");
-    if (missing.length) out.push({ id: w.id, name: w.name, phone: w.phone, email: w.email, devices: w._count.devices, missing, upcoming: w.assignments.length > 0 });
+    if (missing.length) out.push({ id: w.id, name: w.name, phone: w.phone, email: w.email, dni: w.dni, devices: w._count.devices, missing, upcoming: w.assignments.length > 0 });
   }
   return out;
 }

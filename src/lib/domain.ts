@@ -170,6 +170,17 @@ export function appUrl() {
   return url.replace(/\/(entrar|admin|app|login)?\/?$/, "");
 }
 
+/**
+ * Con qué entra cada trabajador en la app: su DNI (el usuario de todos). Mientras no tengamos su DNI, con su
+ * teléfono o su email.
+ */
+export function loginId(w: { dni?: string | null; phone: string | null; email: string | null }) {
+  if (w.dni) return { label: "DNI", value: w.dni };
+  if (w.phone) return { label: "teléfono", value: w.phone };
+  if (w.email) return { label: "email", value: w.email };
+  return null;
+}
+
 /** Página donde entran los trabajadores con su teléfono (o email) y su código. */
 export const loginUrl = () => `${appUrl()}/entrar`;
 
