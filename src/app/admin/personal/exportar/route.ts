@@ -2,7 +2,7 @@ import ExcelJS from "exceljs";
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { appUrl, ROLE_LABEL, type Role } from "@/lib/domain";
+import { loginUrl, ROLE_LABEL, type Role } from "@/lib/domain";
 
 /** Excel con el personal y sus códigos de acceso a la app, para repartirlos. */
 export async function GET() {
@@ -34,7 +34,7 @@ export async function GET() {
   ws.getColumn("code").numFmt = "@";
   ws.getColumn("code").font = { name: "Consolas", bold: true };
   ws.addRow([]);
-  ws.addRow([`Acceso: ${appUrl()}/entrar con el teléfono y el código. Documento confidencial.`]);
+  ws.addRow([`Acceso: ${loginUrl()} con el teléfono y el código. Documento confidencial.`]);
   ws.views = [{ state: "frozen", ySplit: 1 }];
 
   const buffer = await wb.xlsx.writeBuffer();
