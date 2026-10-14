@@ -18,6 +18,7 @@ export async function GET() {
     { header: "Estado", key: "active", width: 10 },
     { header: "Zona", key: "zone", width: 18 },
     { header: "Email", key: "email", width: 26 },
+    { header: "DNI", key: "dni", width: 12 },
   ];
   ws.getRow(1).font = { bold: true };
   for (const w of workers) {
@@ -29,12 +30,13 @@ export async function GET() {
       active: w.active ? "Activo" : "Baja",
       zone: w.zone,
       email: w.email,
+      dni: w.dni,
     });
   }
   ws.getColumn("code").numFmt = "@";
   ws.getColumn("code").font = { name: "Consolas", bold: true };
   ws.addRow([]);
-  ws.addRow([`Acceso: ${loginUrl()} con el teléfono y el código. Documento confidencial.`]);
+  ws.addRow([`Acceso: ${loginUrl()} con el teléfono (o el email, o el DNI si no tiene ninguno) y el código. Documento confidencial.`]);
   ws.views = [{ state: "frozen", ySplit: 1 }];
 
   const buffer = await wb.xlsx.writeBuffer();

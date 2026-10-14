@@ -144,8 +144,24 @@ export const newAccessCode = () => String(randomInt(0, 1_000_000)).padStart(6, "
 
 
 /** Trabajador por su teléfono o, si escribe un email, por su email (puede haber varios con el mismo). */
+/** ¿Parece un DNI o NIE? (12345678Z, X1234567L…; con o sin guion o espacios) */
+const asDni = (v: string) => {
+  const d = v.toUpperCase().replace(/[\s.-]/g, "");
+  return /^([XYZ]\d{7}|\d{8})[A-Z]$/.test(d) ? d : null;
+};
+
+/** Mensaje de error genérico según con qué intenta entrar (no dice si existe o no). */
+export const loginError = (login: string) =>
+  login.includes("@") ? "Email o código incorrectos" : asDni(login) ? "DNI o código incorrectos" : "Teléfono o código incorrectos";
+
 async function findForLogin(login: string, code: string) {
   const v = login.trim();
+  // Con DNI: para quien no tiene teléfono ni email (p. ej. dado de alta desde A3 sin esos datos)
+  const dni = asDni(v);
+  if (dni) {
+    const matches = await db.worker.findMany({ where: { dni, active: true } });
+    return matches.find((w) => safeEqual(sign(code.trim()), sign(w.accessCode))) ?? matches[0] ?? null;
+  }
   if (!v.includes("@")) return db.worker.findUnique({ where: { phoneKey: phoneKey(v) } });
   const matches = await db.worker.findMany({ where: { email: { equals: v, mode: "insensitive" }, active: true } });
   return matches.find((w) => safeEqual(sign(code.trim()), sign(w.accessCode))) ?? matches[0] ?? null;
@@ -153,7 +169,7 @@ async function findForLogin(login: string, code: string) {
 
 export async function workerLogin(login: string, code: string): Promise<string | null> {
   const worker = await findForLogin(login, code);
-  const generic = login.includes("@") ? "Email o código incorrectos" : "Teléfono o código incorrectos";
+  const generic = loginError(login);
   if (!worker || !worker.active) return generic;
   if (worker.lockedUntil && worker.lockedUntil > new Date()) {
     return `Demasiados intentos. Vuelve a probar en unos minutos o pide a RRHH un código nuevo.`;
