@@ -4,6 +4,7 @@ import { incompleteWorkers } from "@/lib/completeness";
 import { notFound } from "next/navigation";
 import { accessText, mailEnabled } from "@/lib/mail";
 import { EmailCode } from "./EmailCode";
+import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { AdminPhotoUpload } from "./AdminPhoto";
 import { PhotoReview } from "@/components/PhotoReview";
 import { PHOTO_STATUS } from "@/lib/photo";
@@ -135,7 +136,7 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
             <div className={score.penalties.reliability ? "font-medium text-red-700" : "font-medium text-emerald-700"}>
               {score.penalties.reliability ? `−${score.penalties.reliability}` : "Sin incidencias"}
             </div>
-            <div className="text-xs text-stone-500">{score.noShows} ausencias · {score.withdrawals} retiradas · {score.lates} retrasos</div>
+            <div className="text-xs text-stone-500">{score.noShows} ausencias · {score.withdrawals + score.lateWithdrawals} bajas{score.lateWithdrawals ? ` (${score.lateWithdrawals} a última hora)` : ""} · {score.lates} retrasos</div>
           </div>
           <div>
             <div className="text-xs text-stone-500">Rotación (30 días)</div>
@@ -154,7 +155,8 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
         </div>
         <p className="text-xs text-stone-500">
           Las estrellas de RRHH ({worker.rating}/5) cuentan como {SCORING.PRIOR_WEIGHT} valoraciones de partida. Cada ausencia resta {SCORING.NO_SHOW_PENALTY},
-          cada retirada tras confirmar {SCORING.WITHDRAWAL_PENALTY} y cada retraso de más de {SCORING.LATE_GRACE_MIN} min {SCORING.LATE_PENALTY}.
+          cada baja tras confirmar {SCORING.WITHDRAWAL_PENALTY} si es con más de 24 h y {SCORING.LATE_WITHDRAWAL_PENALTY} si es a última hora (menos de 24 h), y cada
+          retraso de más de {SCORING.LATE_GRACE_MIN} min {SCORING.LATE_PENALTY}.
         </p>
         {worker.reviews.length > 0 && (
           <details>
@@ -214,6 +216,7 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
         )}
         <div className="flex flex-wrap gap-2">
           <CopyButton text={instructions} label="Copiar instrucciones de acceso" />
+          <WhatsAppButton phone={worker.phone} text={instructions}>💬 Enviar por WhatsApp</WhatsAppButton>
           {worker.email && mailEnabled() && <EmailCode id={worker.id} email={worker.email} />}
           <form action={regenerateAccessCode.bind(null, worker.id)}>
             <ConfirmButton className="btn btn-sm" message="Se cerrará su sesión en todos sus dispositivos y tendrá que entrar con el código nuevo. ¿Continuar?">

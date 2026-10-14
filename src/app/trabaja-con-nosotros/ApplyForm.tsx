@@ -55,8 +55,8 @@ export function ApplyForm() {
       <label className="flex items-start gap-2 text-sm">
         <input type="checkbox" name="consent" value="1" className="mt-0.5 size-4" required />
         <span>
-          Acepto que Artigot trate mis datos para gestionar mi candidatura y contactarme para trabajar en eventos. Puedo pedir que los borren en
-          cualquier momento.
+          Acepto que Artigot trate mis datos para gestionar mi candidatura y contactarme para trabajar en eventos. Si no llego a trabajar con
+          vosotros, los guardaréis un máximo de 12 meses. Puedo pedir que los borren en cualquier momento.
         </span>
       </label>
       {r && !r.ok && <p className="text-sm text-red-600">{r.message}</p>}

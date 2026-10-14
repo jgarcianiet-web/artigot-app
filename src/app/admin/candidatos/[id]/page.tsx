@@ -4,10 +4,14 @@ import { deleteCandidate, hireCandidateAction, markCandidateSeen, updateCandidat
 import { MarkSeen } from "./MarkSeen";
 import { ConfirmButton, SubmitButton } from "@/components/client";
 import { RoleBadge } from "@/components/ui";
-import { CANDIDATE_STATUS } from "@/lib/candidates";
+import { CANDIDATE_STATUS, candidateMessages, OPEN_STATUSES } from "@/lib/candidates";
+import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { db } from "@/lib/db";
 import { mailEnabled } from "@/lib/mail";
 import { ROLE_LABEL, ROLES } from "@/lib/domain";
+
+/** Valor para <input type="datetime-local"> en hora de Madrid. */
+const localInput = (d: Date) => new Date(d.toLocaleString("sv-SE", { timeZone: "Europe/Madrid" }).replace(" ", "T") + "Z").toISOString().slice(0, 16);
 
 const when = new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", dateStyle: "long", timeStyle: "short" });
 
@@ -15,6 +19,12 @@ export default async function CandidateDetail({ params }: { params: Promise<{ id
   const c = await db.candidate.findUnique({ where: { id: (await params).id } });
   if (!c) notFound();
   const existing = await db.worker.findUnique({ where: { phoneKey: c.phoneKey }, select: { id: true, name: true } });
+  const msg = candidateMessages(c, "");
+  const wa: [string, string][] = [
+    ["💬 Contactar", msg.contact],
+    ...(msg.interview ? [["📅 Recordar entrevista", msg.interview] as [string, string]] : []),
+    ...(c.status === "DESCARTADO" ? [["✉️ Avisar de que no seguimos", msg.discard] as [string, string]] : []),
+  ];
   return (
     <div className="max-w-3xl space-y-4">
       {!c.seenAt && <MarkSeen action={markCandidateSeen.bind(null, c.id)} />}
@@ -31,6 +41,16 @@ export default async function CandidateDetail({ params }: { params: Promise<{ id
         </div>
         <span className={`rounded-full px-3 py-1 text-sm ${CANDIDATE_STATUS[c.status].cls}`}>{CANDIDATE_STATUS[c.status].label}</span>
       </div>
+      {c.interviewAt && (
+        <p className="card bg-violet-50 text-sm">📅 Entrevista: <strong>{when.format(c.interviewAt)}</strong>{c.rating ? ` · valoración ${"★".repeat(c.rating)}${"☆".repeat(5 - c.rating)}` : ""}</p>
+      )}
+      {!c.workerId && wa.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {wa.map(([label, text]) => (
+            <WhatsAppButton key={label} phone={c.phone} text={text}>{label} por WhatsApp</WhatsAppButton>
+          ))}
+        </div>
+      )}
       <section className="card space-y-2 text-sm">
         <p><strong>Experiencia:</strong> {c.experience ?? "—"}</p>
         <p><strong>Disponibilidad:</strong> {c.availability ?? "—"}</p>
@@ -57,7 +77,8 @@ export default async function CandidateDetail({ params }: { params: Promise<{ id
           )}
           <SubmitButton>{existing ? `Enlazar con ${existing.name}` : "Crear usuario"}</SubmitButton>
           <p className="w-full text-xs text-stone-500">
-            {existing ? "Ya existe un trabajador con este teléfono: se enlazará con él." : "Se crea su ficha con un código de acceso a la app."}
+            {existing ? "Ya existe un trabajador con este teléfono: se enlazará con él." : "Se crea su ficha con un código de acceso a la app, la valoración de la entrevista como punto de partida y tus notas."}
+            {c.fileId && " Su CV pasa a sus documentos."}
             {!mailEnabled() && " El envío de emails no está configurado (SMTP): copia las instrucciones desde su ficha."}
           </p>
         </form>
@@ -65,16 +86,30 @@ export default async function CandidateDetail({ params }: { params: Promise<{ id
 
       <form action={updateCandidate.bind(null, c.id)} className="card space-y-3">
         <div className="flex flex-wrap gap-2">
-          {["NUEVO", "CONTACTADO", "DESCARTADO"].map((s) => (
+          {[...OPEN_STATUSES, "DESCARTADO"].map((s) => (
             <label key={s} className="flex items-center gap-1.5 text-sm">
               <input type="radio" name="status" value={s} defaultChecked={c.status === s} /> {CANDIDATE_STATUS[s].label}
             </label>
           ))}
         </div>
+        <div className="flex flex-wrap gap-3">
+          <div>
+            <label className="label" htmlFor="interviewAt">Entrevista</label>
+            <input id="interviewAt" name="interviewAt" type="datetime-local" className="input" defaultValue={c.interviewAt ? localInput(c.interviewAt) : ""} />
+          </div>
+          <div>
+            <label className="label" htmlFor="rating">Valoración tras la entrevista</label>
+            <select id="rating" name="rating" className="input" defaultValue={c.rating ?? ""}>
+              <option value="">Sin valorar</option>
+              {[5, 4, 3, 2, 1].map((r) => <option key={r} value={r}>{"★".repeat(r)}{"☆".repeat(5 - r)}</option>)}
+            </select>
+          </div>
+        </div>
         <textarea name="notes" rows={3} className="input" defaultValue={c.notes ?? ""} placeholder="Notas internas (entrevista, referencias…)" />
         <SubmitButton className="btn">Guardar</SubmitButton>
       </form>
 
+      <p className="text-xs text-stone-500">Si no se da de alta, sus datos se borran solos a los 12 meses de la solicitud.</p>
       <form action={deleteCandidate.bind(null, c.id)}>
         <ConfirmButton message="¿Borrar definitivamente los datos de este candidato (p. ej. si lo pide)?">Borrar sus datos</ConfirmButton>
       </form>

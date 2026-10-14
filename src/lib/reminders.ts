@@ -16,6 +16,7 @@ import { migrateFilesToStorage, sweepOrphanFiles } from "./files";
 import { storageEnabled } from "./storage";
 import { getConvocationSettings } from "./convocation";
 import { autoReplace } from "./staffing";
+import { CANDIDATE_RETENTION_MONTHS, purgeOldCandidates } from "./candidates";
 
 /**
  * Avisos automáticos. Se comprueban cada pocos minutos; cada aviso se registra en ReminderLog
@@ -296,6 +297,15 @@ export async function runReminders(now = new Date()) {
     } catch (e) {
       console.error("copia nocturna", e);
       await notify({ admins: true, adminUrl: "/admin/ajustes/copias", title: "⚠️ Copia de seguridad fallida", body: `La copia de esta noche no se ha podido hacer: ${(e as Error).message}`, tag: "copia" });
+    }
+  }
+
+  // 8. Candidatos que no llegaron a trabajar con nosotros: sus datos se borran pasado el plazo (una vez al día)
+  if (await claim(`candidatos:${today}`)) {
+    const n = await purgeOldCandidates(now);
+    if (n) {
+      await audit("Borrado automático", "Sistema", "Candidatos", "Datos caducados", `${n} ${n === 1 ? "candidatura" : "candidaturas"} de más de ${CANDIDATE_RETENTION_MONTHS} meses borradas`);
+      sent.push(`candidatos:${n}`);
     }
   }
 

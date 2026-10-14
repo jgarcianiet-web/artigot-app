@@ -10,8 +10,8 @@ import { addDays, callTime } from "./domain";
  *   (una valoración pierde la mitad de su peso cada HALF_LIFE_DAYS). La valoración de RRHH
  *   de la ficha (estrellas) cuenta como PRIOR_WEIGHT valoraciones: es el punto de partida
  *   de quien aún no tiene valoraciones y se va diluyendo según llegan.
- * FIABILIDAD (últimos 12 meses): resta por no presentarse, por retirarse después de confirmar
- *   y por fichar tarde (más de LATE_GRACE_MIN minutos después de la citación).
+ * FIABILIDAD (últimos 12 meses): resta por no presentarse, por darse de baja después de confirmar (más si es
+ *   a menos de 24 h) y por fichar tarde (más de LATE_GRACE_MIN minutos después de la citación).
  * ROTACIÓN: resta un poco por cada servicio de los últimos 30 días, para repartir el trabajo
  *   entre quienes tienen puntuaciones parecidas.
  */
@@ -19,7 +19,10 @@ export const SCORING = {
   HALF_LIFE_DAYS: 180,
   PRIOR_WEIGHT: 2,
   NO_SHOW_PENALTY: 25,
-  WITHDRAWAL_PENALTY: 8,
+  /** Baja tras confirmar con más de 24 h (se cancela sola) */
+  WITHDRAWAL_PENALTY: 4,
+  /** Baja tras confirmar a menos de 24 h (la aprueba RRHH) */
+  LATE_WITHDRAWAL_PENALTY: 12,
   LATE_PENALTY: 4,
   LATE_GRACE_MIN: 10,
   ROTATION_PENALTY: 2,
@@ -43,6 +46,7 @@ export type Score = {
   reviewCount: number;
   noShows: number;
   withdrawals: number;
+  lateWithdrawals: number;
   lates: number;
   recentEvents: number;
   penalties: { reliability: number; rotation: number };
@@ -88,6 +92,7 @@ export async function computeScores(workerIds: string[], refDate: string) {
         role: true,
         status: true,
         withdrew: true,
+        withdrawLate: true,
         checkIn: true,
         group: { select: { callTime: true } },
         event: { select: { date: true, startTime: true, unloadTime: true } },
@@ -122,13 +127,17 @@ export async function computeScores(workerIds: string[], refDate: string) {
 
     // Fiabilidad y rotación
     const mine = assignments.filter((a) => a.workerId === w.id);
-    const withdrawals = mine.filter((a) => a.withdrew).length;
+    const withdrawals = mine.filter((a) => a.withdrew && !a.withdrawLate).length;
+    const lateWithdrawals = mine.filter((a) => a.withdrew && a.withdrawLate).length;
     const lates = mine.filter(
       (a) => a.status === "CONFIRMADO" && a.checkIn && lateMinutes(a.checkIn, callTime(a.event, a.role, a.group)) > SCORING.LATE_GRACE_MIN,
     ).length;
     const recentEvents = mine.filter((a) => a.status === "CONFIRMADO" && a.event.date >= rotationFrom && a.event.date < refDate).length;
     const reliability =
-      noShows * SCORING.NO_SHOW_PENALTY + withdrawals * SCORING.WITHDRAWAL_PENALTY + lates * SCORING.LATE_PENALTY;
+      noShows * SCORING.NO_SHOW_PENALTY +
+      withdrawals * SCORING.WITHDRAWAL_PENALTY +
+      lateWithdrawals * SCORING.LATE_WITHDRAWAL_PENALTY +
+      lates * SCORING.LATE_PENALTY;
     const rotation = recentEvents * SCORING.ROTATION_PENALTY;
 
     result.set(w.id, {
@@ -138,6 +147,7 @@ export async function computeScores(workerIds: string[], refDate: string) {
       reviewCount,
       noShows,
       withdrawals,
+      lateWithdrawals,
       lates,
       recentEvents,
       penalties: { reliability, rotation },
@@ -152,7 +162,8 @@ export function explainScore(s: Score) {
     `Calidad ${s.quality} (media ${s.average.toFixed(2).replace(".", ",")}/5, ${s.reviewCount} valoraciones)`,
   ];
   if (s.noShows) parts.push(`−${s.noShows * SCORING.NO_SHOW_PENALTY} por ${s.noShows} ausencia(s)`);
-  if (s.withdrawals) parts.push(`−${s.withdrawals * SCORING.WITHDRAWAL_PENALTY} por ${s.withdrawals} retirada(s)`);
+  if (s.withdrawals) parts.push(`−${s.withdrawals * SCORING.WITHDRAWAL_PENALTY} por ${s.withdrawals} baja(s) con más de 24 h`);
+  if (s.lateWithdrawals) parts.push(`−${s.lateWithdrawals * SCORING.LATE_WITHDRAWAL_PENALTY} por ${s.lateWithdrawals} baja(s) a última hora`);
   if (s.lates) parts.push(`−${s.lates * SCORING.LATE_PENALTY} por ${s.lates} retraso(s)`);
   if (s.recentEvents) parts.push(`−${s.penalties.rotation} rotación (${s.recentEvents} servicios en 30 días)`);
   return parts.join(" · ");

@@ -21,10 +21,10 @@ export const callInstant = (a: WithEvent) => madridTime(a.event.date, callTime(a
 export const canWithdrawFreely = (a: WithEvent, now = new Date()) => callInstant(a).getTime() - now.getTime() > WITHDRAW_FREE_HOURS * 3_600_000;
 
 /** Da de baja a quien no va: deja su sitio (y su grupo), cuenta como retirada y se busca sustituto. */
-export async function applyWithdrawal(assignmentId: string, reason: string, who: string) {
+export async function applyWithdrawal(assignmentId: string, reason: string, who: string, late = false) {
   const a = await db.assignment.update({
     where: { id: assignmentId },
-    data: { status: "RECHAZADO", respondedAt: new Date(), withdrew: true, groupId: null, withdrawReason: reason, withdrawRequestedAt: null },
+    data: { status: "RECHAZADO", respondedAt: new Date(), withdrew: true, withdrawLate: late, groupId: null, withdrawReason: reason, withdrawRequestedAt: null },
     include: { event: true, worker: { select: { name: true } } },
   });
   if (isRole(a.role)) later(() => autoReplace(a.eventId, a.role as Role, who));
@@ -35,7 +35,7 @@ export async function applyWithdrawal(assignmentId: string, reason: string, who:
 export async function approveWithdrawal(assignmentId: string) {
   const req = await db.assignment.findUnique({ where: { id: assignmentId }, select: { status: true, withdrawRequestedAt: true, withdrawReason: true, worker: { select: { name: true } } } });
   if (!req || req.status !== "CONFIRMADO" || !req.withdrawRequestedAt) return null;
-  const a = await applyWithdrawal(assignmentId, req.withdrawReason ?? "", req.worker.name);
+  const a = await applyWithdrawal(assignmentId, req.withdrawReason ?? "", req.worker.name, true);
   later(() =>
     notify({
       workerIds: [a.workerId],
