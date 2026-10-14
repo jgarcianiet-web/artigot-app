@@ -1,19 +1,9 @@
 import ExcelJS from "exceljs";
-import { phoneKey } from "./auth";
-import { db } from "./db";
 import { isRole, type Role } from "./domain";
-import { validDniNie } from "./staff";
 
-/**
- * Importación del personal desde Excel (.xlsx) o CSV.
- * Detecta las columnas por su nombre (admite variantes habituales), normaliza puestos
- * y teléfonos y marca cada fila como nueva, a actualizar, ya existente o con error.
- */
+/** Lectura de Excel (.xlsx) y CSV como tabla de texto, y utilidades comunes de las importaciones. */
 
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
-const MAX_ROWS = 3000;
-
-type Field = "name" | "surname" | "phone" | "role" | "email" | "zone" | "rating" | "notes" | "dni";
 
 export const norm = (s: string) =>
   s
@@ -22,35 +12,6 @@ export const norm = (s: string) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
-
-const cleanDni = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "");
-
-const ALIASES: Record<Field, string[]> = {
-  name: ["nombre", "nombre y apellidos", "nombre completo", "nombre apellidos", "trabajador", "empleado", "persona", "name"],
-  surname: ["apellidos", "apellido", "primer apellido", "apellido 1", "apellidos 1"],
-  phone: ["telefono", "tel", "tlf", "telf", "movil", "telefono movil", "movil personal", "celular", "whatsapp", "phone", "contacto"],
-  role: ["puesto", "categoria", "rol", "cargo", "funcion", "perfil", "tipo", "puesto de trabajo"],
-  email: ["email", "e mail", "correo", "correo electronico", "mail"],
-  zone: ["zona", "localidad", "poblacion", "ciudad", "municipio", "residencia", "provincia", "direccion"],
-  rating: ["valoracion", "puntuacion", "nota", "estrellas", "rating", "nivel"],
-  notes: ["notas", "observaciones", "comentarios", "obs"],
-  dni: ["dni", "nie", "nif", "dni nie", "nif nie", "dni nif", "documento", "n documento", "num documento", "documento identidad"],
-};
-
-function fieldFor(header: string): Field | null {
-  const h = norm(header);
-  if (!h) return null;
-  for (const [field, aliases] of Object.entries(ALIASES) as [Field, string[]][]) {
-    if (aliases.includes(h)) return field;
-  }
-  // Coincidencias parciales para cabeceras largas («Teléfono móvil personal», «Correo de contacto»…)
-  if (/\b(telefono|movil|tlf|telf)\b/.test(h)) return "phone";
-  if (/\b(correo|email|mail)\b/.test(h)) return "email";
-  if (/\bapellido/.test(h)) return "surname";
-  if (/\bnombre\b/.test(h)) return "name";
-  if (/\b(puesto|categoria)\b/.test(h)) return "role";
-  return null;
-}
 
 export function parseRole(value: string): Role | null {
   const v = norm(value);
@@ -61,14 +22,6 @@ export function parseRole(value: string): Role | null {
   if (/(mozo|descarga|carga|montaje|mozo de almacen|peon)/.test(v)) return "MOZO";
   if (/(camarer|waiter|servicio|extra)/.test(v)) return "CAMARERO";
   return null;
-}
-
-function parseRating(value: string): number | null {
-  const stars = (value.match(/★/g) ?? []).length;
-  if (stars) return Math.min(5, stars);
-  const n = Number(value.replace(",", "."));
-  if (!value.trim() || !Number.isFinite(n)) return null;
-  return Math.min(5, Math.max(1, Math.round(n > 5 ? n / 2 : n))); // admite notas sobre 10
 }
 
 // ---------- Lectura del archivo ----------
@@ -152,137 +105,4 @@ export async function readTable(file: File): Promise<string[][] | { error: strin
   }
   if (/\.(xls|ods|numbers)$/.test(name)) return { error: "Ese formato no se puede leer. Ábrelo en Excel y guárdalo como «Libro de Excel (.xlsx)» o CSV." };
   return { error: "Sube un archivo .xlsx o .csv." };
-}
-
-// ---------- Análisis ----------
-
-export type ImportRow = {
-  line: number;
-  name: string;
-  phone: string;
-  role: Role | null;
-  roleRaw: string;
-  email: string | null;
-  /** DNI / NIE válido (si el archivo lo trae) */
-  dni: string | null;
-  zone: string | null;
-  rating: number | null;
-  notes: string | null;
-  status: "nuevo" | "actualizar" | "existe" | "omitido" | "error";
-  message?: string;
-  existingName?: string;
-  existingId?: string;
-};
-
-export type ImportPreview = {
-  rows: ImportRow[];
-  columns: { header: string; field: Field | null }[];
-  counts: Record<ImportRow["status"], number>;
-};
-
-export async function analyzeFile(
-  file: File,
-  opts: { defaultRole: Role | null; updateExisting: boolean },
-): Promise<ImportPreview | { error: string }> {
-  if (!file || file.size === 0) return { error: "Selecciona un archivo." };
-  if (file.size > MAX_FILE_BYTES) return { error: "El archivo es demasiado grande (máximo 5 MB)." };
-  const name = file.name.toLowerCase();
-  const buffer = await file.arrayBuffer();
-  let table: string[][];
-  try {
-    if (name.endsWith(".xlsx") || name.endsWith(".xlsm")) table = await readXlsx(buffer);
-    else if (name.endsWith(".csv") || name.endsWith(".txt")) table = readCsv(buffer);
-    else if (name.endsWith(".xls") || name.endsWith(".ods") || name.endsWith(".numbers")) {
-      return { error: "Ese formato no se puede leer. Ábrelo en Excel y guárdalo como «Libro de Excel (.xlsx)» o CSV." };
-    } else return { error: "Sube un archivo .xlsx o .csv." };
-  } catch {
-    return { error: "No se ha podido leer el archivo. Comprueba que es un Excel (.xlsx) o CSV válido." };
-  }
-
-  // Cabecera: la primera de las 10 primeras filas donde se reconozca el teléfono y el nombre
-  let headerIdx = -1;
-  let fields: (Field | null)[] = [];
-  for (let i = 0; i < Math.min(10, table.length); i++) {
-    const f = table[i].map(fieldFor);
-    if ((f.includes("phone") || f.includes("email")) && (f.includes("name") || f.includes("surname"))) {
-      headerIdx = i;
-      fields = f;
-      break;
-    }
-  }
-  if (headerIdx < 0) {
-    return { error: "No encuentro las columnas de nombre y teléfono (o email). La primera fila debe tener cabeceras como «Nombre», «Teléfono» y «Puesto» (descarga la plantilla)." };
-  }
-  const columns = table[headerIdx].map((header, i) => ({ header, field: fields[i] }));
-  const col = (row: string[], field: Field) =>
-    fields.map((f, i) => (f === field ? row[i] ?? "" : "")).filter(Boolean).join(" ").trim();
-
-  const body = table.slice(headerIdx + 1);
-  if (body.length > MAX_ROWS) return { error: `El archivo tiene demasiadas filas (máximo ${MAX_ROWS}).` };
-
-  const existing = await db.worker.findMany({ select: { id: true, name: true, phoneKey: true, email: true, dni: true } });
-  // El DNI manda: si ya hay alguien con ese DNI es la misma persona aunque el nombre esté escrito distinto
-  const byDni = new Map(existing.filter((w) => w.dni).map((w) => [cleanDni(w.dni!), w]));
-  const byPhone = new Map(existing.filter((w) => w.phoneKey).map((w) => [w.phoneKey!, w]));
-  const byEmail = new Map(existing.filter((w) => w.email).map((w) => [w.email!.toLowerCase(), w]));
-  const seen = new Map<string, number>();
-  const rows: ImportRow[] = [];
-
-  body.forEach((raw, i) => {
-    if (raw.every((c) => !c)) return; // fila vacía
-    const line = headerIdx + i + 2; // número de fila tal y como se ve en Excel
-    const name = [col(raw, "name"), col(raw, "surname")].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
-    const phone = col(raw, "phone");
-    const roleRaw = col(raw, "role");
-    const email = col(raw, "email") || null;
-    const dniRaw = cleanDni(col(raw, "dni"));
-    const row: ImportRow = {
-      line,
-      name,
-      phone,
-      role: parseRole(roleRaw) ?? (roleRaw ? null : opts.defaultRole),
-      roleRaw,
-      email,
-      dni: dniRaw && validDniNie(dniRaw) ? dniRaw : null,
-      zone: col(raw, "zone") || null,
-      rating: parseRating(col(raw, "rating")),
-      notes: col(raw, "notes") || null,
-      status: "nuevo",
-    };
-    let key = phone ? phoneKey(phone) : "";
-    let note: string | undefined;
-    // Teléfono mal escrito pero con email: se importa igualmente y entra con el email
-    if (phone && key.length < 9 && email) {
-      note = `Teléfono «${phone}» no válido: entrará con su email`;
-      row.phone = "";
-      key = "";
-    }
-    const fail = (message: string) => rows.push({ ...row, status: "error", message });
-    if (name.length < 2) return fail("Falta el nombre");
-    // Usuarios de RRHH en listados exportados de otros programas: no son personal
-    if (/^(admin|administrador|administracion|rrhh|recursos humanos|gestor|oficina)$/.test(norm(roleRaw))) {
-      return rows.push({ ...row, status: "omitido", message: "Es de RRHH: no se importa como personal" });
-    }
-    if (key && key.length < 9) return fail("Teléfono no válido (menos de 9 cifras)");
-    if (!key && !email) return fail("Falta el teléfono o el email (para poder entrar en la app)");
-    const match = (row.dni && byDni.get(row.dni)) || (key && byPhone.get(key)) || (email ? byEmail.get(email.toLowerCase()) : undefined);
-    if (roleRaw && !parseRole(roleRaw)) return fail(`Puesto no reconocido: «${roleRaw}» (usa Camarero, Camarero responsable, Maître o Mozo)`);
-    // A quien ya existe se le mantiene su puesto si el Excel no lo indica
-    if (!row.role && !match) return fail("Falta el puesto (elige un puesto por defecto)");
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail("Email no válido");
-    if (row.dni && seen.has(`dni:${row.dni}`)) return fail(`DNI repetido (ya está en la fila ${seen.get(`dni:${row.dni}`)}): es la misma persona`);
-    const dupKey = key || `@${email!.toLowerCase()}`;
-    if (seen.has(dupKey)) return fail(`${key ? "Teléfono" : "Email"} repetido (ya está en la fila ${seen.get(dupKey)})`);
-    seen.set(dupKey, line);
-    if (row.dni) seen.set(`dni:${row.dni}`, line);
-    if (dniRaw && !row.dni) note = `DNI «${col(raw, "dni")}» no válido: no se guarda`;
-    if (match) {
-      const why = row.dni && match === byDni.get(row.dni) && norm(match.name) !== norm(name) ? `Mismo DNI que «${match.name}»` : undefined;
-      rows.push({ ...row, status: opts.updateExisting ? "actualizar" : "existe", existingName: match.name, existingId: match.id, message: why });
-    } else rows.push({ ...row, message: note ?? (key ? undefined : "Sin teléfono: entrará con su email") });
-  });
-
-  const counts = { nuevo: 0, actualizar: 0, existe: 0, omitido: 0, error: 0 };
-  rows.forEach((r) => counts[r.status]++);
-  return { rows, columns, counts };
 }

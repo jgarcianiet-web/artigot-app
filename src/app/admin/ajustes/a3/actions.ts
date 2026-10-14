@@ -2,20 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { A3_ALTA_DEFAULTS, getA3Alta, saveA3Alta, type A3AltaConfig } from "@/lib/a3alta";
-import { importA3Database, type A3ImportResult } from "@/lib/a3import";
 import { diff, auditAdmin } from "@/lib/audit";
 import { requireAdmin } from "@/lib/auth";
 import { ROLES } from "@/lib/domain";
-
-export async function importA3DatabaseAction(_prev: A3ImportResult | null, form: FormData): Promise<A3ImportResult> {
-  const by = await requireAdmin();
-  const file = form.get("file");
-  if (!(file instanceof File)) return { ok: false, message: "Selecciona un archivo." };
-  const res = await importA3Database(file, by, { replaceRates: form.get("replaceRates") === "1" });
-  revalidatePath("/admin/ajustes/a3");
-  revalidatePath("/admin/personal", "layout");
-  return res;
-}
 
 export async function saveA3AltaAction(_prev: string | null, form: FormData) {
   const by = await requireAdmin();

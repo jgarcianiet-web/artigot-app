@@ -1,21 +1,22 @@
 import { bumpLastCode, getA3Alta } from "./a3alta";
 import { auditAdmin } from "./audit";
-import { phoneKey } from "./auth";
+import { newAccessCode, phoneKey } from "./auth";
 import { incompleteWorkers } from "./completeness";
 import { db } from "./db";
 import { parseDate } from "./employment";
-import { parseContract } from "./domain";
-import { norm, readTable } from "./importStaff";
+import { parseContract, type Role } from "./domain";
+import { norm, parseRole, readTable } from "./importStaff";
 import { validDniNie, validIban } from "./staff";
 
 /**
- * Completa las fichas del personal con cualquier Excel o CSV (la «Base de Datos» de A3, una lista
- * exportada de otro programa…). Busca a cada persona por DNI, teléfono, email o nombre y solo
- * rellena lo que falta: nunca cambia un dato que ya esté puesto. Lo que siga faltando se le pide al
- * trabajador en la app (recordatorio automático de datos incompletos).
+ * Importa el personal desde A3 (la «Base de Datos» u otro listado de trabajadores exportado de A3, en Excel o CSV).
+ * Busca a cada persona por DNI, teléfono, email o nombre:
+ * - si ya está en la app, rellena solo lo que le falta (nunca cambia un dato que ya esté puesto);
+ * - si no está (y se pide crearla), da de alta su ficha con su código de acceso a la app.
+ * Con `dryRun` no guarda nada: solo dice qué haría. Lo que siga faltando se le pide al trabajador en la app.
  */
 
-type Col = "dni" | "name" | "surname" | "phone" | "email" | "code" | "nss" | "center" | "iban" | "birth" | "address" | "sex" | "nationality" | "zone" | "rateBODA" | "rateEVENTO" | "rateOTRO" | "rateAll" | "rateMAITRE:BODA" | "rateMAITRE:EVENTO" | "rateMAITRE:OTRO" | "rateMAITRE:ALL" | "contract";
+type Col = "dni" | "name" | "surname" | "phone" | "email" | "code" | "nss" | "center" | "iban" | "birth" | "address" | "sex" | "nationality" | "zone" | "rateBODA" | "rateEVENTO" | "rateOTRO" | "rateAll" | "rateMAITRE:BODA" | "rateMAITRE:EVENTO" | "rateMAITRE:OTRO" | "rateMAITRE:ALL" | "contract" | "role";
 
 function colFor(header: string): Col | null {
   const h = norm(header);
@@ -33,6 +34,7 @@ function colFor(header: string): Col | null {
     if (/^(tarifa|tarifa hora|tarifa propia|precio|precio hora|eur hora|euros hora|eur h)$/.test(h)) return "rateAll";
   }
   if (/^(tipo de contrato|tipo contrato|contrato|cod contrato|codigo contrato)$/.test(h)) return "contract";
+  if (/^(puesto|categoria|cargo|puesto de trabajo|categoria profesional)$/.test(h)) return "role";
   if (/^(codigo|cod|cod trabajador|codigo trabajador|codigo a3|cod a3)$/.test(h)) return "code";
   if (/^(nass|nss|naf|n ss|num ss|seguridad social|n seguridad social|numero seguridad social|n afiliacion|afiliacion)$/.test(h)) return "nss";
   if (/^(centro|cod centro|codigo centro)$/.test(h)) return "center";
@@ -59,14 +61,33 @@ const FIELD_LABEL: Record<string, string> = {
   contractCode: "tipo de contrato",
 };
 
-export type A3ImportResult = { ok: boolean; message: string; details?: string[] };
+export type A3ImportResult = { ok: boolean; message: string; details?: string[]; preview?: boolean };
+
+const LOWER = new Set(["de", "del", "la", "las", "los", "y", "da", "do", "dos", "van", "von"]);
+/** «FERRANDO PEREZ, BEATRIZ» → «Beatriz Ferrando Perez» (A3 guarda los nombres en mayúsculas y con los apellidos delante). */
+export function a3Name(raw: string) {
+  const cap = (t: string) =>
+    t
+      .toLocaleLowerCase("es-ES")
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((w, i) => (i > 0 && LOWER.has(w) ? w : w.replace(/(^|[-'])(\p{L})/gu, (_, a, b) => a + b.toLocaleUpperCase("es-ES"))))
+      .join(" ");
+  if (!raw.includes(",")) return { name: cap(raw) };
+  const [surnames, first] = raw.split(",").map((x) => x.trim());
+  const [s1, ...rest] = cap(surnames).split(" ");
+  const firstName = cap(first);
+  return { name: [firstName, cap(surnames)].filter(Boolean).join(" "), firstName, surname1: s1, surname2: rest.join(" ") };
+}
+
+export type A3ImportOptions = { replaceRates?: boolean; create?: boolean; dryRun?: boolean; defaultRole?: Role };
 
 const rateValue = (v: string) => {
   const n = Number(v.replace(/[€\s]/g, "").replace(",", "."));
   return v.trim() && Number.isFinite(n) && n > 0 && n < 500 ? Math.round(n * 1000) / 1000 : null;
 };
 
-export async function completeFromFile(file: File, by: string, opts: { replaceRates?: boolean } = {}): Promise<A3ImportResult> {
+export async function completeFromFile(file: File, by: string, opts: A3ImportOptions = {}): Promise<A3ImportResult> {
   const table = await readTable(file);
   if ("error" in table) return { ok: false, message: table.error };
   let headerIdx = -1;
@@ -106,6 +127,10 @@ export async function completeFromFile(file: File, by: string, opts: { replaceRa
   const conflicts: string[] = [];
   const filled: Record<string, number> = {};
   const matched = new Set<string>();
+  const created: string[] = [];
+  const noAccess: string[] = [];
+  const cannot: string[] = [];
+  const seenDni = new Set<string>();
   for (const raw of table.slice(headerIdx + 1)) {
     const dni = cleanDni(at(raw, "dni"));
     const phone = at(raw, "phone");
@@ -118,7 +143,62 @@ export async function completeFromFile(file: File, by: string, opts: { replaceRa
     const key = phone ? phoneKey(phone) : "";
     const w =
       (dni && byDni.get(dni)) || (key.length >= 9 && byPhone.get(key)) || (email && byEmail.get(email)) || (name ? byName.get(nameKey(name)) : null);
-    if (!w || matched.has(w.id)) continue;
+    if (!w) {
+      // No está en la app: se da de alta (con el DNI como identificador para no duplicarla en la siguiente importación)
+      if (!opts.create || !name) continue;
+      if (!dni || !validDniNie(dni)) {
+        cannot.push(`${a3Name(name).name}: ${dni ? `DNI no válido (${dni})` : "sin DNI"}`);
+        continue;
+      }
+      const n = a3Name(name);
+      if (seenDni.has(dni)) {
+        cannot.push(`${n.name}: DNI repetido en el archivo (${dni})`);
+        continue;
+      }
+      seenDni.add(dni);
+      const okPhone = key.length >= 9 && !phoneOwners.has(key);
+      const okEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      if (okPhone) phoneOwners.add(key);
+      const role = parseRole(at(raw, "role")) ?? opts.defaultRole ?? "CAMARERO";
+      const sex = norm(at(raw, "sex"));
+      const iban = at(raw, "iban").toUpperCase().replace(/\s/g, "");
+      const nss = at(raw, "nss").replace(/\D/g, "");
+      const rates: Record<string, number> = {};
+      for (const t of ["BODA", "EVENTO", "OTRO"] as const) {
+        const r = rateValue(at(raw, `rate${t}` as Col)) ?? rateValue(at(raw, "rateAll"));
+        const m = rateValue(at(raw, `rateMAITRE:${t}` as Col)) ?? rateValue(at(raw, "rateMAITRE:ALL"));
+        if (r != null) rates[t] = r;
+        if (m != null) rates[`MAITRE:${t}`] = m;
+      }
+      if (!opts.dryRun)
+        await db.worker.create({
+          data: {
+            name: n.name,
+            ...(n.firstName && { firstName: n.firstName, surname1: n.surname1, surname2: n.surname2 }),
+            dni,
+            role,
+            roles: [role],
+            accessCode: newAccessCode(),
+            ...(okPhone && { phone, phoneKey: key }),
+            ...(okEmail && { email }),
+            ...(code && { a3Code: code }),
+            ...(nss.length >= 11 && { nss }),
+            ...(at(raw, "center") && { a3Center: at(raw, "center") }),
+            ...(iban && validIban(iban) && { iban }),
+            ...(parseDate(at(raw, "birth")) && { birthDate: parseDate(at(raw, "birth")) }),
+            ...(at(raw, "address") && { address: at(raw, "address") }),
+            ...(/^(h|hombre|varon|m|masculino)$/.test(sex) ? { sex: "Hombre" } : /^(mujer|f|femenino)$/.test(sex) ? { sex: "Mujer" } : {}),
+            ...(at(raw, "nationality") && { nationality: at(raw, "nationality").toLocaleUpperCase("es-ES") }),
+            ...(at(raw, "zone") && { zone: at(raw, "zone") }),
+            ...(parseContract(at(raw, "contract")) && { contractCode: parseContract(at(raw, "contract")) }),
+            ...(Object.keys(rates).length && { customRates: rates }),
+          },
+        });
+      created.push(n.name);
+      if (!okPhone && !okEmail) noAccess.push(n.name);
+      continue;
+    }
+    if (matched.has(w.id)) continue;
     matched.add(w.id);
 
     const data: Record<string, unknown> = {};
@@ -168,16 +248,34 @@ export async function completeFromFile(file: File, by: string, opts: { replaceRa
       if (first && s1) Object.assign(data, { firstName: first, surname1: s1, surname2: rest.join(" ") || "" });
     }
     if (Object.keys(data).length) {
-      await db.worker.update({ where: { id: w.id }, data });
+      if (!opts.dryRun) await db.worker.update({ where: { id: w.id }, data });
       updated.push(w.name);
       for (const k of Object.keys(data)) if (FIELD_LABEL[k]) filled[FIELD_LABEL[k]] = (filled[FIELD_LABEL[k]] ?? 0) + 1;
     }
   }
   if (!rows) return { ok: false, message: "El archivo no tiene filas con datos." };
+  const what = Object.entries(filled).map(([k, n]) => `${n} ${k}`).join(", ");
+  if (opts.create) {
+    const list = (title: string, names: string[]) => (names.length ? [`${title}:`, ...names.slice(0, 40).map((x) => `  ${x}`), ...(names.length > 40 ? [`  … y ${names.length - 40} más`] : [])] : []);
+    const details = [
+      ...list(opts.dryRun ? "Se darán de alta" : "Dados de alta", created),
+      ...list("No se pueden dar de alta", cannot),
+      ...list("Sin teléfono ni email (no pueden entrar en la app hasta que se lo pongas en su ficha)", noAccess),
+      ...(conflicts.length ? list("Con un código de A3 distinto en la app (no se cambia)", conflicts) : []),
+    ];
+    const summary =
+      `${rows} personas en el archivo: ${created.length} ${opts.dryRun ? "nuevas se darán de alta" : "dadas de alta"}, ` +
+      `${matched.size} ya estaban en la app (${updated.length} ${opts.dryRun ? "se completarán" : "completadas"}${what ? `: ${what}` : ""})` +
+      `${cannot.length ? `, ${cannot.length} no se pueden dar de alta` : ""}.`;
+    if (opts.dryRun) return { ok: true, preview: true, message: `Vista previa (aún no se ha guardado nada). ${summary}`, details };
+    if (maxCode) await bumpLastCode(maxCode);
+    await auditAdmin(by, "Trabajador", "Importación A3", summary);
+    const next = maxCode ? ` El próximo código de alta en A3 será el ${(await getA3Alta()).lastCode + 1}.` : "";
+    return { ok: true, message: `Hecho. ${summary}${next}${created.length ? " Ya puedes mandarles las instrucciones de acceso desde «Pedir avisos» o desde su ficha." : ""}`, details };
+  }
   if (maxCode) await bumpLastCode(maxCode);
   await auditAdmin(by, "Trabajador", "Completar datos", `${rows} filas: ${matched.size} encontrados en la app, ${updated.length} fichas completadas${conflicts.length ? `, ${conflicts.length} códigos distintos` : ""}`);
   const stillMissing = (await incompleteWorkers()).length;
-  const what = Object.entries(filled).map(([k, n]) => `${n} ${k}`).join(", ");
   const nextCode = maxCode ? ` El próximo código de alta en A3 será el ${(await getA3Alta()).lastCode + 1}.` : "";
   return {
     ok: true,
@@ -190,6 +288,3 @@ export async function completeFromFile(file: File, by: string, opts: { replaceRa
     details: conflicts.slice(0, 30),
   };
 }
-
-/** La «Base de Datos» de A3 es un caso particular. */
-export const importA3Database = completeFromFile;

@@ -5,7 +5,7 @@ import { getA3 } from "@/lib/a3";
 import { bajaTemplateLists, getA3Alta, nextA3Code, templateLists } from "@/lib/a3alta";
 import { db } from "@/lib/db";
 import { A3Form } from "./A3Form";
-import { A3AltaForm, A3ImportForm } from "./AltaForms";
+import { A3AltaForm } from "./AltaForms";
 
 export default async function A3Settings() {
   const [cfg, alta, lists, next, workers] = await Promise.all([
@@ -26,7 +26,10 @@ export default async function A3Settings() {
         </p>
       </div>
       <A3Form cfg={cfg} />
-      <A3ImportForm />
+      <p className="card max-w-3xl text-sm">
+        Para traer a la app el personal de A3 (nuevos y datos que falten, como el código, el NASS o el centro):{" "}
+        <Link href="/admin/personal/importar" className="link">Personal → Importar desde A3</Link>.
+      </p>
       <p className="max-w-3xl text-sm">
         Para dar de alta en A3 a los nuevos: <Link href="/admin/altas/a3" className="link">Altas y bajas → Alta en A3</Link> genera el Excel de alta masiva con estos valores.
       </p>
