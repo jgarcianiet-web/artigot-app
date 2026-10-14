@@ -8,6 +8,7 @@ import {
   duplicateEvent,
   inviteWorkers,
   removeAssignment,
+  decideWithdrawal,
   saveTimesheet,
   setAssignmentStatus,
   setEventStatus,
@@ -103,6 +104,8 @@ export default async function EventDetail({ params, searchParams }: { params: Pr
   const totalMissing = ROLES.reduce((s, r) => s + missing[r], 0);
   const fillable = ROLES.reduce((s, r) => s + Math.min(missing[r], candidates[r].length), 0);
   const confirmed = event.assignments.filter((a) => a.status === "CONFIRMADO");
+  const withdrawRequests = confirmed.filter((a) => a.withdrawRequestedAt);
+  const when = (d: Date) => new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(d);
   const inviteText = (name: string, role: string) =>
     `Hola ${name.split(" ")[0]}, te convocamos para ${event.name} el ${formatDate(event.date, { long: true })} a las ${callTime(event, role)} en ${event.venue} (${ROLE_LABEL[role as Role]?.toLowerCase() ?? role}). Acepta o rechaza en la app: ${appUrl()}/app`;
   const pendingNoPush = event.assignments.filter((a) => a.status === "CONVOCADO" && a.worker._count.devices === 0);
@@ -215,6 +218,31 @@ export default async function EventDetail({ params, searchParams }: { params: Pr
         );
       })()}
 
+      {/* Solicitudes de no asistencia a menos de 24 h: las aprueba RRHH */}
+      {withdrawRequests.length > 0 && (
+        <section className="card space-y-2 border-amber-300 bg-amber-50">
+          <h2 className="text-base">⚠ {withdrawRequests.length === 1 ? "1 persona pide" : `${withdrawRequests.length} personas piden`} no ir (a menos de 24 h)</h2>
+          <p className="text-xs text-amber-900">Hasta que lo apruebes siguen confirmados. Si lo apruebas, deja su sitio y, si está activada la reposición automática, se convoca a otra persona.</p>
+          <ul className="divide-y divide-amber-200">
+            {withdrawRequests.map((a) => (
+              <li key={a.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
+                <span className="mr-auto">
+                  <Link href={`/admin/personal/${a.workerId}`} className="link font-medium">{a.worker.name}</Link>
+                  <span className="text-stone-600"> · {ROLE_LABEL[a.role as Role]} · lo pidió {when(a.withdrawRequestedAt!)}</span>
+                  <span className="block text-amber-900">Motivo: {a.withdrawReason}</span>
+                </span>
+                <form action={decideWithdrawal.bind(null, a.id, true)}>
+                  <SubmitButton className="btn btn-sm btn-primary">Aprobar</SubmitButton>
+                </form>
+                <form action={decideWithdrawal.bind(null, a.id, false)}>
+                  <SubmitButton className="btn btn-sm">No aprobar</SubmitButton>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* Cobertura */}
       <section className="card space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -310,6 +338,12 @@ export default async function EventDetail({ params, searchParams }: { params: Pr
                       )}
                       {a.worker._count.devices === 0 && !a.notice && (
                         <span className="ml-1 text-xs text-amber-700" title="No ha activado los avisos de la app en ningún móvil: no le llegan las notificaciones">🔕 sin avisos</span>
+                      )}
+                      {a.withdrawRequestedAt && a.status === "CONFIRMADO" && (
+                        <span className="ml-1 rounded bg-amber-100 px-1.5 text-[11px] text-amber-900" title={`Motivo: ${a.withdrawReason ?? ""}`}>⏳ pide no ir</span>
+                      )}
+                      {a.withdrew && a.withdrawReason && a.status !== "CONFIRMADO" && (
+                        <span className="block text-xs text-stone-500">No va: {a.withdrawReason}</span>
                       )}
                       {a.notice && a.status !== "CONFIRMADO" && (
                         <span className={`block text-xs ${a.noticeOk ? "text-emerald-700" : "text-amber-700"}`} title="Resultado del aviso de la convocatoria">{a.notice}</span>

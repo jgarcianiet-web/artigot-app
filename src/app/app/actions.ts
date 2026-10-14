@@ -21,6 +21,7 @@ import { DOC_LABEL, validDniNie, validIban } from "@/lib/staff";
 import { clocksIn, formatDate, isLeadRole, isRole, nowTime, type Role, today } from "@/lib/domain";
 import { autoReplace } from "@/lib/staffing";
 import { placeInGroup } from "@/lib/groups";
+import { applyWithdrawal, canWithdrawFreely, WITHDRAW_FREE_HOURS } from "@/lib/withdrawals";
 import { notify } from "@/lib/push";
 import { isEventLead, pendingReviews, reviewTeam, reviewWindowOpen } from "@/lib/reviews";
 import { CRITERIA } from "@/lib/scoring";
@@ -49,9 +50,9 @@ async function ownAssignment(assignmentId: string) {
 export async function respond(assignmentId: string, accept: boolean) {
   const { a, worker } = await ownAssignment(assignmentId);
   if (a.event.date < today() || a.checkIn) return;
-  // Solo se acepta una convocatoria pendiente; solo se rechaza una pendiente o confirmada.
-  // (Una petición antigua, p. ej. tras caducar o después de un rechazo, no cambia nada.)
-  const from = accept ? ["CONVOCADO"] : ["CONVOCADO", "CONFIRMADO"];
+  // Solo se acepta o rechaza una convocatoria pendiente (una petición antigua, p. ej. tras caducar, no cambia
+  // nada). Quien ya confirmó y no puede ir usa «Ya no puedo ir» (withdraw), con motivo.
+  const from = ["CONVOCADO"];
   if (!from.includes(a.status)) return;
   // Un maître o camarero responsable con valoraciones atrasadas no puede aceptar nuevas convocatorias hasta completarlas
   if (accept && (await pendingReviews(worker.id)).some((p) => p.overdue)) return;
@@ -62,8 +63,6 @@ export async function respond(assignmentId: string, accept: boolean) {
       data: {
         status,
         respondedAt: new Date(),
-        // Retirarse después de haber confirmado resta puntos de fiabilidad
-        ...(a.status === "CONFIRMADO" && !accept && { withdrew: true }),
         // Quien no va deja su sitio en el grupo
         ...(!accept && { groupId: null }),
       },
@@ -83,11 +82,56 @@ export async function respond(assignmentId: string, accept: boolean) {
       admins: true,
       adminUrl: `/admin/eventos/${a.eventId}`,
       title: accept ? "✅ Convocatoria aceptada" : "❌ Convocatoria rechazada",
-      body: `${worker.name} ${accept ? "confirma" : a.status === "CONFIRMADO" ? "ya no puede ir a" : "no puede ir a"} ${a.event.name} (${formatDate(a.event.date)})`,
+      body: `${worker.name} ${accept ? "confirma" : "no puede ir a"} ${a.event.name} (${formatDate(a.event.date)})`,
       tag: `resp-${a.id}`,
     }),
   );
   revalidatePath("/app", "layout");
+}
+
+export type WithdrawResult = { ok: boolean; message: string } | null;
+
+/**
+ * «Ya no puedo ir» de alguien confirmado, con motivo obligatorio. Con más de 24 h hasta su entrada se cancela
+ * al momento; con menos, queda como solicitud que aprueba RRHH (mientras tanto sigue confirmado).
+ */
+export async function withdraw(assignmentId: string, _prev: WithdrawResult, form: FormData): Promise<WithdrawResult> {
+  const { a, worker } = await ownAssignment(assignmentId);
+  const reason = cleanReason(form.get("reason"));
+  if (reason.length < 3) return { ok: false, message: "Escribe el motivo por el que no puedes ir (es obligatorio)." };
+  if (a.status !== "CONFIRMADO" || a.checkIn || a.event.date < today()) return { ok: false, message: "Esta convocatoria ya no se puede cancelar desde la app. Habla con RRHH." };
+  if (a.withdrawRequestedAt) return { ok: false, message: "Ya enviaste la solicitud: RRHH la está revisando." };
+  const when = formatDate(a.event.date);
+  if (canWithdrawFreely(a)) {
+    await applyWithdrawal(a.id, reason, worker.name);
+    await audit(worker.name, "Trabajador", "Convocatoria", "No asistencia", `${worker.name} cancela su asistencia a ${a.event.name} (${when}). Motivo: ${reason}`, { entityId: a.eventId });
+    after(() =>
+      notify({
+        admins: true,
+        adminUrl: `/admin/eventos/${a.eventId}`,
+        title: "❌ Cancela su asistencia",
+        body: `${worker.name} ya no irá a ${a.event.name} (${when}). Motivo: ${reason}`,
+        tag: `resp-${a.id}`,
+      }),
+    );
+    revalidatePath("/app", "layout");
+    revalidatePath(`/admin/eventos/${a.eventId}`);
+    return { ok: true, message: "Hecho: ya no estás en este evento. Gracias por avisar con tiempo." };
+  }
+  await db.assignment.update({ where: { id: a.id }, data: { withdrawRequestedAt: new Date(), withdrawReason: reason } });
+  await audit(worker.name, "Trabajador", "Convocatoria", "Solicitud de no asistencia", `${worker.name} pide no ir a ${a.event.name} (${when}), a menos de ${WITHDRAW_FREE_HOURS} h. Motivo: ${reason}`, { entityId: a.eventId });
+  after(() =>
+    notify({
+      admins: true,
+      adminUrl: `/admin/eventos/${a.eventId}`,
+      title: "⚠ Solicitud de no asistencia",
+      body: `${worker.name} pide no ir a ${a.event.name} (${when}), a menos de ${WITHDRAW_FREE_HOURS} h. Motivo: ${reason}. Apruébala o recházala en el evento.`,
+      tag: `baja-${a.id}`,
+    }),
+  );
+  revalidatePath("/app", "layout");
+  revalidatePath(`/admin/eventos/${a.eventId}`);
+  return { ok: true, message: "Solicitud enviada. Como faltan menos de 24 h, RRHH tiene que aprobarla: hasta entonces sigues confirmado." };
 }
 
 export type ClockResult = { ok: boolean; message: string; /** Fuera del horario normal: hay que escribir el motivo */ needReason?: string };

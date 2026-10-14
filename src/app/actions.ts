@@ -1,6 +1,7 @@
 "use server";
 
 import { placeInGroup } from "@/lib/groups";
+import { approveWithdrawal, rejectWithdrawal } from "@/lib/withdrawals";
 
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
@@ -702,6 +703,16 @@ export async function setAssignmentStatus(id: string, status: string) {
     );
   }
   revalidatePath(`/admin/eventos/${a.eventId}`);
+}
+
+/** RRHH aprueba (o no) que alguien confirmado no vaya, cuando lo pidió a menos de 24 h del evento. */
+export async function decideWithdrawal(id: string, approve: boolean) {
+  const by = await requireAdmin();
+  const a = approve ? await approveWithdrawal(id) : await rejectWithdrawal(id);
+  if (!a) return;
+  await auditAdmin(by, "Convocatoria", approve ? "Baja aprobada" : "Baja no aprobada", `${a.worker.name} en ${a.event.name} (${formatDate(a.event.date)}): ${approve ? "aprobada su no asistencia" : "no aprobada, sigue confirmado"}${a.withdrawReason ? `. Motivo: ${a.withdrawReason}` : ""}`, { entityId: a.eventId });
+  revalidatePath(`/admin/eventos/${a.eventId}`);
+  revalidatePath("/admin");
 }
 
 export async function removeAssignment(id: string) {

@@ -14,7 +14,7 @@ export type Task = { key: string; text: string; detail?: string; href: string; n
 export async function todayTasks(t: string): Promise<Task[]> {
   const conv = await getConvocationSettings();
   const remindBefore = new Date(Date.now() - conv.remindHours * 3_600_000);
-  const [noAlta, altas, bajas, noAnswer, events, drafts, docs, photos, candidates, incidents, openShifts] = await Promise.all([
+  const [noAlta, altas, bajas, noAnswer, events, drafts, docs, photos, candidates, incidents, withdrawals, openShifts] = await Promise.all([
     missingAltas(t, 7),
     // Altas de hoy y mañana sin comunicar (el alta va antes de empezar a trabajar)
     db.employment.findMany({ where: { startReported: false, startDate: { gte: addDays(t, -3), lte: addDays(t, 1) } }, select: { startDate: true } }),
@@ -34,6 +34,11 @@ export async function todayTasks(t: string): Promise<Task[]> {
     pendingPhotos(),
     db.candidate.count({ where: { seenAt: null } }),
     db.incident.count({ where: { resolved: false } }),
+    // Solicitudes de no asistencia a menos de 24 h (las aprueba RRHH)
+    db.assignment.findMany({
+      where: { status: "CONFIRMADO", withdrawRequestedAt: { not: null }, event: { date: { gte: t } } },
+      select: { eventId: true, worker: { select: { name: true } }, event: { select: { name: true } } },
+    }),
     // Servicios de ayer y anteayer con la entrada fichada y sin salida (horas por cerrar)
     db.assignment.findMany({
       where: { status: "CONFIRMADO", checkIn: { not: null }, checkOut: null, hoursOverride: null, event: { date: { gte: addDays(t, -2), lt: t } } },
@@ -65,6 +70,14 @@ export async function todayTasks(t: string): Promise<Task[]> {
       text: `Comunicar ${altas.length} ${altas.length === 1 ? "alta" : "altas"} y ${bajas.length} ${bajas.length === 1 ? "baja" : "bajas"} a la Seguridad Social`,
       detail: "Descarga los Excel para A3 del día y márcalos como comunicados",
       href: `/admin/altas?dia=${altas.find((a) => a.startDate >= t)?.startDate ?? bajas[0]?.endDate ?? t}`,
+    },
+    {
+      key: "bajas-pedidas",
+      n: withdrawals.length,
+      urgent: true,
+      text: `${withdrawals.length} ${withdrawals.length === 1 ? "solicitud" : "solicitudes"} de no asistencia por aprobar`,
+      detail: names(withdrawals.map((a) => `${a.worker.name} (${a.event.name})`)),
+      href: `/admin/eventos/${withdrawals[0]?.eventId}`,
     },
     {
       key: "sinrespuesta",
