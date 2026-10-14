@@ -35,7 +35,7 @@ function colFor(header: string): Col | null {
   }
   if (/^(tipo de contrato|tipo contrato|contrato|cod contrato|codigo contrato)$/.test(h)) return "contract";
   if (/^(puesto|categoria|cargo|puesto de trabajo|categoria profesional)$/.test(h)) return "role";
-  if (/^(codigo|cod|cod trabajador|codigo trabajador|codigo a3|cod a3)$/.test(h)) return "code";
+  if (/^(codigo|cod|cod trabajador|codigo trabajador|cod empleado|codigo empleado|n empleado|codigo a3|cod a3)$/.test(h)) return "code";
   if (/^(nass|nss|naf|n ss|num ss|seguridad social|n seguridad social|numero seguridad social|n afiliacion|afiliacion)$/.test(h)) return "nss";
   if (/^(centro|cod centro|codigo centro)$/.test(h)) return "center";
   if (/^(iban|cuenta|cuenta bancaria|n cuenta|ccc)$/.test(h)) return "iban";
@@ -81,14 +81,15 @@ export function a3Name(raw: string) {
   const [surnames, first] = raw.split(",").map((x) => x.trim());
   const [s1, ...rest] = cap(surnames).split(" ");
   const firstName = cap(first);
-  return { name: [firstName, cap(surnames)].filter(Boolean).join(" "), firstName, surname1: s1, surname2: rest.join(" ") };
+  // «del», «de la»… en minúscula también cuando el apellido va detrás del nombre («Lucía del Castillo»)
+  return { name: cap([first, surnames].filter(Boolean).join(" ")), firstName, surname1: s1, surname2: rest.join(" ") };
 }
 
 /** Nombre de pila y apellidos por separado (A3 «Datos Identificativos»), en mayúsculas → «Patricia Gomez Aparisi». */
 function a3Parts(first: string, s1: string, s2: string) {
   const c = (x: string) => (x ? a3Name(x).name : "");
   const [firstName, surname1, surname2] = [c(first), c(s1), c(s2)];
-  return { name: [firstName, surname1, surname2].filter(Boolean).join(" "), firstName, surname1, surname2 };
+  return { name: a3Name([first, s1, s2].filter(Boolean).join(" ")).name, firstName, surname1, surname2 };
 }
 
 export type A3ImportOptions = { replaceRates?: boolean; create?: boolean; dryRun?: boolean; defaultRole?: Role };
@@ -145,6 +146,8 @@ export async function completeFromFile(file: File, by: string, opts: A3ImportOpt
   const cannot: string[] = [];
   const seen = new Set<string>();
   const noDni: string[] = [];
+  const sameDni: string[] = [];
+  const badDni: string[] = [];
   for (const raw of table.slice(headerIdx + 1)) {
     const dni = cleanDni(at(raw, "dni"));
     const phone = at(raw, "phone");
@@ -159,8 +162,9 @@ export async function completeFromFile(file: File, by: string, opts: A3ImportOpt
     if (/^\d+$/.test(code)) maxCode = Math.max(maxCode, Number(code));
     const key = phone ? phoneKey(phone) : "";
     const w =
-      (dni && byDni.get(dni)) ||
+      // Primero el código de A3 (es único por alta); si no, el DNI
       (/^\d+$/.test(code) && byCode.get(codeKey(code))) ||
+      (dni && byDni.get(dni)) ||
       (key.length >= 9 && byPhone.get(key)) ||
       (email && byEmail.get(email)) ||
       (name ? byName.get(nameKey(name)) : null);
@@ -178,7 +182,9 @@ export async function completeFromFile(file: File, by: string, opts: A3ImportOpt
       }
       const id = dni || `A3:${codeKey(code)}`;
       if (seen.has(id)) {
-        cannot.push(`${n.name}: ${dni ? `DNI repetido en el archivo (${dni})` : `código de A3 repetido en el archivo (${code})`}`);
+        // A3 da un código nuevo a quien vuelve a trabajar: es la misma persona, no se duplica
+        if (dni) sameDni.push(`${n.name} (${dni})${code ? `: código ${code}` : ""}`);
+        else cannot.push(`${n.name}: código de A3 repetido en el archivo (${code})`);
         continue;
       }
       seen.add(id);
@@ -233,7 +239,14 @@ export async function completeFromFile(file: File, by: string, opts: A3ImportOpt
     };
     if (code && !w.a3Code) data.a3Code = code;
     else if (code && w.a3Code && w.a3Code.replace(/^0+/, "") !== code.replace(/^0+/, "")) conflicts.push(`${w.name}: código en la app ${w.a3Code}, en el archivo ${code}`);
-    if (dni && validDniNie(dni)) put("dni", dni);
+    if (dni && !validDniNie(dni)) badDni.push(`${w.name}: ${dni}`);
+    else if (dni && !w.dni) {
+      // Ese DNI ya lo tiene otra ficha: es la misma persona con dos códigos de A3 (se avisa para unirlas)
+      const other = byDni.get(dni);
+      if (other && other.id !== w.id) sameDni.push(`${w.name} (${dni}): también es ${other.name}`);
+      put("dni", dni);
+      byDni.set(dni, w);
+    }
     const nss = at(raw, "nss").replace(/\D/g, "");
     if (nss.length >= 11) put("nss", nss);
     put("a3Center", at(raw, "center"));
@@ -287,6 +300,8 @@ export async function completeFromFile(file: File, by: string, opts: A3ImportOpt
     const details = [
       ...list(opts.dryRun ? "Se darán de alta" : "Dados de alta", created),
       ...list("No se pueden dar de alta", cannot),
+      ...list("Mismo DNI con otro código de A3 (es la misma persona: si tiene dos fichas, únelas en Personal → personas repetidas)", sameDni),
+      ...list("DNI no válido en A3 (no se ha guardado: corrígelo en A3 o en su ficha)", badDni),
       ...list("Sin DNI: para entrar en la app necesitan su DNI (impórtalo desde A3 con un listado que lo incluya, o ponlo en su ficha)", noDni),
       ...(conflicts.length ? list("Con un código de A3 distinto en la app (no se cambia)", conflicts) : []),
     ];
