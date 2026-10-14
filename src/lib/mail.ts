@@ -1,6 +1,6 @@
 import { lookup } from "node:dns/promises";
 import nodemailer from "nodemailer";
-import { appUrl } from "./domain";
+import { loginUrl } from "./domain";
 
 /**
  * Envío de emails, de dos formas:
@@ -75,7 +75,7 @@ type AccessWorker = { name: string; phone: string | null; email: string | null; 
 export function accessText(w: AccessWorker) {
   return [
     `Hola ${w.name.split(" ")[0]}, ya tienes acceso a la app de Artigot para ver convocatorias, confirmar, fichar y hablar en el chat de cada evento.`,
-    `Entra en ${appUrl()} (o en la app) con:`,
+    `Entra en ${loginUrl()} (o en la app) con:`,
     w.phone ? `Teléfono: ${w.phone}` : `Email: ${w.email}`,
     `Código: ${w.accessCode}`,
     process.env.ANDROID_APK_URL && `App Android: ${process.env.ANDROID_APK_URL}`,

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { markPushAsked } from "@/app/actions";
 import { Empty } from "@/components/ui";
 import { db } from "@/lib/db";
-import { appUrl, formatDate } from "@/lib/domain";
+import { formatDate, loginUrl } from "@/lib/domain";
 import { AskButton } from "./AskButton";
 
 /** Pedir de golpe por WhatsApp que activen los avisos a quien no los tiene en ningún móvil. */
@@ -17,7 +17,7 @@ export default async function AskPush() {
   const text = (name: string, phone: string | null, code: string) =>
     [
       `Hola ${name.split(" ")[0]}, para enterarte al momento de las convocatorias de Artigot activa los avisos de la app:`,
-      `1. Abre ${appUrl()}/app y entra con tu ${phone ? "teléfono" : "email"} y tu código ${code}.`,
+      `1. Abre ${loginUrl()} y entra con tu ${phone ? "teléfono" : "email"} y tu código ${code}.`,
       "2. Añádela a la pantalla de inicio: en iPhone, Compartir → «Añadir a pantalla de inicio»; en Android, menú ⋮ → «Instalar app» o «Añadir a pantalla de inicio».",
       "3. Ábrela desde ese icono, ve a Perfil → «Avisos en este móvil» y pulsa «Activar avisos» y luego «Enviarme un aviso de prueba».",
       "¡Gracias!",

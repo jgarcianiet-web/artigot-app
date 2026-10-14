@@ -161,9 +161,17 @@ export const euro = (n: number) =>
 
 export const num = (n: number) => new Intl.NumberFormat("es-ES", { maximumFractionDigits: 2 }).format(n);
 
+/**
+ * Dirección pública de la app (la que va en los mensajes). Sale de APP_URL; si no está puesta, de la
+ * dirección que Railway da al servicio (RAILWAY_PUBLIC_DOMAIN).
+ */
 export function appUrl() {
-  return (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
+  const url = process.env.APP_URL?.trim() || (process.env.RAILWAY_PUBLIC_DOMAIN && `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`) || "http://localhost:3000";
+  return url.replace(/\/(entrar|admin|app|login)?\/?$/, "");
 }
+
+/** Página donde entran los trabajadores con su teléfono (o email) y su código. */
+export const loginUrl = () => `${appUrl()}/entrar`;
 
 // ---------- Tipo de contrato ----------
 
