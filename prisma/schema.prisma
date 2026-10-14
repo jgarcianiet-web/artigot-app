@@ -81,6 +81,9 @@ model Worker {
   incidentsAbout  Incident[]       @relation("incidentWorker")
   contracts       Contract[]
   candidate       Candidate?
+  // Nuevo (dado de alta desde Candidatos o marcado por RRHH): desde cuándo. Lleva la etiqueta «Nuevo» hasta completar
+  // sus primeros servicios desde esa fecha; null = no es nuevo
+  newcomerSince   DateTime?
   payLines        PayLine[]
   employments     Employment[]
   pollAnswers     PollAnswer[]

@@ -19,7 +19,8 @@ import { TeamAltas } from "./TeamAltas";
 import { Groups } from "./Groups";
 import { budgetRows, pctText } from "@/lib/budget";
 import { AdminTransport } from "./Transport";
-import { CoverageBar, ScoreBadge, StatusBadge } from "@/components/ui";
+import { CoverageBar, NewBadge, ScoreBadge, StatusBadge } from "@/components/ui";
+import { newcomers, newcomerText } from "@/lib/newcomers";
 import { requireAdmin } from "@/lib/auth";
 import { unreadCounts } from "@/lib/chat";
 import { CLOCK_RADIUS_M, clockWindow, hhmm } from "@/lib/clockRules";
@@ -92,6 +93,8 @@ export default async function EventDetail({ params, searchParams }: { params: Pr
     unreadCounts({ kind: "admin", name: adminName }, [event.id]),
   ]);
   const unreadChat = unread.get(event.id) ?? 0;
+  // Personal nuevo (de Candidatos) entre los convocados y los disponibles
+  const fresh = await newcomers(today(), [...event.assignments.map((a) => a.workerId), ...Object.values(candidates).flat().map((c) => c.id)]);
   // Quien ese día también va a otro evento (mañana y tarde): se puede, pero se avisa
   const otherSameDay = new Map<string, string[]>();
   for (const o of await db.assignment.findMany({
@@ -319,6 +322,10 @@ export default async function EventDetail({ params, searchParams }: { params: Pr
                 <span className="text-sm font-normal text-stone-500">
                   · citación {role !== "MOZO" && event.groups.length ? "la de su grupo" : callTime(event, role)}
                 </span>
+                {(() => {
+                  const n = assigned.filter((a) => fresh.has(a.workerId) && (a.status === "CONFIRMADO" || a.status === "CONVOCADO")).length;
+                  return n > 0 && <span className="ml-2 rounded-full bg-lime-100 px-2 py-0.5 text-xs font-medium text-lime-800">{n} {n === 1 ? "nuevo" : "nuevos"}</span>;
+                })()}
               </h2>
               {assigned.length === 0 && <p className="text-sm text-stone-500">Nadie convocado todavía.</p>}
               <ul className="divide-y divide-stone-100">
@@ -326,6 +333,7 @@ export default async function EventDetail({ params, searchParams }: { params: Pr
                   <li key={a.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
                     <span className="mr-auto">
                       <Link href={`/admin/personal/${a.workerId}`} className="link">{a.worker.name}</Link>
+                      {fresh.has(a.workerId) && <NewBadge title={newcomerText(fresh.get(a.workerId)!)} />}
                       {a.group && (
                         <Link href={`/admin/eventos/${event.id}?tab=grupos`} className="ml-1 rounded bg-stone-100 px-1.5 text-[11px] text-stone-700" title={`Entrada ${a.group.callTime ?? event.startTime}`}>
                           {a.group.name}
@@ -419,6 +427,7 @@ export default async function EventDetail({ params, searchParams }: { params: Pr
                           </td>
                           <td>
                             {c.name}
+                            {fresh.has(c.id) && <NewBadge title={newcomerText(fresh.get(c.id)!)} />}
                             {c.available && <span className="ml-1.5 rounded bg-emerald-100 px-1.5 text-[11px] text-emerald-800" title="Ha dicho en un sondeo que puede trabajar este día">✓ disponible</span>}
                             {c.busyWith && <div className="text-xs text-amber-800">⚠ Ese día ya está en {c.busyWith}</div>}
                             {c.zone && <div className="text-xs text-stone-500">{c.zone}</div>}

@@ -137,6 +137,7 @@ export async function hireCandidate(id: string, role: Role, by = "RRHH") {
     (await db.worker.create({
       data: {
         name: c.name, phone: c.phone, phoneKey: key, email: c.email, zone: c.zone, role, roles, accessCode: newAccessCode(), notes,
+        newcomerSince: new Date(),
         ...(c.rating && { rating: c.rating }),
         // Con coche: se le proponen 3 plazas por defecto al elegir «Llevo coche» (las puede cambiar)
         ...(c.hasCar && { carSeats: 3 }),

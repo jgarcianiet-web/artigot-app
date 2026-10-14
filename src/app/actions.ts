@@ -243,6 +243,15 @@ export async function toggleWorkerActive(id: string) {
   revalidatePath("/admin", "layout");
 }
 
+/** Pone o quita a mano la etiqueta «Nuevo» (normalmente se quita sola al completar sus primeros servicios). */
+export async function toggleNewcomer(id: string) {
+  const by = await requireAdmin();
+  const { newcomerSince } = await db.worker.findUniqueOrThrow({ where: { id }, select: { newcomerSince: true } });
+  const w = await db.worker.update({ where: { id }, data: { newcomerSince: newcomerSince ? null : new Date() } });
+  await auditAdmin(by, "Trabajador", w.newcomerSince ? "Marcado como nuevo" : "Quitada etiqueta de nuevo", `${w.name}: ${w.newcomerSince ? "marcado como nuevo" : "ya no es nuevo"}`, { entityId: id });
+  revalidatePath("/admin", "layout");
+}
+
 /** Nuevo código de acceso: cierra la sesión en todos sus dispositivos. */
 /** Envía por email el código de acceso del trabajador. */
 export async function emailAccessCode(id: string, _prev: string | null): Promise<string | null> {
