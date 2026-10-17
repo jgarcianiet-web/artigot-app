@@ -477,6 +477,9 @@ export async function signContract(contractId: string, _prev: FormResult, form: 
   if (!c || c.workerId !== me.id) return { ok: false, message: "No autorizado" };
   if (c.signedAt) return { ok: true, message: "Ya estaba firmado." };
   if (form.get("accept") !== "1") return { ok: false, message: "Marca la casilla de conformidad." };
+  // Reconocimiento médico: elige si lo quiere pasar o no
+  const choice = String(form.get("choice") ?? "");
+  if (c.kind === "PRL_RECONOCIMIENTO" && choice !== "SI" && choice !== "NO") return { ok: false, message: "Indica si deseas o no pasar el reconocimiento médico." };
   const dataUrl = String(form.get("signature") ?? "");
   const m = dataUrl.match(/^data:image\/png;base64,([A-Za-z0-9+/=]+)$/);
   if (!m) return { ok: false, message: "Firma en el recuadro antes de continuar." };
@@ -485,7 +488,13 @@ export async function signContract(contractId: string, _prev: FormResult, form: 
   const sig = await storeSignature(png, me.id);
   const ip = (await headers()).get("x-forwarded-for")?.split(",")[0].trim() ?? null;
   const note = String(form.get("note") ?? "").trim().slice(0, 1000) || null;
-  await db.contract.update({ where: { id: c.id }, data: { signedAt: new Date(), signerName: me.name, signerIp: ip, signatureFileId: sig.id, signerNote: note } });
+  await db.contract.update({
+    where: { id: c.id },
+    data: {
+      signedAt: new Date(), signerName: me.name, signerIp: ip, signatureFileId: sig.id, signerNote: note,
+      ...(c.kind === "PRL_RECONOCIMIENTO" && { data: { ...((c.data ?? {}) as object), choice } }),
+    },
+  });
   await audit(me.name, "Trabajador", "Documento", "Firmado", `${me.name} firma «${c.title}»${note ? ` con observaciones: ${note}` : ""}`, { entityId: me.id });
   if (note) {
     after(() =>

@@ -18,6 +18,9 @@ export default async function SignContract({ params }: { params: Promise<{ id: s
       <Link href={c.kind === "RGPD" ? "/app/perfil" : c.kind === "JORNADA" ? "/app/nomina" : "/app"} className="text-sm text-stone-500">‹ Volver</Link>
       <h1>{c.title}</h1>
       <article className="card text-sm leading-relaxed whitespace-pre-line">{c.body}</article>
+      {c.kind.startsWith("PRL_") && !c.signedAt && (
+        <FileLink href={`/api/contracts/${c.id}/pdf`} title={c.title} className="btn w-full">📄 Ver el documento con mis datos</FileLink>
+      )}
       {c.kind === "JORNADA" && c.data && (() => {
         const d = c.data as RecordData;
         return (

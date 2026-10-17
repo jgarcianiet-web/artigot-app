@@ -25,6 +25,7 @@ import {
 } from "@/app/actions";
 import { newcomers, newcomerText } from "@/lib/newcomers";
 import { minorStatus } from "@/lib/minors";
+import { prlStatus } from "@/lib/prl";
 import { AdminPushTest } from "@/components/PushTest";
 import { ConfirmButton, CopyButton, SubmitButton } from "@/components/client";
 import { Empty, NewBadge, RoleBadge, ScoreBadge, Stars, StatusBadge } from "@/components/ui";
@@ -60,6 +61,7 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
   if (!worker) notFound();
   const privacy = await privacySignature(worker.id);
   const minor = await minorStatus(worker);
+  const prl = await prlStatus(worker.id);
   const missing = worker.active ? ((await incompleteWorkers([worker.id]))[0]?.missing ?? []) : [];
 
   const instructions = accessText(worker);
@@ -250,6 +252,22 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
               ) : (
                 <span className="text-amber-700">Sin firmar (se le pide al subir documentos)</span>
               )}
+            </dd>
+            <dt className="text-stone-500">Prevención (PRL)</dt>
+            <dd className="space-y-0.5">
+              {prl.map((d) => (
+                <div key={d.kind}>
+                  {d.doc?.signedAt ? (
+                    <span className="text-emerald-700">
+                      ✓ {d.title.split(" · ")[1]}
+                      {d.kind === "PRL_RECONOCIMIENTO" && (d.doc.data as { choice?: string } | null)?.choice && ` (${(d.doc.data as { choice?: string }).choice === "SI" ? "sí desea" : "no desea"} reconocimiento)`} ·{" "}
+                      <a href={`/api/contracts/${d.doc.id}/pdf`} target="_blank" className="link">PDF</a>
+                    </span>
+                  ) : (
+                    <span className="text-amber-700">{d.title.split(" · ")[1]}: {d.doc ? "pendiente de firmar" : "se le pedirá al firmar la protección de datos"}</span>
+                  )}
+                </div>
+              ))}
             </dd>
             <dt className="text-stone-500">DNI / NIE</dt><dd>{worker.dni ?? <Missing />}</dd>
             <dt className="text-stone-500">Seguridad Social</dt><dd>{worker.nss ?? <Missing />}</dd>

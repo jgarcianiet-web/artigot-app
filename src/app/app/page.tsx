@@ -16,6 +16,7 @@ import { respond, startPrivacySignature, toggleUnavailable } from "./actions";
 import { Onboarding } from "@/components/Onboarding";
 import { incompleteWorkers } from "@/lib/completeness";
 import { privacySignature } from "@/lib/privacy";
+import { ensurePrlDocs, isPrl, PRL_DOCS } from "@/lib/prl";
 import { pushConfig } from "@/lib/push";
 import { GROUP_WITH_LEAD } from "@/lib/groups";
 
@@ -57,11 +58,13 @@ export default async function WorkerHome() {
     [...clockable, ...upcoming].map((a) => a.eventId),
   );
 
+  // Documentos de prevención (PRL): se le preparan en cuanto firma la protección de datos
+  if (await privacySignature(me.id)) await ensurePrlDocs(worker);
   const [uniform, toSign, polls] = await Promise.all([
     getUniform(),
     db.contract.findMany({
-      where: { workerId: me.id, signedAt: null, OR: [{ assignment: { status: "CONFIRMADO" } }, { kind: { in: ["RGPD", "JORNADA"] } }] },
-      select: { id: true, title: true },
+      where: { workerId: me.id, signedAt: null, OR: [{ assignment: { status: "CONFIRMADO" } }, { kind: { in: ["RGPD", "JORNADA", ...PRL_DOCS.map((d) => d.kind)] } }] },
+      select: { id: true, title: true, kind: true },
       orderBy: { createdAt: "asc" },
     }),
     openPollsFor(worker),
@@ -83,6 +86,13 @@ export default async function WorkerHome() {
     },
     { key: "rgpd", title: "Firma la información de protección de datos", text: "Lee qué datos tratamos y para qué, y fírmalo con el dedo.", done: !!privacy },
     { key: "datos", title: "Completa tus datos y documentos", text: `Necesitamos tu DNI, Seguridad Social e IBAN con sus documentos para darte de alta y pagarte.${dataMissing.length ? ` Te falta: ${dataMissing.join(", ")}.` : ""}`, done: !!privacy && dataMissing.length === 0 },
+    {
+      key: "prl",
+      title: "Firma los documentos de prevención de riesgos",
+      text: "Entrega de la información de PRL, de tus EPIs y si quieres o no el reconocimiento médico. Se rellenan solos con tus datos: solo tienes que firmar.",
+      done: !!privacy && !toSign.some((c) => isPrl(c.kind)),
+      href: toSign.find((c) => isPrl(c.kind)) ? `/app/firmar/${toSign.find((c) => isPrl(c.kind))!.id}` : undefined,
+    },
     { key: "avisos", title: "Activa los avisos", text: "Así te enteras al momento de convocatorias, cambios y mensajes del chat.", done: devices > 0 },
   ];
   const blocked = toReview.some((p) => p.overdue);
