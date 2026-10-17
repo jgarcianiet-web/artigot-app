@@ -24,6 +24,7 @@ import {
   testWorkerPush,
 } from "@/app/actions";
 import { newcomers, newcomerText } from "@/lib/newcomers";
+import { minorStatus } from "@/lib/minors";
 import { AdminPushTest } from "@/components/PushTest";
 import { ConfirmButton, CopyButton, SubmitButton } from "@/components/client";
 import { Empty, NewBadge, RoleBadge, ScoreBadge, Stars, StatusBadge } from "@/components/ui";
@@ -58,6 +59,7 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
   });
   if (!worker) notFound();
   const privacy = await privacySignature(worker.id);
+  const minor = await minorStatus(worker);
   const missing = worker.active ? ((await incompleteWorkers([worker.id]))[0]?.missing ?? []) : [];
 
   const instructions = accessText(worker);
@@ -253,6 +255,24 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
             <dt className="text-stone-500">Seguridad Social</dt><dd>{worker.nss ?? <Missing />}</dd>
             <dt className="text-stone-500">IBAN</dt><dd className="font-mono text-xs">{worker.iban ? formatIban(worker.iban) : <Missing />}</dd>
             <dt className="text-stone-500">Nacimiento</dt><dd>{worker.birthDate ? formatDate(worker.birthDate, { long: true }) : <Missing />}</dd>
+            {minor && (
+              <>
+                <dt className="text-stone-500">Menor de edad</dt>
+                <dd>
+                  {minor.state === "authorized" ? (
+                    <span className="text-emerald-700">
+                      {minor.age} años · ✓ Autorizado por {minor.contract!.signerName} ({(minor.contract!.data as { relation?: string; tutorDni?: string } | null)?.relation?.toLowerCase()}, {(minor.contract!.data as { tutorDni?: string } | null)?.tutorDni}) ·{" "}
+                      <a href={`/api/contracts/${minor.contract!.id}/pdf`} target="_blank" className="link">PDF</a>
+                    </span>
+                  ) : minor.state === "needs-tutor" ? (
+                    <span className="text-amber-700">{minor.age} años · Falta la autorización de su padre, madre o tutor: la app se la pide y no le deja seguir sin ella.</span>
+                  ) : (
+                    <span className="text-red-700">{minor.age} años · Menor de 16: no puede trabajar (revisa la fecha).</span>
+                  )}
+                  <div className="text-xs text-stone-500">Menor de 18: no puede trabajar de noche (22:00–6:00) ni hacer horas extra.</div>
+                </dd>
+              </>
+            )}
             <dt className="text-stone-500">Dirección</dt><dd>{worker.address ?? <Missing />}</dd>
             <dt className="text-stone-500">Avisos</dt>
             <dd className="space-y-1">

@@ -21,6 +21,7 @@ import { budgetRows, pctText } from "@/lib/budget";
 import { AdminTransport } from "./Transport";
 import { CoverageBar, NewBadge, ScoreBadge, StatusBadge } from "@/components/ui";
 import { newcomers, newcomerText } from "@/lib/newcomers";
+import { ADULT_AGE, ageOn } from "@/lib/minors";
 import { requireAdmin } from "@/lib/auth";
 import { unreadCounts } from "@/lib/chat";
 import { CLOCK_RADIUS_M, clockWindow, hhmm } from "@/lib/clockRules";
@@ -95,6 +96,22 @@ export default async function EventDetail({ params, searchParams }: { params: Pr
   const unreadChat = unread.get(event.id) ?? 0;
   // Personal nuevo (de Candidatos) entre los convocados y los disponibles
   const fresh = await newcomers(today(), [...event.assignments.map((a) => a.workerId), ...Object.values(candidates).flat().map((c) => c.id)]);
+  // Menores de 18 (no pueden trabajar de noche, de 22:00 a 6:00)
+  const minors = new Map(
+    (await db.worker.findMany({
+      where: { id: { in: [...event.assignments.map((a) => a.workerId), ...Object.values(candidates).flat().map((c) => c.id)] }, birthDate: { not: null } },
+      select: { id: true, birthDate: true },
+    }))
+      .map((w) => [w.id, ageOn(w.birthDate!, event.date)] as const)
+      .filter(([, age]) => age < ADULT_AGE),
+  );
+  const night = !event.endTime || event.endTime > "22:00" || event.endTime < event.startTime;
+  const MinorBadge = ({ id }: { id: string }) =>
+    minors.has(id) ? (
+      <span className={`ml-1 rounded px-1.5 text-[11px] ${night ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-900"}`} title="Menor de 18: no puede trabajar de noche (22:00–6:00) ni hacer horas extra">
+        Menor ({minors.get(id)}){night ? " · no de noche" : ""}
+      </span>
+    ) : null;
   // Quien ese día también va a otro evento (mañana y tarde): se puede, pero se avisa
   const otherSameDay = new Map<string, string[]>();
   for (const o of await db.assignment.findMany({
@@ -334,6 +351,7 @@ export default async function EventDetail({ params, searchParams }: { params: Pr
                     <span className="mr-auto">
                       <Link href={`/admin/personal/${a.workerId}`} className="link">{a.worker.name}</Link>
                       {fresh.has(a.workerId) && <NewBadge title={newcomerText(fresh.get(a.workerId)!)} />}
+                      <MinorBadge id={a.workerId} />
                       {a.group && (
                         <Link href={`/admin/eventos/${event.id}?tab=grupos`} className="ml-1 rounded bg-stone-100 px-1.5 text-[11px] text-stone-700" title={`Entrada ${a.group.callTime ?? event.startTime}`}>
                           {a.group.name}
@@ -428,6 +446,7 @@ export default async function EventDetail({ params, searchParams }: { params: Pr
                           <td>
                             {c.name}
                             {fresh.has(c.id) && <NewBadge title={newcomerText(fresh.get(c.id)!)} />}
+                            <MinorBadge id={c.id} />
                             {c.available && <span className="ml-1.5 rounded bg-emerald-100 px-1.5 text-[11px] text-emerald-800" title="Ha dicho en un sondeo que puede trabajar este día">✓ disponible</span>}
                             {c.busyWith && <div className="text-xs text-amber-800">⚠ Ese día ya está en {c.busyWith}</div>}
                             {c.zone && <div className="text-xs text-stone-500">{c.zone}</div>}

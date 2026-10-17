@@ -107,6 +107,17 @@ export function hoursBetween(checkIn: string | null, checkOut: string | null) {
   return Math.round((diff / 60) * 4) / 4;
 }
 
+/**
+ * Reparte las horas de un servicio que pasa de medianoche entre su día y el siguiente: de 16:00 a 04:00 son 8 h
+ * el día del servicio y 4 h el siguiente. `start`/`end` son la entrada y la salida (fichadas o previstas); si no se
+ * saben, o no pasa de medianoche, todo va al día del servicio. Lo que se paga de más (mínimo de horas) va a ese día.
+ */
+export function splitAtMidnight(total: number, start: string | null, end: string | null) {
+  if (!start || !end || toMinutes(end) >= toMinutes(start)) return { day: total, next: 0 };
+  const next = Math.min(total, Math.round((toMinutes(end) / 60) * 4) / 4);
+  return { day: Math.round((total - next) * 100) / 100, next };
+}
+
 export function workedHours(a: {
   checkIn: string | null;
   checkOut: string | null;

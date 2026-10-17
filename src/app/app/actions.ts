@@ -27,6 +27,7 @@ import { isEventLead, pendingReviews, reviewTeam, reviewWindowOpen } from "@/lib
 import { CRITERIA } from "@/lib/scoring";
 import { audit, diff } from "@/lib/audit";
 import { deleteStoredFile } from "@/lib/files";
+import { ageOn, MIN_AGE, minorStatus, TUTOR_RELATIONS, tutorText } from "@/lib/minors";
 
 export async function login(_prev: string | null, form: FormData) {
   const error = await workerLogin(String(form.get("phone") ?? ""), String(form.get("code") ?? ""));
@@ -379,6 +380,7 @@ export async function saveMyData(_prev: FormResult, form: FormData): Promise<For
   if (!validIban(iban)) return { ok: false, message: "El IBAN no es correcto." };
   if (nss.length !== 12) return { ok: false, message: "El número de la Seguridad Social tiene 12 cifras." };
   if (birthDate && !/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) return { ok: false, message: "Fecha de nacimiento no válida." };
+  if (birthDate && ageOn(birthDate) < MIN_AGE) return { ok: false, message: `Para trabajar con nosotros tienes que tener al menos ${MIN_AGE} años. Revisa la fecha de nacimiento.` };
   if (!email) return { ok: false, message: "Escribe tu email." };
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, message: "Email no válido." };
   const before = await db.worker.findUniqueOrThrow({ where: { id: me.id } });
@@ -416,6 +418,8 @@ export async function saveMyData(_prev: FormResult, form: FormData): Promise<For
     );
   }
   revalidatePath("/app/perfil");
+  // Menor de edad: hasta tener la autorización firmada de su padre, madre o tutor no puede seguir
+  if ((await minorStatus(after_))?.state === "needs-tutor") redirect("/autorizacion");
   return { ok: true, message: stored.length ? "Datos y documentos guardados. RRHH los revisará." : "Datos guardados." };
 }
 
@@ -498,6 +502,61 @@ export async function signContract(contractId: string, _prev: FormResult, form: 
   if (c.eventId) revalidatePath(`/admin/eventos/${c.eventId}`);
   revalidatePath(`/admin/personal/${me.id}`);
   return { ok: true, message: "¡Firmado! Puedes descargar tu copia en PDF." };
+}
+
+/** Autorización del padre, madre o tutor de un trabajador de 16 o 17 años: la firma el tutor en el móvil del menor. */
+export async function signTutorAuthorization(_prev: FormResult, form: FormData): Promise<FormResult> {
+  const me = await requireWorker();
+  const status = await minorStatus(me);
+  if (status?.state !== "needs-tutor") return { ok: true, message: "No hace falta autorización." };
+  const name = String(form.get("tutorName") ?? "").trim().replace(/\s+/g, " ").slice(0, 120);
+  const dni = String(form.get("tutorDni") ?? "").trim().toUpperCase().replace(/[\s.-]/g, "");
+  const relation = String(form.get("relation") ?? "");
+  if (name.split(" ").length < 2) return { ok: false, message: "Escribe el nombre y los apellidos del padre, madre o tutor." };
+  if (!validDniNie(dni)) return { ok: false, message: "El DNI/NIE del padre, madre o tutor no es correcto (revisa la letra)." };
+  if (me.dni && dni === me.dni) return { ok: false, message: "El DNI tiene que ser el del padre, madre o tutor, no el tuyo." };
+  if (!(TUTOR_RELATIONS as readonly string[]).includes(relation)) return { ok: false, message: "Indica si es tu padre, tu madre o tu tutor/a legal." };
+  if (form.get("accept") !== "1") return { ok: false, message: "El padre, madre o tutor tiene que marcar la casilla de autorización." };
+  const m = String(form.get("signature") ?? "").match(/^data:image\/png;base64,([A-Za-z0-9+/=]+)$/);
+  if (!m) return { ok: false, message: "El padre, madre o tutor tiene que firmar en el recuadro." };
+  const png = Buffer.from(m[1], "base64");
+  if (png.length < 500) return { ok: false, message: "La firma es demasiado corta. Firma de nuevo." };
+  const sig = await storeSignature(png, me.id);
+  const ip = (await headers()).get("x-forwarded-for")?.split(",")[0].trim() ?? null;
+  const tutor = { name, dni, relation };
+  await db.contract.create({
+    data: {
+      kind: "TUTOR",
+      workerId: me.id,
+      title: "Autorización del padre, madre o tutor para trabajar",
+      body: await tutorText({ name: me.name, dni: me.dni, birthDate: me.birthDate! }, tutor),
+      createdBy: me.name,
+      signedAt: new Date(),
+      signerName: name,
+      signerIp: ip,
+      signatureFileId: sig.id,
+      data: { tutorName: name, tutorDni: dni, relation, birthDate: me.birthDate },
+    },
+  });
+  await audit(me.name, "Trabajador", "Documento", "Autorización del tutor", `${me.name} (${status.age} años): autoriza ${relation.toLowerCase()} ${name} (${dni})`, { entityId: me.id });
+  after(() =>
+    notify({ admins: true, adminUrl: `/admin/personal/${me.id}`, title: "Autorización de menor", body: `${me.name} (${status.age} años) ya tiene firmada la autorización de ${name}.`, tag: `tutor-${me.id}` }),
+  );
+  revalidatePath("/app", "layout");
+  revalidatePath(`/admin/personal/${me.id}`);
+  redirect("/app/perfil");
+}
+
+/** Corrige la fecha de nacimiento desde la pantalla de autorización (si la puso mal). */
+export async function fixMyBirthDate(_prev: FormResult, form: FormData): Promise<FormResult> {
+  const me = await requireWorker();
+  const birthDate = String(form.get("birthDate") ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) return { ok: false, message: "Fecha de nacimiento no válida." };
+  if (ageOn(birthDate) < MIN_AGE) return { ok: false, message: `Para trabajar con nosotros tienes que tener al menos ${MIN_AGE} años.` };
+  await db.worker.update({ where: { id: me.id }, data: { birthDate } });
+  await audit(me.name, "Trabajador", "Trabajador", "Datos (desde la app)", `${me.name}: Nacimiento ${me.birthDate ?? "—"} → ${birthDate}`, { entityId: me.id });
+  revalidatePath("/app", "layout");
+  redirect((await minorStatus({ id: me.id, birthDate }))?.state === "needs-tutor" ? "/autorizacion" : "/app");
 }
 
 /** Abre la cláusula de protección de datos para firmarla. */
