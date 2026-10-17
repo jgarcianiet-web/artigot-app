@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FileLink } from "@/components/FileLink";
 import { useActionState } from "react";
 import { signContract } from "@/app/app/actions";
@@ -13,11 +14,19 @@ export function SignForm({ id, kind }: { id: string; kind: string }) {
       <div className="card space-y-2 bg-emerald-50">
         <p className="text-emerald-900">{r.message}</p>
         <FileLink href={`/api/contracts/${id}/pdf`} className="btn">Ver PDF firmado</FileLink>
+        {kind.startsWith("PRL_") && <Link href="/app" className="btn btn-primary">Seguir ›</Link>}
       </div>
     );
   }
   return (
     <ActionForm action={run} className="card space-y-3">
+      {kind === "PRL_RECONOCIMIENTO" && (
+        <fieldset className="space-y-1.5 text-sm">
+          <legend className="mb-1 font-medium">Reconocimiento médico</legend>
+          <label className="flex items-center gap-2"><input type="radio" name="choice" value="NO" required className="size-4" /> NO DESEO pasar el reconocimiento médico</label>
+          <label className="flex items-center gap-2"><input type="radio" name="choice" value="SI" required className="size-4" /> SÍ DESEO pasar el reconocimiento médico</label>
+        </fieldset>
+      )}
       <SignaturePad />
       <label className="flex items-start gap-2 text-sm">
         <input type="checkbox" name="accept" value="1" className="mt-0.5 size-4" required />
@@ -25,7 +34,9 @@ export function SignForm({ id, kind }: { id: string; kind: string }) {
           ? "He leído y entendido la información sobre protección de datos."
           : kind === "JORNADA"
             ? "He revisado mi registro de jornada de este mes."
-            : "He leído el documento y estoy conforme con las condiciones."}
+            : kind.startsWith("PRL_")
+              ? "He leído el documento y declaro que es correcto."
+              : "He leído el documento y estoy conforme con las condiciones."}
       </label>
       {kind === "JORNADA" && (
         <label className="block text-sm">

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { EnablePushButton } from "./PushSetup";
 
-type Step = { key: string; title: string; text: string; done: boolean };
+type Step = { key: string; title: string; text: string; done: boolean; href?: string };
 type PushConfig = { webPublicKey: string | null; fcm: boolean; apns: boolean };
 
 /** Bienvenida guiada: los pasos que necesita una persona nueva, en orden, con su progreso. */
@@ -47,6 +47,7 @@ export function Onboarding({ name, steps, push, signAction }: { name: string; st
                   {s.key === "rgpd" && <form action={signAction}><button className="btn btn-primary btn-sm">Leer y firmar</button></form>}
                   {s.key === "foto" && <Link href="/app/perfil#foto" className="btn btn-primary btn-sm">Subir mi foto</Link>}
                   {s.key === "datos" && <Link href="/app/perfil" className="btn btn-primary btn-sm">Completar mis datos</Link>}
+                  {s.key === "prl" && s.href && <Link href={s.href} className="btn btn-primary btn-sm">Firmar</Link>}
                   {s.key === "avisos" && (
                     <div className="flex flex-wrap items-start gap-3">
                       <EnablePushButton config={push} onDone={() => router.refresh()} />
