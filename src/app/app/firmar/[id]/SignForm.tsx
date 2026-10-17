@@ -7,7 +7,7 @@ import { signContract } from "@/app/app/actions";
 import { ActionForm, SubmitButton } from "@/components/client";
 import { SignaturePad } from "@/components/SignaturePad";
 
-export function SignForm({ id, kind }: { id: string; kind: string }) {
+export function SignForm({ id, kind, medicalChoice = true }: { id: string; kind: string; medicalChoice?: boolean }) {
   const [r, run] = useActionState(signContract.bind(null, id), null);
   if (r?.ok) {
     return (
@@ -20,7 +20,12 @@ export function SignForm({ id, kind }: { id: string; kind: string }) {
   }
   return (
     <ActionForm action={run} className="card space-y-3">
-      {kind === "PRL_RECONOCIMIENTO" && (
+      {kind === "PRL_RECONOCIMIENTO" && !medicalChoice && (
+        <p className="rounded-lg bg-stone-100 p-3 text-sm">
+          ☒ <strong>NO DESEO</strong> pasar el reconocimiento médico (es lo que corresponde al personal extra y a los mozos).
+        </p>
+      )}
+      {kind === "PRL_RECONOCIMIENTO" && medicalChoice && (
         <fieldset className="space-y-1.5 text-sm">
           <legend className="mb-1 font-medium">Reconocimiento médico</legend>
           <label className="flex items-center gap-2"><input type="radio" name="choice" value="NO" required className="size-4" /> NO DESEO pasar el reconocimiento médico</label>
