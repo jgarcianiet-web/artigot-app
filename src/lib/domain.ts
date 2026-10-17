@@ -107,6 +107,9 @@ export function hoursBetween(checkIn: string | null, checkOut: string | null) {
   return Math.round((diff / 60) * 4) / 4;
 }
 
+/** ¿Pasa de medianoche? (terminar justo a las 00:00 no cuenta: el trabajo acaba ese mismo día) */
+export const passesMidnight = (start: string | null, end: string | null) => !!start && !!end && toMinutes(end) > 0 && toMinutes(end) < toMinutes(start);
+
 /**
  * Reparte las horas de un servicio que pasa de medianoche entre su día y el siguiente: de 16:00 a 04:00 son 8 h
  * el día del servicio y 4 h el siguiente. `start`/`end` son la entrada y la salida (fichadas o previstas); si no se

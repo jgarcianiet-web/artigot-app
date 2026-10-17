@@ -1,6 +1,6 @@
 import { auditAdmin } from "./audit";
 import { db } from "./db";
-import { addDays, EXTRA_WHERE, isFixed, ROLE_LABEL, today, type Role } from "./domain";
+import { addDays, EXTRA_WHERE, isFixed, passesMidnight, ROLE_LABEL, today, type Role } from "./domain";
 
 /**
  * Altas y bajas automáticas en la Seguridad Social a partir del personal confirmado.
@@ -30,13 +30,15 @@ async function workDays(from: string, to: string, workerIds?: string[]) {
   const rows = await db.assignment.findMany({
     // Solo el personal extra (contrato 300): los fijos tienen el alta todo el año
     where: { status: "CONFIRMADO", event: { date: { gte: from, lte: to } }, worker: EXTRA_WHERE, ...(workerIds && { workerId: { in: workerIds } }) },
-    select: { workerId: true, role: true, event: { select: { date: true, startTime: true, endTime: true, name: true } } },
+    select: { workerId: true, role: true, checkIn: true, checkOut: true, event: { select: { date: true, startTime: true, endTime: true, name: true } } },
   });
   const by = new Map<string, Map<string, Work>>();
   for (const a of rows) {
     const days = by.get(a.workerId) ?? new Map<string, Work>();
     const prev = days.get(a.event.date);
-    const overnight = !!a.event.endTime && a.event.endTime < a.event.startTime;
+    // Pasa de medianoche según lo fichado (si ya ha fichado la salida) o, si no, según el horario del evento:
+    // entonces la baja es al día siguiente
+    const overnight = a.checkIn && a.checkOut ? passesMidnight(a.checkIn, a.checkOut) : passesMidnight(a.event.startTime, a.event.endTime);
     days.set(a.event.date, { date: a.event.date, overnight: overnight || !!prev?.overnight, role: prev?.role ?? a.role, event: prev ? `${prev.event}, ${a.event.name}` : a.event.name });
     by.set(a.workerId, days);
   }
