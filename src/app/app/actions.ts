@@ -28,6 +28,7 @@ import { CRITERIA } from "@/lib/scoring";
 import { audit, diff } from "@/lib/audit";
 import { deleteStoredFile } from "@/lib/files";
 import { ageOn, MIN_AGE, minorStatus, TUTOR_RELATIONS, tutorText } from "@/lib/minors";
+import { canChooseMedical } from "@/lib/prl";
 
 export async function login(_prev: string | null, form: FormData) {
   const error = await workerLogin(String(form.get("phone") ?? ""), String(form.get("code") ?? ""));
@@ -477,8 +478,8 @@ export async function signContract(contractId: string, _prev: FormResult, form: 
   if (!c || c.workerId !== me.id) return { ok: false, message: "No autorizado" };
   if (c.signedAt) return { ok: true, message: "Ya estaba firmado." };
   if (form.get("accept") !== "1") return { ok: false, message: "Marca la casilla de conformidad." };
-  // Reconocimiento médico: elige si lo quiere pasar o no
-  const choice = String(form.get("choice") ?? "");
+  // Reconocimiento médico: los fijos y los maîtres eligen; los extras y los mozos, siempre «NO DESEO»
+  const choice = c.kind === "PRL_RECONOCIMIENTO" && !canChooseMedical(me) ? "NO" : String(form.get("choice") ?? "");
   if (c.kind === "PRL_RECONOCIMIENTO" && choice !== "SI" && choice !== "NO") return { ok: false, message: "Indica si deseas o no pasar el reconocimiento médico." };
   const dataUrl = String(form.get("signature") ?? "");
   const m = dataUrl.match(/^data:image\/png;base64,([A-Za-z0-9+/=]+)$/);

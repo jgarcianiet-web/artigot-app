@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { formatDate, num } from "@/lib/domain";
 import type { RecordData } from "@/lib/timeRecord";
 import { SignForm } from "./SignForm";
+import { canChooseMedical } from "@/lib/prl";
 
 const when = new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", dateStyle: "long", timeStyle: "short" });
 
@@ -51,7 +52,7 @@ export default async function SignContract({ params }: { params: Promise<{ id: s
           {c.kind === "RGPD" && <Link href="/app/perfil" className="btn btn-primary">Subir mis documentos ›</Link>}
         </div>
       ) : (
-        <SignForm id={c.id} kind={c.kind} />
+        <SignForm id={c.id} kind={c.kind} medicalChoice={canChooseMedical(me)} />
       )}
     </div>
   );

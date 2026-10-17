@@ -3,7 +3,7 @@ import path from "node:path";
 import { PDFDocument, PDFName, StandardFonts, rgb } from "pdf-lib";
 import { getCompany } from "./contracts";
 import { db } from "./db";
-import { ROLE_LABEL, type Role } from "./domain";
+import { isFixed, ROLE_LABEL, type Role } from "./domain";
 import { readStoredFile } from "./files";
 
 /**
@@ -44,6 +44,12 @@ export const PRL_DOCS = [
 export type PrlKind = (typeof PRL_DOCS)[number]["kind"];
 export const isPrl = (kind: string): kind is PrlKind => PRL_DOCS.some((d) => d.kind === kind);
 
+/**
+ * Reconocimiento médico: los fijos (contrato 100/200) y los maîtres eligen si lo quieren; los extras y los mozos
+ * siempre «NO DESEO».
+ */
+export const canChooseMedical = (w: { role: string; contractCode?: string | null }) => isFixed(w) || w.role === "MAITRE";
+
 /** EPI que se entrega según el puesto. */
 export const epiFor = (role: string) => (role === "MOZO" ? "Guantes de carga" : "Guantes de látex");
 
@@ -77,8 +83,6 @@ function bodyFor(kind: PrlKind, role: string) {
     "El/la trabajador/a que suscribe la presente ha sido informado/a, conforme al artículo 22 de la Ley 31/1995 de Prevención de riesgos laborales, del derecho a la vigilancia de la salud en relación a los riesgos que pudieran derivarse de la actividad laboral que desarrolla para la empresa, y la posibilidad de someterme a un reconocimiento médico para prevenir dichos riesgos, así como la determinación de las medidas de protección necesarias para evitarlos o minimizarlos.",
     "",
     "El Servicio de Prevención PREVINTEGRA Servicios Integrales en Seguridad y Salud Laboral garantiza, contando al efecto con las oportunas medidas de seguridad, la confidencialidad de todos los datos (médicos y personales) que le sean facilitados por el/la trabajador/a aquí firmante, de acuerdo con lo previsto en la normativa de Protección de Datos vigente (Reglamento (UE) 2016/679 y Ley Orgánica 3/2018).",
-    "",
-    "Al firmar, indica si DESEA o NO DESEA pasar el reconocimiento médico.",
   ].join("\n");
 }
 
