@@ -158,7 +158,9 @@ export async function contractPdf(contractId: string) {
   }
   newPageIfNeeded(150);
   y -= 24;
-  page.drawText("Firma de la persona trabajadora:", { x: M, y, size: 10, font: bold });
+  // Autorización de un menor: firma su padre, madre o tutor
+  const tutor = c.kind === "TUTOR" ? (c.data as { tutorDni?: string } | null) : null;
+  page.drawText(tutor ? "Firma del padre, madre o tutor legal:" : "Firma de la persona trabajadora:", { x: M, y, size: 10, font: bold });
   y -= 8;
   if (c.signature && c.signedAt) {
     const img = await pdf.embedPng(await readStoredFile(c.signature));
@@ -167,7 +169,7 @@ export async function contractPdf(contractId: string) {
     y -= img.height * scale + 16;
     const when = new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", dateStyle: "long", timeStyle: "medium" }).format(c.signedAt);
     for (const l of wrap(
-      pdfSafe(`Firmado electrónicamente por ${c.signerName ?? c.worker.name}${c.worker.dni ? ` (${c.worker.dni})` : ""} el ${when} desde la app de Artigot (IP ${c.signerIp ?? "desconocida"}). Documento ${c.id}.`),
+      pdfSafe(`Firmado electrónicamente por ${c.signerName ?? c.worker.name}${tutor ? (tutor.tutorDni ? ` (${tutor.tutorDni})` : "") : c.worker.dni ? ` (${c.worker.dni})` : ""} el ${when} desde la app de Artigot (IP ${c.signerIp ?? "desconocida"}). Documento ${c.id}.`),
       font,
       8.5,
       W - 2 * M,

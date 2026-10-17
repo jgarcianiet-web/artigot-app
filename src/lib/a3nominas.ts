@@ -3,7 +3,7 @@ import ExcelJS from "exceljs";
 import { getA3 } from "./a3";
 import { a3Name, getA3Alta, positionCode } from "./a3alta";
 import { db } from "./db";
-import { addDays, EXTRA_WHERE, type Role } from "./domain";
+import { addDays, callTime, EXTRA_WHERE, splitAtMidnight, type Role } from "./domain";
 import { deductions, getPaySettings, netOf } from "./pay";
 import { monthRange, payrollLines } from "./payroll";
 
@@ -61,8 +61,19 @@ export async function monthLlamamientos(from: string, to: string) {
     if (!e.endDate) { bad("Alta sin fecha de baja"); continue; }
     if (!mine.length) { bad("No tiene servicios confirmados en esas fechas"); continue; }
     if (mine.some((l) => l.hours == null)) { bad("Servicios sin horas: ficha o corrige las horas"); continue; }
+    // Horas de cada día: si el servicio pasa de medianoche, las de después de las 00:00 van al día siguiente
     const byDay = new Map<string, number>();
-    for (const l of mine) byDay.set(l.a.event.date, (byDay.get(l.a.event.date) ?? 0) + (l.billedHours ?? 0));
+    const add = (d: string, h: number) => h > 0 && byDay.set(d, (byDay.get(d) ?? 0) + h);
+    for (const l of mine) {
+      const [start, end] = l.a.checkIn && l.a.checkOut ? [l.a.checkIn, l.a.checkOut] : l.a.hoursOverride != null ? [null, null] : [callTime(l.a.event, l.a.role, l.a.group), l.a.event.endTime];
+      const { day, next } = splitAtMidnight(l.billedHours ?? 0, start, end);
+      const tomorrow = addDays(l.a.event.date, 1);
+      // Si el periodo de alta no llega al día siguiente, todo cuenta en el día del servicio
+      if (tomorrow <= baja) {
+        add(l.a.event.date, day);
+        add(tomorrow, next);
+      } else add(l.a.event.date, day + next);
+    }
     const irpf = s.ratesAreNet ? 0 : (e.worker.irpf ?? pct.irpfPct);
     const net = Math.round(mine.reduce((sum, l) => sum + (s.ratesAreNet ? l.amount : netOf(l.amount, pct.ssPct, irpf).net), 0) * 100) / 100;
     ok.push({
