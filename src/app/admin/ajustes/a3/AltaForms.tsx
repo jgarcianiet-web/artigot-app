@@ -34,7 +34,8 @@ export function A3AltaForm({ cfg, lists, next }: { cfg: A3AltaConfig; lists: Lis
         <label className="text-sm">Centro (si la ficha no lo tiene)<input name="center" className="input mt-1" defaultValue={cfg.center} /></label>
         <label className="text-sm">Convenio centro 1 (Madrid)<input name="agreement" className="input mt-1" defaultValue={cfg.agreement} /></label>
         <label className="text-sm">Convenio centro 2 (Segovia)<input name="agreement2" className="input mt-1" defaultValue={cfg.agreement2} /></label>
-        <label className="text-sm">Categoría<input name="category" className="input mt-1" defaultValue={cfg.category} /></label>
+        <label className="text-sm">Categoría centro 1 (Madrid)<input name="category" className="input mt-1" defaultValue={cfg.category} /></label>
+        <label className="text-sm">Categoría centro 2 (Segovia)<input name="category2" className="input mt-1" defaultValue={cfg.category2} /></label>
         <label className="text-sm">Puesto<input name="position" className="input mt-1" defaultValue={cfg.position} /></label>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">

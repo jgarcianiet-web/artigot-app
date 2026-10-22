@@ -15,7 +15,10 @@ export type A3AltaConfig = {
   agreement: string;
   /** Convenio del centro 2 (Segovia) */
   agreement2: string;
+  /** Categoría del centro 1 (Madrid) */
   category: string;
+  /** Categoría del centro 2 (Segovia) */
+  category2: string;
   position: string;
   regime: string;
   tariffGroup: string;
@@ -48,6 +51,7 @@ export const A3_ALTA_DEFAULTS: A3AltaConfig = {
   agreement: "28002085011981",
   agreement2: "40000195011982",
   category: "2",
+  category2: "1/31 - CAMARERO/A",
   position: "36",
   regime: "Régimen General",
   tariffGroup: "08 - Oficiales de Primera y Segunda",
@@ -264,7 +268,7 @@ export async function buildAltaWorkbook(rows: AltaRow[], companyCode: string, cf
       M: w.nationality || cfg.nationality,
       N: null,
       O: agreementFor(cfg, w.a3Center || cfg.center),
-      P: cfg.category,
+      P: categoryFor(cfg, w.a3Center || cfg.center),
       Q: cfg.position,
       U: cfg.regime,
       V: cfg.tariffGroup,
@@ -377,6 +381,10 @@ export type AltaSucesivaRow = BajaRow & { role: Role; center?: string | null };
 /** Convenio según el centro del trabajador: 1 Madrid, 2 Segovia. */
 export const agreementFor = (cfg: A3AltaConfig, center: string | null | undefined) =>
   String(center ?? cfg.center).trim() === "2" ? cfg.agreement2 : cfg.agreement;
+
+/** Categoría según el centro: Madrid «2»; Segovia «1/31 - CAMARERO/A». */
+export const categoryFor = (cfg: A3AltaConfig, center: string | null | undefined) =>
+  String(center ?? cfg.center).trim() === "2" ? cfg.category2 : cfg.category;
 
 /** Posición/puesto como en A3: 8 cifras («00000036»). */
 export const positionCode = (cfg: A3AltaConfig) => (/^\d+$/.test(cfg.position) ? cfg.position.padStart(8, "0") : cfg.position);
