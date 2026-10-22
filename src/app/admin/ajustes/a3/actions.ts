@@ -17,6 +17,7 @@ export async function saveA3AltaAction(_prev: string | null, form: FormData) {
     agreement: get("agreement"),
     agreement2: get("agreement2"),
     category: get("category"),
+    category2: get("category2"),
     position: get("position"),
     regime: get("regime"),
     tariffGroup: get("tariffGroup"),
@@ -38,7 +39,7 @@ export async function saveA3AltaAction(_prev: string | null, form: FormData) {
   };
   await saveA3Alta(value);
   const d = diff({ ...before, occupation: JSON.stringify(before.occupation) }, { ...value, occupation: JSON.stringify(value.occupation) }, {
-    center: "Centro", agreement: "Convenio centro 1 (Madrid)", agreement2: "Convenio centro 2 (Segovia)", category: "Categoría", position: "Puesto", regime: "Régimen", tariffGroup: "Grupo de tarifa",
+    center: "Centro", agreement: "Convenio centro 1 (Madrid)", agreement2: "Convenio centro 2 (Segovia)", category: "Categoría centro 1 (Madrid)", category2: "Categoría centro 2 (Segovia)", position: "Puesto", regime: "Régimen", tariffGroup: "Grupo de tarifa",
     paymentType: "Tipo de cobro", contractType: "Contrato", contributionType: "Cotización", grossType: "Bruto anual", occupation: "Ocupación",
     education: "Nivel formativo", nationality: "Nacionalidad", lastCode: "Último código", bajaReason: "Motivo de baja", bajaInactivity: "Inactividad",
     imputation: "Imputación camareros", imputationMozo: "Imputación mozos", imputationPct: "% imputación", ampExtra: "Camareros extras (AMP)", adjustConcept: "Concepto del ajuste salarial",
