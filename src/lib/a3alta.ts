@@ -51,7 +51,7 @@ export const A3_ALTA_DEFAULTS: A3AltaConfig = {
   agreement: "28002085011981",
   agreement2: "40000195011982",
   category: "2",
-  category2: "1/31 - CAMARERO/A",
+  category2: "1/31",
   position: "36",
   regime: "Régimen General",
   tariffGroup: "08 - Oficiales de Primera y Segunda",
@@ -382,7 +382,7 @@ export type AltaSucesivaRow = BajaRow & { role: Role; center?: string | null };
 export const agreementFor = (cfg: A3AltaConfig, center: string | null | undefined) =>
   String(center ?? cfg.center).trim() === "2" ? cfg.agreement2 : cfg.agreement;
 
-/** Categoría según el centro: Madrid «2»; Segovia «1/31 - CAMARERO/A». */
+/** Categoría según el centro: Madrid «2»; Segovia «1/31». */
 export const categoryFor = (cfg: A3AltaConfig, center: string | null | undefined) =>
   String(center ?? cfg.center).trim() === "2" ? cfg.category2 : cfg.category;
 
