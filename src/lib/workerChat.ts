@@ -1,6 +1,7 @@
 import { after } from "next/server";
 import { bus } from "./bus";
 import { db } from "./db";
+import { deleteStoredFile } from "./files";
 import { notify } from "./push";
 import { staffInbox, type StaffChatMessage, type StaffEvent } from "./staffChat";
 
@@ -119,4 +120,15 @@ export async function staffDmUnread() {
     SELECT count(*)::bigint AS n FROM "WorkerMessage" m JOIN "WorkerThread" t ON t."workerId" = m."workerId"
     WHERE m."fromWorker" AND (t."staffReadAt" IS NULL OR m."createdAt" > t."staffReadAt")`;
   return Number(rows[0]?.n ?? 0);
+}
+
+/** Elimina la conversación entera (mensajes y fotos) para todos: RRHH y el trabajador. */
+export async function deleteDm(workerId: string) {
+  const files = await db.workerMessage.findMany({ where: { workerId, fileId: { not: null } }, select: { fileId: true } });
+  const { count } = await db.workerMessage.deleteMany({ where: { workerId } });
+  await db.workerThread.deleteMany({ where: { workerId } });
+  for (const f of files) await deleteStoredFile(f.fileId!);
+  bus.emit(dmChannel(workerId), { type: "cleared" } satisfies StaffEvent);
+  await pingAdmins();
+  return count;
 }

@@ -45,6 +45,9 @@ export function StaffChat({
         setMessages((prev) => merge(prev, [ev.message]));
         if (ev.message.adminId !== meId) markRead();
         router.refresh(); // actualiza la lista de conversaciones
+      } else if (ev.type === "cleared") {
+        setMessages([]); // RRHH ha eliminado la conversación
+        router.refresh();
       } else setReads((r) => ({ ...r, [ev.adminId]: ev.at > (r[ev.adminId] ?? "") ? ev.at : r[ev.adminId] }));
     });
     es.onopen = () => {

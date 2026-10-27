@@ -19,12 +19,12 @@ export default async function Messages({ searchParams }: { searchParams: Promise
             : "Chat interno de RRHH: solo lo veis los usuarios de RRHH, nunca el personal."}
         </p>
       </div>
-      <div className="grid gap-4 lg:grid-cols-[20rem_1fr]">
+      <div className="grid gap-4 md:grid-cols-[16rem_1fr] lg:grid-cols-[20rem_1fr]">
         <div className="space-y-3">
           <MessageTabs meId={me.id} active={personal ? "personal" : "equipo"} />
           {personal ? <PersonalList /> : <RoomList meId={me.id} />}
         </div>
-        <div className="card hidden items-center justify-center text-sm text-stone-500 lg:flex lg:min-h-96">Elige una conversación</div>
+        <div className="card hidden items-center justify-center text-sm text-stone-500 md:flex md:min-h-96">Elige una conversación</div>
       </div>
       <InboxRefresh />
     </div>
