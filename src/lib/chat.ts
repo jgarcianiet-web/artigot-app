@@ -1,6 +1,7 @@
 import { after } from "next/server";
 import type { Viewer } from "./auth";
-import { bus, chatChannel } from "./bus";
+import { addDays, today } from "./domain";
+import { bus, chatChannel, workerInbox } from "./bus";
 import { db } from "./db";
 import { notify } from "./push";
 
@@ -84,6 +85,7 @@ export async function postMessage(viewer: Viewer, eventId: string, text: string,
       where: { eventId, status: "CONFIRMADO" },
       select: { workerId: true },
     });
+    for (const m of members) if (viewer.kind !== "worker" || m.workerId !== viewer.id) bus.emit(workerInbox(m.workerId), "chat");
     const preview = body
       ? body.length > 140 ? `${body.slice(0, 137)}…` : body
       : attachment.fileId ? "📷 Foto" : "📍 Ubicación";
@@ -108,6 +110,7 @@ export async function markRead(viewer: Viewer, eventId: string, at = new Date())
     create: { eventId, reader, lastReadAt: at },
     update: { lastReadAt: at },
   });
+  if (viewer.kind === "worker") bus.emit(workerInbox(viewer.id), "read");
 }
 
 /** Mensajes sin leer por evento para quien consulta (no cuenta los propios). */
@@ -130,4 +133,13 @@ export async function unreadCounts(viewer: Viewer, eventIds: string[]) {
     ),
   );
   return new Map(eventIds.map((id, i) => [id, counts[i]]));
+}
+
+/** Chats de evento que ve el trabajador en «Chats»: los eventos en los que está confirmado desde hace una semana. */
+export function workerChatEvents(workerId: string) {
+  return db.event.findMany({
+    where: { date: { gte: addDays(today(), -7) }, assignments: { some: { workerId, status: "CONFIRMADO" } } },
+    include: { messages: { orderBy: { createdAt: "desc" }, take: 1 } },
+    orderBy: { date: "asc" },
+  });
 }

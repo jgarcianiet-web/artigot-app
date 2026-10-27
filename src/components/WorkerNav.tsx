@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 const TABS = [
   { href: "/app", label: "Inicio" },
@@ -10,9 +11,26 @@ const TABS = [
   { href: "/app/perfil", label: "Perfil" },
 ];
 
-/** `chats`: mensajes de RRHH sin leer (número en la pestaña «Chats»). */
+/**
+ * `chats`: cuántos chats (RRHH y eventos) tienen mensajes sin leer (número en la pestaña «Chats»). Se actualiza
+ * solo: al llegar un mensaje nuevo o al leerlo.
+ */
 export function WorkerNav({ chats = 0 }: { chats?: number }) {
   const path = usePathname();
+  const router = useRouter();
+  useEffect(() => {
+    const es = new EventSource("/api/me/inbox");
+    let t: ReturnType<typeof setTimeout> | undefined;
+    // Varios avisos seguidos (mensaje + leído) → un solo refresco
+    es.addEventListener("inbox", () => {
+      clearTimeout(t);
+      t = setTimeout(() => router.refresh(), 300);
+    });
+    return () => {
+      clearTimeout(t);
+      es.close();
+    };
+  }, [router]);
   return (
     <nav className="fixed inset-x-0 bottom-0 border-t border-stone-200 bg-white pb-[env(safe-area-inset-bottom)]">
       <div className="mx-auto flex max-w-lg text-sm">

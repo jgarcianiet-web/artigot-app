@@ -3,7 +3,7 @@ import { PushSetup } from "@/components/PushSetup";
 import { redirect } from "next/navigation";
 import { requireWorker } from "@/lib/auth";
 import { minorStatus } from "@/lib/minors";
-import { workerUnread } from "@/lib/workerChat";
+import { unreadChats } from "@/lib/workerChat";
 import { pushConfig } from "@/lib/push";
 import { Logo } from "@/components/Logo";
 import { WorkerNav } from "@/components/WorkerNav";
@@ -26,7 +26,7 @@ export default async function WorkerLayout({ children }: { children: React.React
         <OfflineClockSync />
         {children}
       </main>
-      <WorkerNav chats={await workerUnread(me.id)} />
+      <WorkerNav chats={await unreadChats(me)} />
     </div>
   );
 }

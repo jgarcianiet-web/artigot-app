@@ -1,5 +1,6 @@
 import { after } from "next/server";
-import { bus } from "./bus";
+import { bus, workerInbox } from "./bus";
+import { unreadCounts, workerChatEvents } from "./chat";
 import { db } from "./db";
 import { deleteStoredFile } from "./files";
 import { notify } from "./push";
@@ -56,6 +57,7 @@ export async function postDm(from: { side: DmSide; id: string; name: string }, w
   const msg = toMsg(m);
   bus.emit(dmChannel(workerId), { type: "message", message: msg } satisfies StaffEvent);
   bus.emit(dmChannel(workerId), { type: "read", adminId: from.side, at: msg.createdAt } satisfies StaffEvent);
+  if (!fromWorker) bus.emit(workerInbox(workerId), "dm");
   after(async () => {
     await pingAdmins();
     if (fromWorker)
@@ -83,6 +85,7 @@ export async function markDmRead(side: DmSide, workerId: string) {
   if (r.count) {
     bus.emit(dmChannel(workerId), { type: "read", adminId: side, at: at.toISOString() } satisfies StaffEvent);
     if (side === RRHH) await pingAdmins();
+    else bus.emit(workerInbox(workerId), "read");
   }
 }
 
@@ -129,6 +132,17 @@ export async function deleteDm(workerId: string) {
   await db.workerThread.deleteMany({ where: { workerId } });
   for (const f of files) await deleteStoredFile(f.fileId!);
   bus.emit(dmChannel(workerId), { type: "cleared" } satisfies StaffEvent);
+  bus.emit(workerInbox(workerId), "cleared");
   await pingAdmins();
   return count;
+}
+
+/** Número de la pestaña «Chats» del trabajador: cuántos chats (RRHH y eventos) tienen mensajes sin leer. */
+export async function unreadChats(me: { id: string; name: string; role: string }) {
+  const events = await workerChatEvents(me.id);
+  const [dm, counts] = await Promise.all([
+    workerUnread(me.id),
+    unreadCounts({ kind: "worker", id: me.id, name: me.name, role: me.role }, events.map((e) => e.id)),
+  ]);
+  return (dm > 0 ? 1 : 0) + [...counts.values()].filter((n) => n > 0).length;
 }
