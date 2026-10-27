@@ -1,21 +1,14 @@
 import Link from "next/link";
 import { Empty } from "@/components/ui";
 import { requireWorker } from "@/lib/auth";
-import { unreadCounts } from "@/lib/chat";
+import { unreadCounts, workerChatEvents } from "@/lib/chat";
 import { db } from "@/lib/db";
-import { addDays, formatDate, today } from "@/lib/domain";
+import { formatDate } from "@/lib/domain";
 import { workerUnread } from "@/lib/workerChat";
 
 export default async function WorkerChats() {
   const me = await requireWorker();
-  const events = await db.event.findMany({
-    where: {
-      date: { gte: addDays(today(), -7) },
-      assignments: { some: { workerId: me.id, status: "CONFIRMADO" } },
-    },
-    include: { messages: { orderBy: { createdAt: "desc" }, take: 1 } },
-    orderBy: { date: "asc" },
-  });
+  const events = await workerChatEvents(me.id);
   const unread = await unreadCounts({ kind: "worker", id: me.id, name: me.name, role: me.role }, events.map((e) => e.id));
   const [rrhhUnread, rrhhLast] = await Promise.all([
     workerUnread(me.id),

@@ -9,3 +9,5 @@ const g = globalThis as unknown as { bus?: EventEmitter };
 export const bus = g.bus ?? (g.bus = new EventEmitter().setMaxListeners(0));
 
 export const chatChannel = (eventId: string) => `chat:${eventId}`;
+/** Avisa a la app de un trabajador de que han cambiado sus chats sin leer (para el número de «Chats»). */
+export const workerInbox = (workerId: string) => `inbox:worker:${workerId}`;
