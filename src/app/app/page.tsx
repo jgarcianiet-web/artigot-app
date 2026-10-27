@@ -17,6 +17,7 @@ import { Onboarding } from "@/components/Onboarding";
 import { incompleteWorkers } from "@/lib/completeness";
 import { privacySignature } from "@/lib/privacy";
 import { ensurePrlDocs, isPrl, PRL_DOCS } from "@/lib/prl";
+import { workerUnread } from "@/lib/workerChat";
 import { pushConfig } from "@/lib/push";
 import { GROUP_WITH_LEAD } from "@/lib/groups";
 
@@ -60,6 +61,7 @@ export default async function WorkerHome() {
 
   // Documentos de prevención (PRL): se le preparan en cuanto firma la protección de datos
   if (await privacySignature(me.id)) await ensurePrlDocs(worker);
+  const rrhhUnread = await workerUnread(me.id);
   const [uniform, toSign, polls] = await Promise.all([
     getUniform(),
     db.contract.findMany({
@@ -175,6 +177,13 @@ export default async function WorkerHome() {
 
 
       {steps.some((st) => !st.done) && <Onboarding name={worker.name.split(" ")[0]} steps={steps} push={await pushConfig()} signAction={startPrivacySignature} />}
+
+      {rrhhUnread > 0 && (
+        <Link href="/app/rrhh" className="card flex items-center justify-between gap-2 border-emerald-300 bg-emerald-50">
+          <span>💬 RRHH te ha escrito {rrhhUnread === 1 ? "un mensaje" : `${rrhhUnread} mensajes`}</span>
+          <span className="text-sm font-medium">Leer ›</span>
+        </Link>
+      )}
 
       {polls.map((p) => <PollCard key={p.id} poll={p} busy={busy} />)}
 

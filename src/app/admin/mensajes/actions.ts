@@ -29,3 +29,10 @@ export async function newGroup(_prev: string | null, form: FormData) {
   }
   redirect(`/admin/mensajes/${id}`);
 }
+
+/** Abre (o empieza) la conversación con un trabajador. */
+export async function openWorkerChat(form: FormData) {
+  await me();
+  const workerId = String(form.get("workerId") ?? "");
+  if (workerId) redirect(`/admin/mensajes/personal/${workerId}`);
+}

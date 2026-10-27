@@ -84,6 +84,7 @@ model Worker {
   // Nuevo (dado de alta desde Candidatos o marcado por RRHH): desde cuándo. Lleva la etiqueta «Nuevo» hasta completar
   // sus primeros servicios desde esa fecha; null = no es nuevo
   newcomerSince   DateTime?
+  chatThread      WorkerThread?
   payLines        PayLine[]
   employments     Employment[]
   pollAnswers     PollAnswer[]
@@ -745,4 +746,32 @@ model EventDraft {
   updatedAt DateTime @updatedAt
 
   @@index([date])
+}
+
+// Chat directo RRHH ↔ trabajador (tipo WhatsApp): una conversación por trabajador, compartida por todo RRHH
+model WorkerThread {
+  workerId      String          @id
+  lastMessageAt DateTime        @default(now())
+  // Hasta dónde ha leído el trabajador y hasta dónde RRHH (cualquiera de RRHH)
+  workerReadAt  DateTime?
+  staffReadAt   DateTime?
+  worker        Worker          @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  messages      WorkerMessage[]
+
+  @@index([lastMessageAt])
+}
+
+model WorkerMessage {
+  id         String       @id @default(cuid())
+  workerId   String
+  // true: lo escribe el trabajador; false: RRHH (adminId y su nombre)
+  fromWorker Boolean
+  adminId    String?
+  authorName String
+  body       String
+  fileId     String?
+  createdAt  DateTime     @default(now())
+  thread     WorkerThread @relation(fields: [workerId], references: [workerId], onDelete: Cascade)
+
+  @@index([workerId, createdAt])
 }

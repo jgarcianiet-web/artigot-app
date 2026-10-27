@@ -16,8 +16,13 @@ function merge(list: StaffChatMessage[], incoming: StaffChatMessage[]) {
 
 type Member = { id: string; name: string; lastReadAt: string };
 
-/** Conversación del chat interno de RRHH (tipo WhatsApp). */
-export function StaffChat({ roomId, meId, initial, members, group }: { roomId: string; meId: string; initial: StaffChatMessage[]; members: Member[]; group: boolean }) {
+/**
+ * Conversación tipo WhatsApp: el chat interno de RRHH y también el chat directo RRHH ↔ trabajador (con `base` y
+ * los dos «miembros» rrhh / worker).
+ */
+export function StaffChat({
+  roomId, meId, initial, members, group, base: baseUrl, emptyText = "Aún no hay mensajes. Solo lo ve RRHH.",
+}: { roomId: string; meId: string; initial: StaffChatMessage[]; members: Member[]; group: boolean; base?: string; emptyText?: string }) {
   const router = useRouter();
   const [messages, setMessages] = useState(initial);
   const [reads, setReads] = useState(() => Object.fromEntries(members.map((m) => [m.id, m.lastReadAt])));
@@ -26,7 +31,7 @@ export function StaffChat({ roomId, meId, initial, members, group }: { roomId: s
   const [online, setOnline] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
-  const base = `/api/rrhh-chat/${roomId}`;
+  const base = baseUrl ?? `/api/rrhh-chat/${roomId}`;
 
   const markRead = useCallback(() => {
     if (document.visibilityState === "visible") fetch(`${base}/read`, { method: "POST" }).catch(() => {});
@@ -113,7 +118,7 @@ export function StaffChat({ roomId, meId, initial, members, group }: { roomId: s
       {!online && <div className="bg-amber-100 px-3 py-1 text-center text-xs text-amber-800">Reconectando…</div>}
       <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
         {messages.length === 0 && (
-          <p className="mx-auto mt-6 max-w-xs rounded-lg bg-white/70 p-3 text-center text-sm text-stone-600">Aún no hay mensajes. Solo lo ve RRHH.</p>
+          <p className="mx-auto mt-6 max-w-xs rounded-lg bg-white/70 p-3 text-center text-sm text-stone-600">{emptyText}</p>
         )}
         {messages.map((m) => {
           const d = new Date(m.createdAt);
