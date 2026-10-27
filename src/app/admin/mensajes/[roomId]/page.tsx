@@ -4,6 +4,7 @@ import { InboxRefresh, StaffChat } from "@/components/StaffChat";
 import { currentAdmin } from "@/lib/auth";
 import { roomInfo, roomMessages } from "@/lib/staffChat";
 import { RoomList } from "../RoomList";
+import { MessageTabs } from "../Tabs";
 
 export default async function Room({ params }: { params: Promise<{ roomId: string }> }) {
   const me = await currentAdmin();
@@ -15,7 +16,8 @@ export default async function Room({ params }: { params: Promise<{ roomId: strin
   return (
     <div className="space-y-3">
       <div className="grid gap-4 lg:grid-cols-[20rem_1fr]">
-        <div className="hidden lg:block">
+        <div className="hidden space-y-3 lg:block">
+          <MessageTabs meId={me.id} active="equipo" />
           <RoomList meId={me.id} activeId={roomId} />
         </div>
         <div className="flex h-[calc(100dvh-7rem)] min-h-96 flex-col gap-2">

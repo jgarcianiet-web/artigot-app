@@ -10,13 +10,17 @@ const TABS = [
   { href: "/app/perfil", label: "Perfil" },
 ];
 
-export function WorkerNav() {
+/** `chats`: mensajes de RRHH sin leer (número en la pestaña «Chats»). */
+export function WorkerNav({ chats = 0 }: { chats?: number }) {
   const path = usePathname();
   return (
     <nav className="fixed inset-x-0 bottom-0 border-t border-stone-200 bg-white pb-[env(safe-area-inset-bottom)]">
       <div className="mx-auto flex max-w-lg text-sm">
         {TABS.map((t) => {
-          const active = t.href === "/app" ? path === "/app" || path.startsWith("/app/eventos") || path.startsWith("/app/firmar") : path.startsWith(t.href);
+          const active =
+            t.href === "/app"
+              ? path === "/app" || path.startsWith("/app/eventos") || path.startsWith("/app/firmar")
+              : path.startsWith(t.href) || (t.href === "/app/chats" && path.startsWith("/app/rrhh"));
           return (
             <Link
               key={t.href}
@@ -25,6 +29,7 @@ export function WorkerNav() {
               className={`flex-1 border-t-2 py-3 text-center font-medium ${active ? "border-stone-900 text-stone-900" : "border-transparent text-stone-500"}`}
             >
               {t.label}
+              {t.href === "/app/chats" && chats > 0 && <span className="ml-1 rounded-full bg-emerald-600 px-1.5 text-[11px] font-semibold text-white">{chats}</span>}
             </Link>
           );
         })}

@@ -2,6 +2,7 @@ import { AdminNav } from "@/components/AdminNav";
 import { PushSetup } from "@/components/PushSetup";
 import { currentAdmin, requireAdmin } from "@/lib/auth";
 import { unreadTotal } from "@/lib/staffChat";
+import { staffDmUnread } from "@/lib/workerChat";
 import { db } from "@/lib/db";
 import { pendingPhotos } from "@/lib/photo";
 import { pushConfig } from "@/lib/push";
@@ -12,7 +13,8 @@ export const dynamic = "force-dynamic";
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const name = await requireAdmin();
   const me = await currentAdmin();
-  const unreadMessages = me ? await unreadTotal(me.id) : 0;
+  // Chat interno de RRHH + lo que ha escrito el personal sin leer
+  const unreadMessages = (me ? await unreadTotal(me.id) : 0) + (await staffDmUnread());
   const newCandidates = await db.candidate.count({ where: { seenAt: null } });
   const docsPending = (await db.workerDocument.count({ where: { verified: false, worker: { active: true } } })) + (await pendingPhotos());
   return (

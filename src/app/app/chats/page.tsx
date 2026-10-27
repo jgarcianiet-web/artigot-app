@@ -4,6 +4,7 @@ import { requireWorker } from "@/lib/auth";
 import { unreadCounts } from "@/lib/chat";
 import { db } from "@/lib/db";
 import { addDays, formatDate, today } from "@/lib/domain";
+import { workerUnread } from "@/lib/workerChat";
 
 export default async function WorkerChats() {
   const me = await requireWorker();
@@ -16,10 +17,25 @@ export default async function WorkerChats() {
     orderBy: { date: "asc" },
   });
   const unread = await unreadCounts({ kind: "worker", id: me.id, name: me.name, role: me.role }, events.map((e) => e.id));
+  const [rrhhUnread, rrhhLast] = await Promise.all([
+    workerUnread(me.id),
+    db.workerMessage.findFirst({ where: { workerId: me.id }, orderBy: { createdAt: "desc" } }),
+  ]);
 
   return (
     <div className="space-y-4">
       <h1>Chats</h1>
+      {/* Chat directo con RRHH, siempre arriba */}
+      <Link href="/app/rrhh" className="card flex items-center gap-3 px-4 py-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-stone-900 text-sm font-semibold text-white">RH</span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-medium">RRHH</span>
+          <span className="block truncate text-sm text-stone-500">
+            {rrhhLast ? `${rrhhLast.fromWorker ? "Tú" : rrhhLast.authorName.split(" ")[0]}: ${rrhhLast.body || "📷 Foto"}` : "Escribe a RRHH si necesitas algo"}
+          </span>
+        </span>
+        {rrhhUnread > 0 && <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-medium text-white">{rrhhUnread}</span>}
+      </Link>
       {events.length === 0 && <Empty>Cuando aceptes una convocatoria aparecerá aquí el chat del evento.</Empty>}
       <ul className="card divide-y divide-stone-100 p-0">
         {events.map((e) => {

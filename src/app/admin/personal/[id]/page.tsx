@@ -122,6 +122,7 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
         </div>
           </div>
         <div className="flex flex-wrap gap-2">
+          <Link href={`/admin/mensajes/personal/${worker.id}`} className="btn">💬 Mensaje</Link>
           <Link href={`/admin/personal/${worker.id}/editar`} className="btn">Editar</Link>
           <form action={toggleNewcomer.bind(null, worker.id)}>
             <SubmitButton className="btn">{isNew ? "Quitar «Nuevo»" : "Marcar como nuevo"}</SubmitButton>
