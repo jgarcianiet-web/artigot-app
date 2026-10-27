@@ -14,7 +14,7 @@ export const staffChannel = (roomId: string) => `staff:${roomId}`;
 export const staffInbox = (adminId: string) => `staff-inbox:${adminId}`;
 
 export type StaffChatMessage = { id: string; roomId: string; adminId: string | null; authorName: string; body: string; fileId: string | null; createdAt: string };
-export type StaffEvent = { type: "message"; message: StaffChatMessage } | { type: "read"; adminId: string; at: string };
+export type StaffEvent = { type: "message"; message: StaffChatMessage } | { type: "read"; adminId: string; at: string } | { type: "cleared" };
 
 const toMsg = (m: { id: string; roomId: string; adminId: string | null; authorName: string; body: string; fileId: string | null; createdAt: Date }): StaffChatMessage => ({
   id: m.id, roomId: m.roomId, adminId: m.adminId, authorName: m.authorName, body: m.body, fileId: m.fileId, createdAt: m.createdAt.toISOString(),

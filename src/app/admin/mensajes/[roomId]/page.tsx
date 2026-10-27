@@ -15,14 +15,14 @@ export default async function Room({ params }: { params: Promise<{ roomId: strin
   const messages = await roomMessages(roomId);
   return (
     <div className="space-y-3">
-      <div className="grid gap-4 lg:grid-cols-[20rem_1fr]">
-        <div className="hidden space-y-3 lg:block">
+      <div className="grid gap-4 md:grid-cols-[16rem_1fr] lg:grid-cols-[20rem_1fr]">
+        <div className="hidden space-y-3 md:block">
           <MessageTabs meId={me.id} active="equipo" />
           <RoomList meId={me.id} activeId={roomId} />
         </div>
-        <div className="flex h-[calc(100dvh-7rem)] min-h-96 flex-col gap-2">
+        <div className="flex h-[calc(100dvh-7rem)] min-h-96 min-w-0 flex-col gap-2">
           <div className="flex items-center gap-2">
-            <Link href="/admin/mensajes" className="btn btn-sm lg:hidden" aria-label="Volver a las conversaciones">‹</Link>
+            <Link href="/admin/mensajes" className="btn btn-sm shrink-0 md:hidden">‹ Conversaciones</Link>
             <div className="min-w-0">
               <h1 className="truncate text-lg">{room.title}</h1>
               {room.kind !== "DIRECTO" && <p className="truncate text-xs text-stone-500">{room.members.map((m) => (m.id === me.id ? "Tú" : m.name)).join(", ")}</p>}

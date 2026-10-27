@@ -3,7 +3,9 @@
 import { redirect } from "next/navigation";
 import { auditAdmin } from "@/lib/audit";
 import { currentAdmin } from "@/lib/auth";
+import { db } from "@/lib/db";
 import { createGroup, directRoom } from "@/lib/staffChat";
+import { deleteDm } from "@/lib/workerChat";
 
 async function me() {
   const a = await currentAdmin();
@@ -35,4 +37,15 @@ export async function openWorkerChat(form: FormData) {
   await me();
   const workerId = String(form.get("workerId") ?? "");
   if (workerId) redirect(`/admin/mensajes/personal/${workerId}`);
+}
+
+export async function deleteWorkerChat(form: FormData) {
+  const a = await me();
+  const workerId = String(form.get("workerId") ?? "");
+  const w = await db.worker.findUnique({ where: { id: workerId }, select: { name: true } });
+  if (w) {
+    const n = await deleteDm(workerId);
+    await auditAdmin(a.name, "Mensajes", "Conversación eliminada", `Chat con ${w.name} eliminado (${n} mensajes)`, { entityId: workerId });
+  }
+  redirect("/admin/mensajes?ver=personal");
 }
