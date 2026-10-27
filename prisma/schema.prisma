@@ -9,95 +9,96 @@ datasource db {
 
 // Puestos: CAMARERO | RESPONSABLE (camarero responsable) | MAITRE | MOZO
 model Worker {
-  id              String           @id @default(cuid())
-  name            String
+  id                String              @id @default(cuid())
+  name              String
   // Sin teléfono puede entrar con su email (p. ej. personal importado sin móvil)
-  phone           String?
-  email           String?
+  phone             String?
+  email             String?
   // Puesto principal y todos los puestos que puede desempeñar (incluye el principal).
   // El puesto en cada evento lo marca la convocatoria (Assignment.role)
-  role            String
-  roles           String[]         @default([])
-  rating          Int              @default(3)
-  zone            String?
-  notes           String?
+  role              String
+  roles             String[]            @default([])
+  rating            Int                 @default(3)
+  zone              String?
+  notes             String?
   // Datos laborales (los puede completar el propio trabajador desde la app)
-  dni             String?
-  nss             String?
-  iban            String?
-  birthDate       String?
-  address         String?
+  dni               String?
+  nss               String?
+  iban              String?
+  birthDate         String?
+  address           String?
   // Código del trabajador en A3Nom (para la exportación de horas)
-  a3Code          String?
+  a3Code            String?
   // Foto de perfil: la sube el trabajador y RRHH la acepta o la rechaza (PENDIENTE | ACEPTADA | RECHAZADA)
-  photoFileId     String?          @unique
-  photoStatus     String?
-  photoNote       String?
-  photo           StoredFile?      @relation("workerPhoto", fields: [photoFileId], references: [id], onDelete: SetNull)
+  photoFileId       String?             @unique
+  photoStatus       String?
+  photoNote         String?
+  photo             StoredFile?         @relation("workerPhoto", fields: [photoFileId], references: [id], onDelete: SetNull)
   // Datos para el alta masiva en A3 (si faltan los apellidos se separan del nombre)
-  firstName       String?
-  surname1        String?
-  surname2        String?
-  sex             String?
-  nationality     String?
-  education       String?
-  a3Center        String?
+  firstName         String?
+  surname1          String?
+  surname2          String?
+  sex               String?
+  nationality       String?
+  education         String?
+  a3Center          String?
   // Tarifa propia de esta persona por tipo de evento ({ "BODA": 14, "EVENTO": 12.5 }); manda sobre la del puesto
-  customRates     Json?
+  customRates       Json?
   // % de retención de IRPF propio (si es null se usa el general de Ajustes → Pagos)
-  irpf            Float?
+  irpf              Float?
   // Plazas libres en su coche (null o 0 = no suele llevar coche)
-  carSeats        Int?
+  carSeats          Int?
   // Tipo de contrato en A3: 300 (o vacío) = extra fijo discontinuo, cobra por horas y lleva altas y
   // bajas por actividad; 100 / 200 = fijo con nómina mensual (sus horas solo se controlan)
-  contractCode    String?
+  contractCode      String?
   // Cuándo se le pidió por WhatsApp que activara los avisos de la app
-  pushAskedAt     DateTime?
+  pushAskedAt       DateTime?
   // Fijo que no ficha ni cuenta horas (p. ej. maître fijo)
-  noClock         Boolean          @default(false)
+  noClock           Boolean             @default(false)
   // Nómina mensual de un fijo (€): sus servicios valorados con su tarifa se comparan con ella y lo
   // que pase de la nómina se le paga aparte
-  monthlySalary   Float?
-  active          Boolean          @default(true)
+  monthlySalary     Float?
+  active            Boolean             @default(true)
   // Acceso a la app: teléfono normalizado + código de 6 cifras que RRHH entrega al trabajador
-  phoneKey        String?          @unique
-  accessCode      String
-  sessionVersion  Int              @default(0)
-  failedLogins    Int              @default(0)
-  lockedUntil     DateTime?
-  createdAt       DateTime         @default(now())
-  unavailabilities Unavailability[]
-  assignments     Assignment[]
-  messages        Message[]
-  devices         Device[]
-  reviews         Review[]         @relation("reviewed")
-  reviewsGiven    Review[]         @relation("reviewer")
-  incidentsReported Incident[]     @relation("incidentReporter")
-  documents       WorkerDocument[]
-  loans           Loan[]
-  swapsFrom       SwapRequest[]    @relation("swapFrom")
-  swapsTo         SwapRequest[]    @relation("swapTo")
-  files           StoredFile[]     @relation("workerFiles")
-  incidentsAbout  Incident[]       @relation("incidentWorker")
-  contracts       Contract[]
-  candidate       Candidate?
+  phoneKey          String?             @unique
+  accessCode        String
+  sessionVersion    Int                 @default(0)
+  failedLogins      Int                 @default(0)
+  lockedUntil       DateTime?
+  createdAt         DateTime            @default(now())
+  unavailabilities  Unavailability[]
+  assignments       Assignment[]
+  messages          Message[]
+  devices           Device[]
+  reviews           Review[]            @relation("reviewed")
+  reviewsGiven      Review[]            @relation("reviewer")
+  incidentsReported Incident[]          @relation("incidentReporter")
+  documents         WorkerDocument[]
+  loans             Loan[]
+  swapsFrom         SwapRequest[]       @relation("swapFrom")
+  swapsTo           SwapRequest[]       @relation("swapTo")
+  files             StoredFile[]        @relation("workerFiles")
+  incidentsAbout    Incident[]          @relation("incidentWorker")
+  contracts         Contract[]
+  candidate         Candidate?
   // Nuevo (dado de alta desde Candidatos o marcado por RRHH): desde cuándo. Lleva la etiqueta «Nuevo» hasta completar
   // sus primeros servicios desde esa fecha; null = no es nuevo
-  newcomerSince   DateTime?
-  chatThread      WorkerThread?
-  payLines        PayLine[]
-  employments     Employment[]
-  pollAnswers     PollAnswer[]
-  payslips        Payslip[]
+  newcomerSince     DateTime?
+  chatThread        WorkerThread?
+  chatGroups        WorkerGroupMember[]
+  payLines          PayLine[]
+  employments       Employment[]
+  pollAnswers       PollAnswer[]
+  payslips          Payslip[]
 }
 
 // Días en los que el trabajador no está disponible (fecha YYYY-MM-DD)
 model Unavailability {
-  id       String @id @default(cuid())
+  id       String  @id @default(cuid())
   workerId String
   date     String
   reason   String?
-  worker   Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  worker   Worker  @relation(fields: [workerId], references: [id], onDelete: Cascade)
 
   @@unique([workerId, date])
   @@index([date])
@@ -105,51 +106,51 @@ model Unavailability {
 
 // Tipos: BODA | EVENTO | OTRO. Estado: ABIERTO | CERRADO
 model Event {
-  id            String       @id @default(cuid())
-  name          String
-  type          String       @default("BODA")
-  date          String
-  startTime     String
-  endTime       String?
-  unloadTime    String?
-  venue         String
+  id               String        @id @default(cuid())
+  name             String
+  type             String        @default("BODA")
+  date             String
+  startTime        String
+  endTime          String?
+  unloadTime       String?
+  venue            String
   // Punto exacto del evento para validar el fichaje por geolocalización
-  lat           Float?
-  lng           Float?
-  client        String?
+  lat              Float?
+  lng              Float?
+  client           String?
   // Comercial que lleva el evento
-  salesRep      String?
+  salesRep         String?
   // Presupuesto de personal (si es null se calcula con el personal necesario, las tarifas y el horario)
-  budget        Float?
-  budgetNote    String?
-  notes         String?
+  budget           Float?
+  budgetNote       String?
+  notes            String?
   // Qué debe llevar el personal a este evento (una cosa por línea), además del uniforme de su puesto
-  checklist     String?
+  checklist        String?
   // Punto y hora de encuentro para ir juntos al evento
-  meetingPoint  String?
-  meetingTime   String?
+  meetingPoint     String?
+  meetingTime      String?
   // Finca y cliente guardados (opcionales; venue/client guardan el texto que se muestra)
-  venueId       String?
-  clientId      String?
-  savedVenue    Venue?       @relation(fields: [venueId], references: [id], onDelete: SetNull)
-  savedClient   Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  needCamareros Int          @default(0)
-  needMaitres   Int          @default(0)
+  venueId          String?
+  clientId         String?
+  savedVenue       Venue?        @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  savedClient      Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  needCamareros    Int           @default(0)
+  needMaitres      Int           @default(0)
   // Camarero responsable: hace de maître en eventos pequeños
-  needResponsables Int       @default(0)
-  needMozos     Int          @default(0)
-  status        String       @default("ABIERTO")
+  needResponsables Int           @default(0)
+  needMozos        Int           @default(0)
+  status           String        @default("ABIERTO")
   // Si alguien rechaza o se retira, convocar automáticamente al siguiente mejor puntuado
-  autoReplace   Boolean      @default(true)
-  createdAt     DateTime     @default(now())
-  assignments   Assignment[]
-  swaps         SwapRequest[]
-  messages      Message[]
-  reads         ChatRead[]
-  reviews       Review[]
-  incidents     Incident[]
-  files         StoredFile[]
-  groups        EventGroup[]
+  autoReplace      Boolean       @default(true)
+  createdAt        DateTime      @default(now())
+  assignments      Assignment[]
+  swaps            SwapRequest[]
+  messages         Message[]
+  reads            ChatRead[]
+  reviews          Review[]
+  incidents        Incident[]
+  files            StoredFile[]
+  groups           EventGroup[]
 
   @@index([date])
 }
@@ -173,58 +174,58 @@ model EventGroup {
 
 // Estado: CONVOCADO | CONFIRMADO | RECHAZADO | CANCELADO
 model Assignment {
-  id            String    @id @default(cuid())
-  eventId       String
-  workerId      String
-  role          String
-  status        String    @default("CONVOCADO")
-  respondedAt   DateTime?
-  checkIn       String?
-  checkOut      String?
+  id                  String        @id @default(cuid())
+  eventId             String
+  workerId            String
+  role                String
+  status              String        @default("CONVOCADO")
+  respondedAt         DateTime?
+  checkIn             String?
+  checkOut            String?
   // Datos del fichaje por GPS (distancia al evento y precisión en metros). *Manual = corregido por RRHH
-  checkInLat      Float?
-  checkInLng      Float?
-  checkInDistance Int?
-  checkInAccuracy Int?
-  checkInManual   Boolean @default(false)
-  checkOutLat      Float?
-  checkOutLng      Float?
-  checkOutDistance Int?
-  checkOutAccuracy Int?
-  checkOutManual   Boolean @default(false)
+  checkInLat          Float?
+  checkInLng          Float?
+  checkInDistance     Int?
+  checkInAccuracy     Int?
+  checkInManual       Boolean       @default(false)
+  checkOutLat         Float?
+  checkOutLng         Float?
+  checkOutDistance    Int?
+  checkOutAccuracy    Int?
+  checkOutManual      Boolean       @default(false)
   // Fichado sin cobertura: se guardó en el móvil y se envió al recuperar la señal
-  checkInOffline  Boolean @default(false)
-  checkOutOffline Boolean @default(false)
+  checkInOffline      Boolean       @default(false)
+  checkOutOffline     Boolean       @default(false)
   // Motivo obligatorio si se ficha fuera del horario normal (entrada antes de tiempo o salida tarde)
-  checkInReason   String?
-  checkOutReason  String?
-  hoursOverride Float?
+  checkInReason       String?
+  checkOutReason      String?
+  hoursOverride       Float?
   // Transporte: PROPIO (va por su cuenta), CONDUZCO (lleva coche) o NECESITO (necesita que le lleven)
-  transport     String?
-  seats         Int?
-  rideWithId    String?
-  rideWith      Assignment?  @relation("rides", fields: [rideWithId], references: [id], onDelete: SetNull)
-  passengers    Assignment[] @relation("rides")
+  transport           String?
+  seats               Int?
+  rideWithId          String?
+  rideWith            Assignment?   @relation("rides", fields: [rideWithId], references: [id], onDelete: SetNull)
+  passengers          Assignment[]  @relation("rides")
   // El trabajador se retiró después de haber confirmado
-  withdrew      Boolean   @default(false)
+  withdrew            Boolean       @default(false)
   // No asistencia tras confirmar: motivo (obligatorio) y, a menos de 24 h, solicitud que aprueba RRHH
   withdrawReason      String?
   withdrawRequestedAt DateTime?
   // La baja fue a menos de 24 h (la aprobó RRHH): resta más puntos que una con tiempo
-  withdrawLate        Boolean   @default(false)
-  notes         String?
+  withdrawLate        Boolean       @default(false)
+  notes               String?
   // Resultado del aviso de la última convocatoria («✓ Android · app 12:03», el error o sin móvil)
-  notice        String?
-  noticeOk      Boolean?
-  noticeAt      DateTime?
+  notice              String?
+  noticeOk            Boolean?
+  noticeAt            DateTime?
   // Grupo dentro del evento (eventos grandes)
-  groupId       String?
-  group         EventGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  createdAt     DateTime  @default(now())
-  event         Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  worker        Worker    @relation(fields: [workerId], references: [id], onDelete: Cascade)
-  swaps         SwapRequest[]
-  contract      Contract?
+  groupId             String?
+  group               EventGroup?   @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  createdAt           DateTime      @default(now())
+  event               Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  worker              Worker        @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  swaps               SwapRequest[]
+  contract            Contract?
 
   @@unique([eventId, workerId])
 }
@@ -271,9 +272,9 @@ model ChatRead {
 
 // Dispositivo que recibe notificaciones. kind: web (Web Push) | fcm (Android) | apns (iOS)
 model Device {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   kind      String
-  token     String   @unique
+  token     String    @unique
   keys      Json?
   workerId  String?
   adminName String?
@@ -283,8 +284,8 @@ model Device {
   lastOkAt  DateTime?
   lastError String?
   lastAt    DateTime?
-  createdAt DateTime @default(now())
-  worker    Worker?  @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  worker    Worker?   @relation(fields: [workerId], references: [id], onDelete: Cascade)
 
   @@index([workerId])
 }
@@ -314,46 +315,49 @@ model Review {
 // Archivo subido (fotos del chat e incidencias). Se guarda en la base de datos: sin servicios externos.
 // scope: CHAT | INCIDENT. El acceso se comprueba según el evento al que pertenece.
 model StoredFile {
-  id         String   @id @default(cuid())
-  eventId    String?
-  scope      String
-  mime       String
-  size       Int
+  id          String          @id @default(cuid())
+  eventId     String?
+  scope       String
+  mime        String
+  size        Int
   // Contenido: en el almacén de archivos (storageKey, cifrado) o, si no hay almacén configurado, aquí
-  data       Bytes?
-  storageKey String?
-  createdAt  DateTime @default(now())
-  event      Event?   @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  incidentId String?
-  incident   Incident? @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  data        Bytes?
+  storageKey  String?
+  createdAt   DateTime        @default(now())
+  event       Event?          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  incidentId  String?
+  incident    Incident?       @relation(fields: [incidentId], references: [id], onDelete: Cascade)
   // Documentos del trabajador (scope DOC): solo los ven RRHH y el propio trabajador
-  workerId   String?
-  worker     Worker?  @relation("workerFiles", fields: [workerId], references: [id], onDelete: Cascade)
-  photoOf    Worker?  @relation("workerPhoto")
-  document   WorkerDocument?
-  candidate  Candidate?
+  workerId    String?
+  worker      Worker?         @relation("workerFiles", fields: [workerId], references: [id], onDelete: Cascade)
+  photoOf     Worker?         @relation("workerPhoto")
+  // Fotos de un grupo de chat con el personal (scope GROUP): las ven RRHH y los miembros del grupo
+  groupId     String?
+  group       WorkerGroup?    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  document    WorkerDocument?
+  candidate   Candidate?
   signatureOf Contract?
-  payslip    Payslip?
+  payslip     Payslip?
 }
 
 // Incidencia del evento. type: ROTURA | QUEJA | ACCIDENTE | PERSONAL | OTRO
 model Incident {
-  id          String       @id @default(cuid())
-  eventId     String
-  type        String
-  description String
+  id            String       @id @default(cuid())
+  eventId       String
+  type          String
+  description   String
   // Quién la registra: un trabajador (maître/responsable) o RRHH
-  reporterId  String?
+  reporterId    String?
   reporterAdmin String?
   // Trabajador afectado o implicado (opcional)
-  workerId    String?
-  resolved    Boolean      @default(false)
-  resolution  String?
-  createdAt   DateTime     @default(now())
-  event       Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  reporter    Worker?      @relation("incidentReporter", fields: [reporterId], references: [id], onDelete: SetNull)
-  worker      Worker?      @relation("incidentWorker", fields: [workerId], references: [id], onDelete: SetNull)
-  photos      StoredFile[]
+  workerId      String?
+  resolved      Boolean      @default(false)
+  resolution    String?
+  createdAt     DateTime     @default(now())
+  event         Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  reporter      Worker?      @relation("incidentReporter", fields: [reporterId], references: [id], onDelete: SetNull)
+  worker        Worker?      @relation("incidentWorker", fields: [workerId], references: [id], onDelete: SetNull)
+  photos        StoredFile[]
 
   @@index([eventId])
   @@index([resolved, createdAt])
@@ -367,16 +371,16 @@ model ReminderLog {
 
 // Usuario de RRHH. Todos tienen acceso completo. sessionVersion cierra sus sesiones al desactivarlo o cambiar la contraseña.
 model AdminUser {
-  id             String    @id @default(cuid())
+  id             String            @id @default(cuid())
   name           String
-  email          String    @unique
+  email          String            @unique
   passwordHash   String
-  active         Boolean   @default(true)
-  sessionVersion Int       @default(0)
-  failedLogins   Int       @default(0)
+  active         Boolean           @default(true)
+  sessionVersion Int               @default(0)
+  failedLogins   Int               @default(0)
   lockedUntil    DateTime?
   lastLoginAt    DateTime?
-  createdAt      DateTime  @default(now())
+  createdAt      DateTime          @default(now())
   staffRooms     StaffRoomMember[]
 }
 
@@ -468,15 +472,15 @@ model SwapRequest {
 
 // Material prestado al trabajador (chaqueta, sacacorchos, bandeja…)
 model Loan {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   workerId    String
   item        String
-  quantity    Int       @default(1)
+  quantity    Int      @default(1)
   deliveredAt String
   returnedAt  String?
   notes       String?
-  createdAt   DateTime  @default(now())
-  worker      Worker    @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  worker      Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
 
   @@index([workerId])
 }
@@ -604,17 +608,17 @@ model Remittance {
 
 // Nómina de A3 de un trabajador en un mes (sus páginas del PDF que calcula A3; todas las del mes juntas)
 model Payslip {
-  id        String    @id @default(cuid())
+  id        String     @id @default(cuid())
   workerId  String
   month     String
-  fileId    String    @unique
+  fileId    String     @unique
   pages     Int
   // Líquido a percibir leído del PDF (suma de sus nóminas del mes); null si no se ha podido leer
   net       Float?
   createdBy String
-  createdAt DateTime  @default(now())
+  createdAt DateTime   @default(now())
   seenAt    DateTime?
-  worker    Worker    @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  worker    Worker     @relation(fields: [workerId], references: [id], onDelete: Cascade)
   file      StoredFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
 
   @@unique([workerId, month])
@@ -623,26 +627,26 @@ model Payslip {
 
 // Altas y bajas en la Seguridad Social (sustituye al Excel de altas y bajas)
 model Employment {
-  id              String    @id @default(cuid())
-  workerId        String
-  startDate       String
-  endDate         String?
-  contractType    String
-  category        String?
-  hoursPerWeek    Float?
-  endReason       String?
-  notes           String?
+  id            String   @id @default(cuid())
+  workerId      String
+  startDate     String
+  endDate       String?
+  contractType  String
+  category      String?
+  hoursPerWeek  Float?
+  endReason     String?
+  notes         String?
   // Comunicado a la Seguridad Social (Sistema RED)
-  startReported   Boolean   @default(false)
-  endReported     Boolean   @default(false)
+  startReported Boolean  @default(false)
+  endReported   Boolean  @default(false)
   // Generada sola a partir del personal confirmado (días seguidos = un alta; se baja el último día)
-  auto            Boolean   @default(false)
+  auto          Boolean  @default(false)
   // Aviso para RRHH (p. ej. cambió después de comunicarla a la Seguridad Social)
-  warning         String?
-  createdBy       String
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  worker          Worker    @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  warning       String?
+  createdBy     String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  worker        Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
 
   @@index([workerId, startDate])
 }
@@ -774,4 +778,48 @@ model WorkerMessage {
   thread     WorkerThread @relation(fields: [workerId], references: [workerId], onDelete: Cascade)
 
   @@index([workerId, createdAt])
+}
+
+// Grupos de chat de RRHH con el personal (p. ej. «Maîtres», «Fijos Segovia»). Los crea RRHH; todo RRHH los ve.
+model WorkerGroup {
+  id            String              @id @default(cuid())
+  name          String
+  // Solo RRHH puede escribir (tipo canal de avisos); los trabajadores solo leen
+  onlyStaff     Boolean             @default(false)
+  createdBy     String
+  createdAt     DateTime            @default(now())
+  lastMessageAt DateTime            @default(now())
+  staffReadAt   DateTime?
+  members       WorkerGroupMember[]
+  messages      GroupMessage[]
+  files         StoredFile[]
+
+  @@index([lastMessageAt])
+}
+
+model WorkerGroupMember {
+  groupId  String
+  workerId String
+  addedAt  DateTime    @default(now())
+  readAt   DateTime?
+  group    WorkerGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  worker   Worker      @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, workerId])
+  @@index([workerId])
+}
+
+model GroupMessage {
+  id         String      @id @default(cuid())
+  groupId    String
+  // null: lo ha escrito RRHH (adminId); si no, el trabajador
+  workerId   String?
+  adminId    String?
+  authorName String
+  body       String
+  fileId     String?
+  createdAt  DateTime    @default(now())
+  group      WorkerGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId, createdAt])
 }

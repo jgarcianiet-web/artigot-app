@@ -2,6 +2,7 @@
 
 import { FileLink } from "./FileLink";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatMessage } from "@/lib/chat";
 import { shrinkImage } from "@/lib/image";
@@ -28,6 +29,7 @@ export function Chat({
   me: Me;
   className?: string;
 }) {
+  const router = useRouter();
   const [messages, setMessages] = useState(initial);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -36,9 +38,13 @@ export function Chat({
   const bottom = useRef<HTMLDivElement>(null);
   const base = `/api/chat/${eventId}`;
 
+  // Después de marcar como leído se refresca la página para que bajen los números de los menús
   const markRead = useCallback(() => {
-    if (document.visibilityState === "visible") fetch(`${base}/read`, { method: "POST" }).catch(() => {});
-  }, [base]);
+    if (document.visibilityState === "visible")
+      fetch(`${base}/read`, { method: "POST" })
+        .then((r) => r.ok && router.refresh())
+        .catch(() => {});
+  }, [base, router]);
 
   // Tiempo real: Server-Sent Events. Al (re)conectar se recupera lo que se haya podido perder.
   useEffect(() => {

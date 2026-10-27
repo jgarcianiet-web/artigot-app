@@ -8,7 +8,7 @@ import { isEventLead } from "./reviews";
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
 
-export type Scope = "CHAT" | "INCIDENT" | "DOC" | "CANDIDATE" | "SIGNATURE" | "PHOTO" | "STAFF" | "PAYSLIP" | "DM";
+export type Scope = "CHAT" | "INCIDENT" | "DOC" | "CANDIDATE" | "SIGNATURE" | "PHOTO" | "STAFF" | "PAYSLIP" | "DM" | "GROUP";
 
 /** Guarda una imagen subida (las fotos se reducen en el móvil antes de enviarlas). */
 export async function storeImage(file: File, opts: { eventId: string; scope: Scope; incidentId?: string }) {
@@ -26,6 +26,12 @@ export async function storeDocument(file: File, workerId: string) {
 export async function storeDmImage(file: File, workerId: string) {
   if (!IMAGE_TYPES.includes(file.type)) throw new Error("Solo se pueden enviar fotos (JPG, PNG, WEBP o HEIC).");
   return store(file, { scope: "DM", workerId });
+}
+
+/** Foto de un grupo de chat con el personal (la ven RRHH y los miembros del grupo). */
+export async function storeGroupImage(file: File, groupId: string) {
+  if (!IMAGE_TYPES.includes(file.type)) throw new Error("Solo se pueden enviar fotos (JPG, PNG, WEBP o HEIC).");
+  return store(file, { scope: "GROUP", groupId });
 }
 
 /** Foto del chat interno de RRHH (solo la ve RRHH). */
@@ -57,16 +63,16 @@ export async function storePayslipFile(pdf: Buffer, workerId: string) {
   return save(pdf, { scope: "PAYSLIP", workerId, mime: "application/pdf" });
 }
 
-async function store(file: File, opts: { eventId?: string; scope: Scope; incidentId?: string; workerId?: string }) {
+async function store(file: File, opts: { eventId?: string; scope: Scope; incidentId?: string; workerId?: string; groupId?: string }) {
   if (file.size === 0 || file.size > MAX_FILE_BYTES) throw new Error("El archivo es demasiado grande (máximo 5 MB).");
   return save(Buffer.from(await file.arrayBuffer()), { ...opts, mime: file.type });
 }
 
-type SaveOpts = { eventId?: string; scope: Scope; incidentId?: string; workerId?: string; mime: string };
+type SaveOpts = { eventId?: string; scope: Scope; incidentId?: string; workerId?: string; groupId?: string; mime: string };
 
 /** Guarda el contenido en el almacén de archivos (cifrado) o, si no hay almacén, en la base de datos. */
 async function save(data: Buffer, opts: SaveOpts) {
-  const meta = { eventId: opts.eventId, scope: opts.scope, incidentId: opts.incidentId, workerId: opts.workerId, mime: opts.mime, size: data.length };
+  const meta = { eventId: opts.eventId, scope: opts.scope, incidentId: opts.incidentId, workerId: opts.workerId, groupId: opts.groupId, mime: opts.mime, size: data.length };
   if (!storageEnabled()) return db.storedFile.create({ data: { ...meta, data: new Uint8Array(data) }, select: { id: true } });
   const id = randomUUID().replace(/-/g, "");
   const storageKey = `files/${id}`;
@@ -124,9 +130,12 @@ export async function sweepOrphanFiles() {
  * - Fotos del chat: quien puede leer el chat del evento (RRHH + personal confirmado).
  * - Fotos de incidencias: RRHH y el maître / camarero responsable del evento.
  * - Documentos y nóminas del trabajador: RRHH y el propio trabajador.
+ * - Fotos de un grupo con el personal: RRHH y los miembros del grupo.
  */
-export async function canReadFile(viewer: Viewer, file: { scope: string; eventId: string | null; workerId: string | null }) {
+export async function canReadFile(viewer: Viewer, file: { scope: string; eventId: string | null; workerId: string | null; groupId?: string | null }) {
   if (viewer.kind === "admin") return true;
+  if (file.scope === "GROUP")
+    return !!file.groupId && !!(await db.workerGroupMember.findUnique({ where: { groupId_workerId: { groupId: file.groupId, workerId: viewer.id } } }));
   if (file.scope === "DOC" || file.scope === "SIGNATURE" || file.scope === "PHOTO" || file.scope === "PAYSLIP" || file.scope === "DM") return file.workerId === viewer.id;
   if (file.scope === "CANDIDATE" || file.scope === "STAFF") return false; // solo RRHH
   if (!file.eventId) return false;
