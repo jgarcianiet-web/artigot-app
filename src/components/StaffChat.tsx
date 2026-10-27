@@ -21,8 +21,12 @@ type Member = { id: string; name: string; lastReadAt: string };
  * los dos «miembros» rrhh / worker).
  */
 export function StaffChat({
-  roomId, meId, initial, members, group, base: baseUrl, emptyText = "Aún no hay mensajes. Solo lo ve RRHH.",
-}: { roomId: string; meId: string; initial: StaffChatMessage[]; members: Member[]; group: boolean; base?: string; emptyText?: string }) {
+  roomId, meId, initial, members, group, base: baseUrl, emptyText = "Aún no hay mensajes. Solo lo ve RRHH.", readOnlyText,
+}: {
+  roomId: string; meId: string; initial: StaffChatMessage[]; members: Member[]; group: boolean; base?: string; emptyText?: string;
+  /** Si se indica, no se puede escribir (p. ej. grupos de avisos donde solo escribe RRHH) y se muestra este texto */
+  readOnlyText?: string;
+}) {
   const router = useRouter();
   const [messages, setMessages] = useState(initial);
   const [reads, setReads] = useState(() => Object.fromEntries(members.map((m) => [m.id, m.lastReadAt])));
@@ -33,9 +37,13 @@ export function StaffChat({
   const bottom = useRef<HTMLDivElement>(null);
   const base = baseUrl ?? `/api/rrhh-chat/${roomId}`;
 
+  // Después de marcar como leído se refresca la página para que bajen los números de los menús
   const markRead = useCallback(() => {
-    if (document.visibilityState === "visible") fetch(`${base}/read`, { method: "POST" }).catch(() => {});
-  }, [base]);
+    if (document.visibilityState === "visible")
+      fetch(`${base}/read`, { method: "POST" })
+        .then((r) => r.ok && router.refresh())
+        .catch(() => {});
+  }, [base, router]);
 
   useEffect(() => {
     const es = new EventSource(`${base}/stream`);
@@ -158,44 +166,48 @@ export function StaffChat({
         <div ref={bottom} />
       </div>
       {error && <div className="bg-red-50 px-3 py-1 text-xs text-red-700">{error}</div>}
-      <form
-        className="flex items-end gap-2 border-t border-stone-200 bg-stone-50 p-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          send();
-        }}
-      >
-        <label className={`btn h-10 w-10 shrink-0 cursor-pointer rounded-full p-0 ${sending ? "pointer-events-none opacity-50" : ""}`} title="Enviar foto">
-          📷
-          <input
-            type="file"
-            accept="image/*"
-            className="sr-only"
-            aria-label="Enviar foto"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              e.target.value = "";
-              if (f) sendPhoto(f);
-            }}
-          />
-        </label>
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && !("ontouchstart" in window)) {
-              e.preventDefault();
-              send();
-            }
+      {readOnlyText ? (
+        <p className="border-t border-stone-200 bg-stone-50 p-3 text-center text-xs text-stone-500">{readOnlyText}</p>
+      ) : (
+        <form
+          className="flex items-end gap-2 border-t border-stone-200 bg-stone-50 p-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            send();
           }}
-          rows={1}
-          maxLength={4000}
-          placeholder="Escribe un mensaje"
-          aria-label="Mensaje"
-          className="input max-h-32 min-h-10 flex-1 resize-none rounded-2xl text-base sm:text-sm"
-        />
-        <button className="btn btn-primary h-10 rounded-full px-4" disabled={sending || !text.trim()}>Enviar</button>
-      </form>
+        >
+          <label className={`btn h-10 w-10 shrink-0 cursor-pointer rounded-full p-0 ${sending ? "pointer-events-none opacity-50" : ""}`} title="Enviar foto">
+            📷
+            <input
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              aria-label="Enviar foto"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) sendPhoto(f);
+              }}
+            />
+          </label>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && !("ontouchstart" in window)) {
+                e.preventDefault();
+                send();
+              }
+            }}
+            rows={1}
+            maxLength={4000}
+            placeholder="Escribe un mensaje"
+            aria-label="Mensaje"
+            className="input max-h-32 min-h-10 flex-1 resize-none rounded-2xl text-base sm:text-sm"
+          />
+          <button className="btn btn-primary h-10 rounded-full px-4" disabled={sending || !text.trim()}>Enviar</button>
+        </form>
+      )}
     </div>
   );
 }

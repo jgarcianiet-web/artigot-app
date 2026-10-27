@@ -15,7 +15,7 @@ export default async function Messages({ searchParams }: { searchParams: Promise
         <h1>Mensajes</h1>
         <p className="text-sm text-stone-500">
           {personal
-            ? "Chat con cada trabajador: le salta el aviso en el móvil y puede contestar. Lo veis y contestáis todos los de RRHH."
+            ? "Chat con cada trabajador y grupos con el personal: les salta el aviso en el móvil y pueden contestar. Lo veis y contestáis todos los de RRHH."
             : "Chat interno de RRHH: solo lo veis los usuarios de RRHH, nunca el personal."}
         </p>
       </div>

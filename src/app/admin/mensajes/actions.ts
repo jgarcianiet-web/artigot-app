@@ -6,6 +6,7 @@ import { currentAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { createGroup, directRoom } from "@/lib/staffChat";
 import { deleteDm } from "@/lib/workerChat";
+import { deleteGroup, saveGroup } from "@/lib/workerGroups";
 
 async function me() {
   const a = await currentAdmin();
@@ -47,5 +48,26 @@ export async function deleteWorkerChat(form: FormData) {
     const n = await deleteDm(workerId);
     await auditAdmin(a.name, "Mensajes", "Conversación eliminada", `Chat con ${w.name} eliminado (${n} mensajes)`, { entityId: workerId });
   }
+  redirect("/admin/mensajes?ver=personal");
+}
+
+/** Crear o editar un grupo con el personal. */
+export async function saveGroupAction(_prev: string | null, form: FormData) {
+  const a = await me();
+  const id = String(form.get("id") ?? "") || undefined;
+  let saved: { id: string; members: number };
+  try {
+    saved = await saveGroup(a.name, { id, name: String(form.get("name") ?? ""), onlyStaff: form.get("onlyStaff") === "on", workerIds: form.getAll("members").map(String) });
+  } catch (e) {
+    return (e as Error).message;
+  }
+  await auditAdmin(a.name, "Mensajes", id ? "Grupo editado" : "Grupo creado", `Grupo «${String(form.get("name")).trim()}» con ${saved.members} personas`, { entityId: saved.id });
+  redirect(`/admin/mensajes/grupos/${saved.id}`);
+}
+
+export async function deleteGroupAction(form: FormData) {
+  const a = await me();
+  const g = await deleteGroup(String(form.get("groupId") ?? ""));
+  if (g) await auditAdmin(a.name, "Mensajes", "Grupo eliminado", `Grupo «${g.name}» eliminado con sus mensajes`, { entityId: g.id });
   redirect("/admin/mensajes?ver=personal");
 }

@@ -38,7 +38,7 @@ export function WorkerNav({ chats = 0 }: { chats?: number }) {
           const active =
             t.href === "/app"
               ? path === "/app" || path.startsWith("/app/eventos") || path.startsWith("/app/firmar")
-              : path.startsWith(t.href) || (t.href === "/app/chats" && path.startsWith("/app/rrhh"));
+              : path.startsWith(t.href) || (t.href === "/app/chats" && (path.startsWith("/app/rrhh") || path.startsWith("/app/grupos")));
           return (
             <Link
               key={t.href}

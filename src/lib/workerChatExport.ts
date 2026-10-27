@@ -3,8 +3,8 @@ import { db } from "./db";
 import { readStoredFile } from "./files";
 
 /**
- * Exporta en PDF la conversación de RRHH con un trabajador (para guardarla o entregarla): todos los mensajes con
- * fecha, hora y quién lo escribió, y las fotos dentro del documento.
+ * Exporta en PDF la conversación de RRHH con un trabajador o un grupo con el personal (para guardarla o entregarla):
+ * todos los mensajes con fecha, hora y quién lo escribió, y las fotos dentro del documento.
  */
 
 const TZ = "Europe/Madrid";
@@ -37,15 +37,44 @@ function wrap(text: string, font: PDFFont, size: number, width: number) {
   return lines;
 }
 
+type PdfMessage = { createdAt: Date; who: string; staff: boolean; body: string; fileId: string | null };
+
 export async function workerChatPdf(workerId: string, exportedBy: string) {
   const worker = await db.worker.findUniqueOrThrow({ where: { id: workerId }, select: { name: true, dni: true, a3Code: true } });
   const messages = await db.workerMessage.findMany({ where: { workerId }, orderBy: { createdAt: "asc" } });
+  const ids = [worker.dni && `DNI/NIE ${worker.dni}`, worker.a3Code && `Código A3 ${worker.a3Code}`].filter(Boolean).join(" · ");
+  const bytes = await chatPdf(
+    `Conversación de RRHH con ${worker.name}`,
+    ids ? [ids] : [],
+    exportedBy,
+    messages.map((m) => ({ createdAt: m.createdAt, who: m.fromWorker ? m.authorName : `${m.authorName} (RRHH)`, staff: !m.fromWorker, body: m.body, fileId: m.fileId })),
+  );
+  return { bytes, name: worker.name };
+}
+
+/** PDF de un grupo con el personal: miembros y todos los mensajes. */
+export async function groupChatPdf(groupId: string, exportedBy: string) {
+  const g = await db.workerGroup.findUniqueOrThrow({
+    where: { id: groupId },
+    include: { members: { include: { worker: { select: { name: true } } }, orderBy: { worker: { name: "asc" } } } },
+  });
+  const messages = await db.groupMessage.findMany({ where: { groupId }, orderBy: { createdAt: "asc" } });
+  const bytes = await chatPdf(
+    `Grupo «${g.name}»`,
+    [`${g.members.length} personas: ${g.members.map((m) => m.worker.name).join(", ")}`],
+    exportedBy,
+    messages.map((m) => ({ createdAt: m.createdAt, who: m.workerId ? m.authorName : `${m.authorName} (RRHH)`, staff: !m.workerId, body: m.body, fileId: m.fileId })),
+  );
+  return { bytes, name: g.name };
+}
+
+async function chatPdf(title: string, info: string[], exportedBy: string, messages: PdfMessage[]) {
   const files = new Map(
     (await db.storedFile.findMany({ where: { id: { in: messages.flatMap((m) => (m.fileId ? [m.fileId] : [])) } }, select: { id: true, mime: true, data: true, storageKey: true } })).map((f) => [f.id, f]),
   );
 
   const pdf = await PDFDocument.create();
-  pdf.setTitle(`Conversación RRHH - ${worker.name}`);
+  pdf.setTitle(safe(title));
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const [W, H, M] = [595.28, 841.89, 50];
@@ -64,9 +93,8 @@ export async function workerChatPdf(workerId: string, exportedBy: string) {
     y -= size + 4;
   };
 
-  text(safe(`Conversación de RRHH con ${worker.name}`), bold, 15);
-  const ids = [worker.dni && `DNI/NIE ${worker.dni}`, worker.a3Code && `Código A3 ${worker.a3Code}`].filter(Boolean).join(" · ");
-  if (ids) text(ids, font, 10, M, rgb(0.35, 0.35, 0.35));
+  text(safe(title), bold, 15);
+  for (const line of info.flatMap((i) => wrap(i, font, 10, width))) text(line, font, 10, M, rgb(0.35, 0.35, 0.35));
   const span = messages.length ? ` · del ${when(messages[0].createdAt)} al ${when(messages[messages.length - 1].createdAt)}` : "";
   text(safe(`${messages.length} mensajes${span}`), font, 10, M, rgb(0.35, 0.35, 0.35));
   text(safe(`Exportado el ${when(new Date())} por ${exportedBy}`), font, 10, M, rgb(0.35, 0.35, 0.35));
@@ -76,9 +104,8 @@ export async function workerChatPdf(workerId: string, exportedBy: string) {
 
   if (!messages.length) text("No hay mensajes.", font, 11);
   for (const m of messages) {
-    const who = m.fromWorker ? m.authorName : `${m.authorName} (RRHH)`;
     ensure(30);
-    text(safe(`${when(m.createdAt)} · ${who}`), bold, 9, M, m.fromWorker ? rgb(0.1, 0.35, 0.6) : rgb(0.05, 0.45, 0.3));
+    text(safe(`${when(m.createdAt)} · ${m.who}`), bold, 9, M, m.staff ? rgb(0.05, 0.45, 0.3) : rgb(0.1, 0.35, 0.6));
     for (const line of wrap(m.body, font, 11, width - 10)) text(line, font, 11, M + 10);
     if (m.fileId) {
       const f = files.get(m.fileId);
@@ -104,5 +131,5 @@ export async function workerChatPdf(workerId: string, exportedBy: string) {
   pages.forEach((p, i) =>
     p.drawText(`Página ${i + 1} de ${pages.length}`, { x: W - M - 70, y: 25, size: 8, font, color: rgb(0.5, 0.5, 0.5) }),
   );
-  return { bytes: await pdf.save(), name: worker.name };
+  return pdf.save();
 }

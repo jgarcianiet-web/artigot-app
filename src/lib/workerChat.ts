@@ -1,6 +1,7 @@
 import { after } from "next/server";
 import { bus, workerInbox } from "./bus";
 import { unreadCounts, workerChatEvents } from "./chat";
+import { workerGroups } from "./workerGroups";
 import { db } from "./db";
 import { deleteStoredFile } from "./files";
 import { notify } from "./push";
@@ -39,7 +40,7 @@ export async function dmReads(workerId: string) {
 const preview = (body: string, fileId?: string) => (body ? (body.length > 140 ? `${body.slice(0, 137)}…` : body) : fileId ? "📷 Foto" : "");
 
 /** Avisa a la lista de conversaciones de cada usuario de RRHH. */
-async function pingAdmins() {
+export async function pingAdmins() {
   const admins = await db.adminUser.findMany({ where: { active: true }, select: { id: true } });
   for (const a of admins) bus.emit(staffInbox(a.id), "dm");
 }
@@ -137,12 +138,13 @@ export async function deleteDm(workerId: string) {
   return count;
 }
 
-/** Número de la pestaña «Chats» del trabajador: cuántos chats (RRHH y eventos) tienen mensajes sin leer. */
+/** Número de la pestaña «Chats» del trabajador: cuántos chats (RRHH, grupos y eventos) tienen mensajes sin leer. */
 export async function unreadChats(me: { id: string; name: string; role: string }) {
   const events = await workerChatEvents(me.id);
   const [dm, counts] = await Promise.all([
     workerUnread(me.id),
     unreadCounts({ kind: "worker", id: me.id, name: me.name, role: me.role }, events.map((e) => e.id)),
   ]);
-  return (dm > 0 ? 1 : 0) + [...counts.values()].filter((n) => n > 0).length;
+  const groups = await workerGroups(me.id);
+  return (dm > 0 ? 1 : 0) + [...counts.values()].filter((n) => n > 0).length + groups.filter((g) => g.unread > 0).length;
 }
