@@ -9,6 +9,7 @@ import { revalidatePath } from "next/cache";
 import { testPush } from "@/lib/push";
 import { mergeWorkers } from "@/lib/mergeWorkers";
 import { saveConvocationSettings } from "@/lib/convocation";
+import { autoConvoke } from "@/lib/automationJobs";
 import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -459,9 +460,15 @@ async function writeEvent(form: FormData, by: string, note = "") {
   if (!parsed.success) return { error: parsed.error.issues[0].message } as const;
   const id = form.get("id") ? String(form.get("id")) : null;
   const before = id ? await db.event.findUniqueOrThrow({ where: { id } }) : null;
-  const data = { ...parsed.data, ...(await linkVenueAndClient(form, parsed.data)) };
+  // Invitados y convocatoria automática (X días antes; sin marcar = a mano)
+  const int = (k: string, min: number, max: number) => {
+    const n = Math.round(Number(form.get(k)));
+    return String(form.get(k) ?? "").trim() !== "" && Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : null;
+  };
+  const auto = { guests: int("guests", 1, 5000), autoConvokeDays: form.get("autoConvoke") === "1" ? (int("autoConvokeDays", 0, 60) ?? 7) : null };
+  const data = { ...parsed.data, ...auto, ...(await linkVenueAndClient(form, parsed.data)) };
   const event = id ? await db.event.update({ where: { id }, data }) : await db.event.create({ data });
-  const ed = diff(before, event, { name: "Nombre", date: "Fecha", startTime: "Inicio", endTime: "Fin", unloadTime: "Descarga", venue: "Lugar", client: "Cliente", salesRep: "Comercial", budget: "Presupuesto", budgetNote: "Comentario presupuesto", needCamareros: "Camareros", needMaitres: "Maîtres", needResponsables: "Responsables", needMozos: "Mozos" });
+  const ed = diff(before, event, { name: "Nombre", date: "Fecha", startTime: "Inicio", endTime: "Fin", unloadTime: "Descarga", venue: "Lugar", client: "Cliente", salesRep: "Comercial", budget: "Presupuesto", budgetNote: "Comentario presupuesto", needCamareros: "Camareros", needMaitres: "Maîtres", needResponsables: "Responsables", needMozos: "Mozos", guests: "Invitados", autoConvokeDays: "Convocatoria automática (días antes)" });
   if (!before) await auditAdmin(by, "Evento", "Alta", `Nuevo evento: ${event.name} (${formatDate(event.date)})${note}`, { entityId: event.id });
   else if (ed.changed) await auditAdmin(by, "Evento", "Cambios", `${event.name}: ${ed.text}`, { entityId: event.id, data: ed.data });
   return { event, before } as const;
@@ -474,6 +481,9 @@ export async function saveEvent(_prev: string | null, form: FormData) {
   const { event, before } = r;
   // Evento nuevo desde una plantilla con grupos: se crean sus grupos
   if (!before && form.get("plantilla")) await groupsFromTemplate(event.id, String(form.get("plantilla")));
+
+  // Convocatoria automática: si ya le toca, se convoca ahora (y al editar, se cubre lo que falte)
+  if (event.autoConvokeDays != null) after(() => autoConvoke(event.id).then(() => undefined).catch((e) => console.error("convocatoria automática", e)));
 
   if (before) {
     const changes = [
@@ -1134,6 +1144,7 @@ export async function confirmDraft(draftId: string, _prev: string | null): Promi
   if (invited.length) await db.assignment.createMany({ data: invited.map((x) => ({ eventId: event.id, workerId: x.workerId, role: x.role })), skipDuplicates: true });
   await db.eventDraft.delete({ where: { id: draftId } });
   notifyInvited(event, invited);
+  if (event.autoConvokeDays != null) after(() => autoConvoke(event.id).then(() => undefined).catch((e) => console.error("convocatoria automática", e)));
   revalidatePath("/admin", "layout");
   redirect(`/admin/eventos/${event.id}`);
 }

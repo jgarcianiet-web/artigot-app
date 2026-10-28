@@ -43,6 +43,16 @@ export function validIban(value: string) {
   return rem === 1;
 }
 
+/** Nº de la Seguridad Social (12 cifras: provincia, número y control), comprobando los dígitos de control. */
+export function validNss(value: string) {
+  const v = value.replace(/[\s/-]/g, "");
+  if (!/^\d{12}$/.test(v)) return false;
+  const province = Number(v.slice(0, 2));
+  const num = Number(v.slice(2, 10));
+  const base = num < 10_000_000 ? num + province * 10_000_000 : Number(v.slice(0, 10));
+  return base % 97 === Number(v.slice(10));
+}
+
 export const formatIban = (v: string) => v.toUpperCase().replace(/\s/g, "").replace(/(.{4})/g, "$1 ").trim();
 
 // ---------- Uniforme y material ----------

@@ -142,6 +142,11 @@ model Event {
   status           String        @default("ABIERTO")
   // Si alguien rechaza o se retira, convocar automáticamente al siguiente mejor puntuado
   autoReplace      Boolean       @default(true)
+  // Número de invitados (para calcular el personal necesario con las proporciones de Ajustes → Automatizaciones)
+  guests           Int?
+  // Convocatoria automática: cuántos días antes del evento se convoca sola (null = a mano) y cuándo se hizo
+  autoConvokeDays  Int?
+  autoConvokedAt   DateTime?
   createdAt        DateTime      @default(now())
   assignments      Assignment[]
   swaps            SwapRequest[]
@@ -517,6 +522,13 @@ model Candidate {
   // Entrevista: cuándo (estado ENTREVISTA) y valoración de RRHH (1-5), que pasa a su ficha al darle de alta
   interviewAt  DateTime?
   rating       Int?
+  // Datos para el alta en A3 (pasan a la ficha al darle de alta). NSS e IBAN son opcionales al apuntarse
+  dni          String?
+  birthDate    String?
+  sex          String?
+  nationality  String?
+  nss          String?
+  iban         String?
   file         StoredFile? @relation(fields: [fileId], references: [id], onDelete: SetNull)
   worker       Worker?     @relation(fields: [workerId], references: [id], onDelete: SetNull)
 

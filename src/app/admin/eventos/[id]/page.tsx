@@ -23,10 +23,12 @@ import { CoverageBar, NewBadge, ScoreBadge, StatusBadge } from "@/components/ui"
 import { newcomers, newcomerText } from "@/lib/newcomers";
 import { ADULT_AGE, ageOn } from "@/lib/minors";
 import { requireAdmin } from "@/lib/auth";
+import { getAutomation } from "@/lib/automation";
 import { unreadCounts } from "@/lib/chat";
 import { CLOCK_RADIUS_M, clockWindow, hhmm } from "@/lib/clockRules";
 import { db } from "@/lib/db";
 import {
+  addDays,
   callTime,
   euro,
   EVENT_TYPE_LABEL,
@@ -296,6 +298,14 @@ export default async function EventDetail({ params, searchParams }: { params: Pr
             </div>
           ))}
         </div>
+        {event.autoConvokeDays != null && event.status === "ABIERTO" && (
+          <p className="rounded-lg bg-sky-50 p-2 text-sm text-sky-900">
+            🤖{" "}
+            {event.autoConvokedAt
+              ? `Convocatoria automática hecha el ${formatDate(new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid" }).format(event.autoConvokedAt))} a las ${hhmm(event.autoConvokedAt)}. Si subes el personal necesario, se convoca solo lo que falte.`
+              : `Convocatoria automática el ${formatDate(addDays(event.date, -event.autoConvokeDays))} a partir de las ${(await getAutomation()).convoke.hour}: se convocará solo a los mejor puntuados libres hasta cubrir el personal necesario.`}
+          </p>
+        )}
         <p className="text-xs text-stone-500">
           «Selección automática» convoca a quienes tienen mejor puntuación entre los libres ese día. La puntuación (0-100) sale de las valoraciones de maîtres y camareros responsables, resta por ausencias, retiradas y retrasos, y reparte el trabajo entre quienes están igualados. Cada convocado recibe un aviso en el móvil para aceptar o rechazar; al aceptar entra en el chat del evento.{" "}
           {event.autoReplace

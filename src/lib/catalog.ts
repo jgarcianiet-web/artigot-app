@@ -1,3 +1,4 @@
+import { getAutomation } from "./automation";
 import { db } from "./db";
 
 /** Fincas y clientes guardados para los desplegables del formulario de evento. */
@@ -7,5 +8,6 @@ export async function eventFormOptions() {
     db.client.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
     db.event.findMany({ where: { salesRep: { not: null } }, distinct: ["salesRep"], select: { salesRep: true }, orderBy: { salesRep: "asc" } }),
   ]);
-  return { venues, clients, salesReps: reps.map((r) => r.salesRep!) };
+  const { ratios, convoke } = await getAutomation();
+  return { venues, clients, salesReps: reps.map((r) => r.salesRep!), automation: { ratios, convoke } };
 }

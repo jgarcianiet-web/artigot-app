@@ -40,15 +40,17 @@ async function transporter() {
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-export async function sendMail(to: string, subject: string, text: string) {
+export type MailAttachment = { filename: string; content: Buffer };
+
+export async function sendMail(to: string, subject: string, text: string, attachments: MailAttachment[] = []) {
   if (!mailEnabled()) throw new Error("El envío de emails no está configurado (SMTP_HOST).");
   const html = `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;color:#1c1917">${esc(text)
     .split("\n")
     .map((l) => (l ? `<p style="margin:0 0 8px">${l.replace(/(https?:\/\/\S+)/g, '<a href="$1">$1</a>')}</p>` : ""))
     .join("")}</div>`;
   const from = process.env.MAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || "";
-  if (process.env.BREVO_API_KEY) return sendBrevo(from, to, subject, text, html);
-  await (await transporter()).sendMail({ from, to, subject, text, html });
+  if (process.env.BREVO_API_KEY) return sendBrevo(from, to, subject, text, html, attachments);
+  await (await transporter()).sendMail({ from, to, subject, text, html, attachments });
 }
 
 /** «Artigot RRHH <rrhh@artigot.com>» → { name, email } */
@@ -57,13 +59,16 @@ function parseFrom(from: string) {
   return m ? { name: m[1].trim() || undefined, email: m[2].trim() } : { email: from.trim() };
 }
 
-async function sendBrevo(from: string, to: string, subject: string, text: string, html: string) {
+async function sendBrevo(from: string, to: string, subject: string, text: string, html: string, attachments: MailAttachment[]) {
   const sender = parseFrom(from);
   if (!sender.email) throw new Error("Falta el remitente: pon MAIL_FROM (p. ej. «Artigot RRHH <rrhh@artigot.com>») en Railway.");
   const res = await fetch(process.env.BREVO_API_URL || "https://api.brevo.com/v3/smtp/email", {
     method: "POST",
     headers: { "api-key": process.env.BREVO_API_KEY!, "content-type": "application/json", accept: "application/json" },
-    body: JSON.stringify({ sender, to: [{ email: to }], subject, textContent: text, htmlContent: html }),
+    body: JSON.stringify({
+      sender, to: [{ email: to }], subject, textContent: text, htmlContent: html,
+      ...(attachments.length && { attachment: attachments.map((a) => ({ name: a.filename, content: a.content.toString("base64") })) }),
+    }),
     signal: AbortSignal.timeout(20_000),
   });
   if (!res.ok) throw new Error(`Brevo respondió ${res.status}: ${(await res.text()).slice(0, 300)}`);

@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
+import { templateLists } from "@/lib/a3alta";
 import { ApplyForm } from "./ApplyForm";
 import { Logo } from "@/components/Logo";
 
 export const metadata: Metadata = { title: "Trabaja con nosotros · Artigot" };
 
-export default function Apply() {
+export default async function Apply() {
   return (
     <main className="mx-auto max-w-lg space-y-4 p-4 py-8">
       <div>
@@ -14,7 +15,7 @@ export default function Apply() {
           Buscamos camareros y mozos para bodas y eventos. Déjanos tus datos y te llamaremos cuando haya servicios en tu zona.
         </p>
       </div>
-      <ApplyForm />
+      <ApplyForm countries={(await templateLists()).countries} />
     </main>
   );
 }

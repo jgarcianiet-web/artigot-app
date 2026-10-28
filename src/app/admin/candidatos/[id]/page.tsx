@@ -8,7 +8,8 @@ import { CANDIDATE_STATUS, candidateMessages, OPEN_STATUSES } from "@/lib/candid
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { db } from "@/lib/db";
 import { mailEnabled } from "@/lib/mail";
-import { ROLE_LABEL, ROLES } from "@/lib/domain";
+import { formatDate, ROLE_LABEL, ROLES } from "@/lib/domain";
+import { ageOn } from "@/lib/minors";
 
 /** Valor para <input type="datetime-local"> en hora de Madrid. */
 const localInput = (d: Date) => new Date(d.toLocaleString("sv-SE", { timeZone: "Europe/Madrid" }).replace(" ", "T") + "Z").toISOString().slice(0, 16);
@@ -55,6 +56,14 @@ export default async function CandidateDetail({ params }: { params: Promise<{ id
         <p><strong>Experiencia:</strong> {c.experience ?? "—"}</p>
         <p><strong>Disponibilidad:</strong> {c.availability ?? "—"}</p>
         <p><strong>Coche:</strong> {c.hasCar == null ? "—" : c.hasCar ? "🚗 Sí tiene coche" : "No tiene coche"}</p>
+        {c.dni && (
+          <p>
+            <strong>Datos para el alta:</strong> {c.dni}
+            {c.birthDate && ` · nacido/a el ${formatDate(c.birthDate)} (${ageOn(c.birthDate)} años)`}
+            {c.sex && ` · ${c.sex}`}
+            {c.nationality && ` · ${c.nationality}`} · NSS {c.nss ?? "pendiente"} · IBAN {c.iban ? `…${c.iban.slice(-4)}` : "pendiente"}
+          </p>
+        )}
         {c.fileId && <a href={`/api/files/${c.fileId}`} target="_blank" className="btn btn-sm">📎 Ver CV / foto</a>}
         <p className="text-xs text-stone-500">Solicitud del {when.format(c.createdAt)} · consentimiento de datos aceptado el {when.format(c.consentAt)}</p>
       </section>

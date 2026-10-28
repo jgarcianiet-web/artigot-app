@@ -1,4 +1,5 @@
-import { Prisma } from "@prisma/client";
+import { claim } from "./reminderLog";
+import { runAutomations } from "./automationJobs";
 import { clockWindow, hhmm, madridTime } from "./clockRules";
 import { db } from "./db";
 import { mailEnabled, sendMail } from "./mail";
@@ -40,17 +41,6 @@ export const REMINDERS = {
 };
 
 const madridDate = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid" }).format(d);
-
-/** Reserva la clave del aviso; devuelve false si ya se había enviado. */
-async function claim(key: string) {
-  try {
-    await db.reminderLog.create({ data: { key } });
-    return true;
-  } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return false;
-    throw e;
-  }
-}
 
 export async function runReminders(now = new Date()) {
   const today = madridDate(now);
@@ -245,6 +235,9 @@ export async function runReminders(now = new Date()) {
 
   // 10. Altas y bajas automáticas según el personal confirmado
   await syncAutoEmployments().catch((e) => console.error("altas automáticas", e));
+
+  // 11. Automatizaciones: convocatoria automática, disponibilidad semanal y email diario de A3
+  sent.push(...(await runAutomations(now)));
 
   // 8. Datos incompletos: recordatorio al trabajador cada 3 días (cada día si tiene servicio en la próxima semana)
   if (now >= madridTime(today, REMINDERS.DATA_REMINDER_HOUR)) {
