@@ -2,7 +2,7 @@ import { addDays, callTime, type GroupTime } from "./domain";
 
 /**
  * Reglas del fichaje:
- *  - Distancia máxima al lugar del evento: CLOCK_RADIUS_M (200 m por defecto).
+ *  - Distancia máxima al lugar del evento: la del evento o CLOCK_RADIUS_M (200 m por defecto).
  *  - Horario normal: desde CLOCK_MARGIN_MIN antes de la hora de citación del puesto hasta CLOCK_MARGIN_MIN
  *    después de la hora de fin del evento. Fuera de ese horario se puede fichar, pero hay que escribir el motivo
  *    (entrada antes de tiempo o salida tarde), que ve RRHH.
@@ -10,6 +10,8 @@ import { addDays, callTime, type GroupTime } from "./domain";
  * Todo se valida en el servidor con su propia hora; el móvil solo aporta la posición.
  */
 export const CLOCK_RADIUS_M = Number(process.env.CLOCK_RADIUS_M ?? 200);
+/** Radio de fichaje de un evento: el suyo (recintos grandes) o el general. */
+export const radiusOf = (event: { clockRadius?: number | null }) => event.clockRadius ?? CLOCK_RADIUS_M;
 export const CLOCK_MARGIN_MIN = 30;
 export const CLOCK_LIMIT_H = 12;
 /** Si el GPS da una precisión peor que esto, no se puede asegurar la distancia. */
@@ -115,7 +117,7 @@ export type ClockCheck =
 
 /** Comprueba todas las reglas para fichar en este momento desde esta posición. */
 export function checkClock(opts: {
-  event: EventTimes & { lat: number | null; lng: number | null };
+  event: EventTimes & { lat: number | null; lng: number | null; clockRadius?: number | null };
   role: string;
   kind: "in" | "out";
   group?: GroupTime;
@@ -144,9 +146,10 @@ export function checkClock(opts: {
     };
   }
   const distance = distanceMeters(position, { lat: event.lat, lng: event.lng });
-  if (distance > CLOCK_RADIUS_M) {
+  const radius = radiusOf(event);
+  if (distance > radius) {
     const km = distance >= 1000 ? `${(distance / 1000).toFixed(1).replace(".", ",")} km` : `${distance} m`;
-    return { ok: false, reason: `Estás a ${km} del evento. Tienes que estar a menos de ${CLOCK_RADIUS_M} m para fichar.` };
+    return { ok: false, reason: `Estás a ${km} del evento. Tienes que estar a menos de ${radius} m para fichar.` };
   }
   const unusual = unusualClock(opts.kind, now, w);
   return { ok: true, distance, unusual, question: unusual ? reasonQuestion(opts.kind, unusual, w) : null };

@@ -418,11 +418,13 @@ const eventSchema = z.object({
   budgetNote: optText,
   notes: optText,
   checklist: optText,
-  needCamareros: z.coerce.number().int().min(0).max(500),
-  needMaitres: z.coerce.number().int().min(0).max(100),
-  needResponsables: z.coerce.number().int().min(0).max(20),
+  // Hasta eventos de miles de invitados (p. ej. 20.000 en un recinto ferial)
+  needCamareros: z.coerce.number().int().min(0).max(2000),
+  needMaitres: z.coerce.number().int().min(0).max(300),
+  needResponsables: z.coerce.number().int().min(0).max(300),
   autoReplace: z.string().optional().transform((v) => v === "1"),
-  needMozos: z.coerce.number().int().min(0).max(200),
+  needMozos: z.coerce.number().int().min(0).max(1000),
+  groupChats: z.string().optional().transform((v) => v === "1"),
 });
 
 /**
@@ -465,10 +467,15 @@ async function writeEvent(form: FormData, by: string, note = "") {
     const n = Math.round(Number(form.get(k)));
     return String(form.get(k) ?? "").trim() !== "" && Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : null;
   };
-  const auto = { guests: int("guests", 1, 5000), autoConvokeDays: form.get("autoConvoke") === "1" ? (int("autoConvokeDays", 0, 60) ?? 7) : null };
+  const auto = {
+    guests: int("guests", 1, 20000),
+    autoConvokeDays: form.get("autoConvoke") === "1" ? (int("autoConvokeDays", 0, 60) ?? 7) : null,
+    // Vacío = el radio general
+    clockRadius: int("clockRadius", 50, 3000),
+  };
   const data = { ...parsed.data, ...auto, ...(await linkVenueAndClient(form, parsed.data)) };
   const event = id ? await db.event.update({ where: { id }, data }) : await db.event.create({ data });
-  const ed = diff(before, event, { name: "Nombre", date: "Fecha", startTime: "Inicio", endTime: "Fin", unloadTime: "Descarga", venue: "Lugar", client: "Cliente", salesRep: "Comercial", budget: "Presupuesto", budgetNote: "Comentario presupuesto", needCamareros: "Camareros", needMaitres: "Maîtres", needResponsables: "Responsables", needMozos: "Mozos", guests: "Invitados", autoConvokeDays: "Convocatoria automática (días antes)" });
+  const ed = diff(before, event, { name: "Nombre", date: "Fecha", startTime: "Inicio", endTime: "Fin", unloadTime: "Descarga", venue: "Lugar", client: "Cliente", salesRep: "Comercial", budget: "Presupuesto", budgetNote: "Comentario presupuesto", needCamareros: "Camareros", needMaitres: "Maîtres", needResponsables: "Responsables", needMozos: "Mozos", guests: "Invitados", autoConvokeDays: "Convocatoria automática (días antes)", clockRadius: "Radio de fichaje (m)", groupChats: "Chat por grupos" });
   if (!before) await auditAdmin(by, "Evento", "Alta", `Nuevo evento: ${event.name} (${formatDate(event.date)})${note}`, { entityId: event.id });
   else if (ed.changed) await auditAdmin(by, "Evento", "Cambios", `${event.name}: ${ed.text}`, { entityId: event.id, data: ed.data });
   return { event, before } as const;

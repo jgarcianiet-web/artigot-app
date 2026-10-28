@@ -1,27 +1,35 @@
 import { NextResponse } from "next/server";
 import { currentViewer } from "@/lib/auth";
-import { type Attachment, canAccessChat, postMessage, recentMessages } from "@/lib/chat";
+import { type Attachment, chatAccess, postMessage, recentMessages } from "@/lib/chat";
 import { storeImage } from "@/lib/files";
 
 export const dynamic = "force-dynamic";
 
-async function authorize(eventId: string) {
+/** ?grupo=… = el chat de ese grupo (eventos con «chat por grupos»); sin él, el chat general. */
+const groupOf = (req: Request) => new URL(req.url).searchParams.get("grupo") || null;
+
+async function authorize(eventId: string, groupId: string | null) {
   const viewer = await currentViewer();
-  return viewer && (await canAccessChat(viewer, eventId)) ? viewer : null;
+  if (!viewer) return null;
+  return { viewer, ...(await chatAccess(viewer, eventId, groupId)) };
 }
 
 /** Mensajes recientes (se usa al reconectar para recuperar lo que se haya perdido). */
-export async function GET(_req: Request, { params }: { params: Promise<{ eventId: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = await params;
-  if (!(await authorize(eventId))) return new NextResponse("No autorizado", { status: 403 });
-  return NextResponse.json(await recentMessages(eventId));
+  const groupId = groupOf(req);
+  if (!(await authorize(eventId, groupId))?.read) return new NextResponse("No autorizado", { status: 403 });
+  return NextResponse.json(await recentMessages(eventId, 200, groupId));
 }
 
 /** Mensaje de texto (JSON) o con adjunto (multipart: foto y/o ubicación). */
 export async function POST(req: Request, { params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = await params;
-  const viewer = await authorize(eventId);
-  if (!viewer) return new NextResponse("No autorizado", { status: 403 });
+  const groupId = groupOf(req);
+  const access = await authorize(eventId, groupId);
+  if (!access?.read) return new NextResponse("No autorizado", { status: 403 });
+  if (!access.write) return new NextResponse("En este evento el chat general es solo de avisos: escribe en el chat de tu grupo.", { status: 403 });
+  const { viewer } = access;
 
   let body = "";
   const attachment: Attachment = {};
@@ -45,7 +53,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ eventId
     const json = (await req.json().catch(() => ({}))) as { body?: unknown };
     body = typeof json.body === "string" ? json.body : "";
   }
-  const message = await postMessage(viewer, eventId, body, attachment);
+  const message = await postMessage(viewer, eventId, body, attachment, groupId);
   if (!message) return new NextResponse("Mensaje vacío", { status: 400 });
   return NextResponse.json(message);
 }

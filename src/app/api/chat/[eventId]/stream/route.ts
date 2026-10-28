@@ -7,8 +7,9 @@ export const dynamic = "force-dynamic";
 /** Server-Sent Events: envía cada mensaje nuevo del chat en cuanto se publica. */
 export async function GET(req: Request, { params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = await params;
+  const groupId = new URL(req.url).searchParams.get("grupo") || null;
   const viewer = await currentViewer();
-  if (!viewer || !(await canAccessChat(viewer, eventId))) return new Response("No autorizado", { status: 403 });
+  if (!viewer || !(await canAccessChat(viewer, eventId, groupId))) return new Response("No autorizado", { status: 403 });
 
   const encoder = new TextEncoder();
   let cleanup = () => {};
@@ -23,10 +24,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ eventId:
       };
       const onMessage = (m: ChatMessage) => write(`event: message\ndata: ${JSON.stringify(m)}\n\n`);
       const ping = setInterval(() => write(`: ping\n\n`), 25_000);
-      bus.on(chatChannel(eventId), onMessage);
+      bus.on(chatChannel(eventId, groupId), onMessage);
       cleanup = () => {
         clearInterval(ping);
-        bus.off(chatChannel(eventId), onMessage);
+        bus.off(chatChannel(eventId, groupId), onMessage);
       };
       req.signal.addEventListener("abort", () => {
         cleanup();
