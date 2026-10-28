@@ -4,7 +4,7 @@ import { Chat } from "@/components/Chat";
 import { EventInfo } from "@/components/EventInfo";
 import { StatusBadge } from "@/components/ui";
 import { requireWorker } from "@/lib/auth";
-import { recentMessages } from "@/lib/chat";
+import { recentMessages, visibleRooms } from "@/lib/chat";
 import { db } from "@/lib/db";
 import { callTime, formatDate, isLeadRole, today } from "@/lib/domain";
 import { reviewWindowOpen } from "@/lib/reviews";
@@ -17,8 +17,9 @@ import { canWithdrawFreely } from "@/lib/withdrawals";
 import { acceptBlock, sameDayBookings } from "@/lib/convocation";
 import { Transport } from "./Transport";
 
-export default async function WorkerEvent({ params }: { params: Promise<{ id: string }> }) {
+export default async function WorkerEvent({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ chat?: string }> }) {
   const { id } = await params;
+  const { chat } = await searchParams;
   const me = await requireWorker();
   const a = await db.assignment.findUnique({
     where: { eventId_workerId: { eventId: id, workerId: me.id } },
@@ -94,7 +95,36 @@ export default async function WorkerEvent({ params }: { params: Promise<{ id: st
         <Link href={`/app/eventos/${a.eventId}/valorar`} className="btn btn-primary w-full">⭐ Valorar a mi equipo</Link>
       )}
 
-      {confirmed ? (
+      {confirmed && a.event.groupChats ? (
+        // Evento grande: el chat de su grupo y el general de avisos (solo escriben RRHH y los maîtres)
+        await (async () => {
+          const rooms = await visibleRooms({ kind: "worker", id: me.id, name: me.name, role: me.role }, a.eventId);
+          const room = rooms.find((r) => r.id === chat) ?? (chat === "avisos" ? undefined : rooms[0]);
+          const tab = (key: string, label: string, on: boolean) => (
+            <Link key={key} href={`/app/eventos/${a.eventId}?chat=${key}`} scroll={false} className={`shrink-0 rounded-full px-3 py-1.5 text-sm ${on ? "bg-stone-900 text-white" : "bg-stone-100 text-stone-700"}`}>
+              {label}
+            </Link>
+          );
+          return (
+            <div className="space-y-2">
+              <div className="flex gap-2 overflow-x-auto">
+                {rooms.map((r) => tab(r.id, `👥 ${rooms.length === 1 ? "Mi grupo · " : ""}${r.name}`, room?.id === r.id))}
+                {tab("avisos", "📣 Avisos del evento", !room)}
+              </div>
+              <Chat
+                key={room?.id ?? "avisos"}
+                eventId={a.eventId}
+                groupId={room?.id}
+                initial={await recentMessages(a.eventId, 200, room?.id ?? null)}
+                me={{ workerId: me.id }}
+                className="h-[calc(100dvh-18rem)] min-h-80"
+                emptyText={room ? `Chat del grupo ${room.name}: tu equipo y tu maître.` : "Aquí RRHH y los maîtres publican los avisos para todo el evento."}
+                readOnlyText={!room && !isLeadRole(a.role) ? "Chat de avisos: solo escriben RRHH y los maîtres. Para hablar con tu equipo, usa el chat de tu grupo." : undefined}
+              />
+            </div>
+          );
+        })()
+      ) : confirmed ? (
         <Chat
           eventId={a.eventId}
           initial={await recentMessages(a.eventId)}

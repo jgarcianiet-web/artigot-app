@@ -5,7 +5,7 @@ import { openPollsFor } from "@/lib/polls";
 import { EventInfo } from "@/components/EventInfo";
 import { requireWorker } from "@/lib/auth";
 import { unreadCounts } from "@/lib/chat";
-import { CLOCK_RADIUS_M, clockWindow, hhmm } from "@/lib/clockRules";
+import { clockWindow, hhmm, radiusOf } from "@/lib/clockRules";
 import { db } from "@/lib/db";
 import { pendingReviews } from "@/lib/reviews";
 import { addDays, callTime, clocksIn, isLeadRole, formatDate, num, ROLE_LABEL, today, workedHours, type Role } from "@/lib/domain";
@@ -131,11 +131,11 @@ export default async function WorkerHome() {
             checkOut={a.checkOut}
             windowText={(() => {
               const w = clockWindow(a.event, a.role, a.group);
-              return `Ficha a menos de ${CLOCK_RADIUS_M} m del evento. Horario normal: de ${hhmm(w.opensAt)} a ${hhmm(w.closesAt)}; si fichas fuera de ese horario, te pediremos el motivo.`;
+              return `Ficha a menos de ${radiusOf(a.event)} m del evento. Horario normal: de ${hhmm(w.opensAt)} a ${hhmm(w.closesAt)}; si fichas fuera de ese horario, te pediremos el motivo.`;
             })()}
             rules={(() => {
               const w = clockWindow(a.event, a.role, a.group);
-              return { opensAt: w.opensAt.toISOString(), closesAt: w.closesAt.toISOString(), firstAt: w.firstAt.toISOString(), lastAt: w.lastAt.toISOString(), lat: a.event.lat, lng: a.event.lng, radius: CLOCK_RADIUS_M };
+              return { opensAt: w.opensAt.toISOString(), closesAt: w.closesAt.toISOString(), firstAt: w.firstAt.toISOString(), lastAt: w.lastAt.toISOString(), lat: a.event.lat, lng: a.event.lng, radius: radiusOf(a.event) };
             })()}
           />
           <ChatLink eventId={a.eventId} />

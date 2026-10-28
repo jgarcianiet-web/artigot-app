@@ -25,7 +25,7 @@ import { ADULT_AGE, ageOn } from "@/lib/minors";
 import { requireAdmin } from "@/lib/auth";
 import { getAutomation } from "@/lib/automation";
 import { unreadCounts } from "@/lib/chat";
-import { CLOCK_RADIUS_M, clockWindow, hhmm } from "@/lib/clockRules";
+import { clockWindow, hhmm, radiusOf } from "@/lib/clockRules";
 import { db } from "@/lib/db";
 import {
   addDays,
@@ -567,7 +567,7 @@ export default async function EventDetail({ params, searchParams }: { params: Pr
             <SubmitButton>Guardar horas</SubmitButton>
           </div>
           <p className="text-xs text-stone-500">
-            El personal ficha desde la app con su ubicación (a menos de {CLOCK_RADIUS_M} m). Horario normal de {hhmm(clockWindow(event, "CAMARERO").opensAt)} a{" "}
+            El personal ficha desde la app con su ubicación (a menos de {radiusOf(event)} m). Horario normal de {hhmm(clockWindow(event, "CAMARERO").opensAt)} a{" "}
             {hhmm(clockWindow(event, "CAMARERO").closesAt)} (los mozos desde {hhmm(clockWindow(event, "MOZO").opensAt)}); fuera de ese horario puede fichar, pero tiene que
             escribir el motivo (⏰) y RRHH recibe un aviso. 📍 = distancia
             al evento al fichar. ✎ = hora corregida por RRHH. «Sin cobertura» = fichado sin señal con la hora del momento y enviado después. Las horas manuales tienen prioridad.

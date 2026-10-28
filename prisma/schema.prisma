@@ -147,6 +147,10 @@ model Event {
   // Convocatoria automática: cuántos días antes del evento se convoca sola (null = a mano) y cuándo se hizo
   autoConvokeDays  Int?
   autoConvokedAt   DateTime?
+  // Radio de fichaje en metros (null = el general, 200 m): más grande en recintos como IFEMA
+  clockRadius      Int?
+  // Eventos grandes: cada grupo tiene su chat y el chat general es solo de avisos (escriben RRHH y maîtres)
+  groupChats       Boolean       @default(false)
   createdAt        DateTime      @default(now())
   assignments      Assignment[]
   swaps            SwapRequest[]
@@ -173,6 +177,7 @@ model EventGroup {
   createdAt   DateTime     @default(now())
   event       Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
   assignments Assignment[]
+  messages    Message[]
 
   @@index([eventId])
 }
@@ -248,7 +253,7 @@ model Rate {
 
 // Mensaje del chat de un evento. workerId nulo = escrito por RRHH (authorName = nombre de quien escribe)
 model Message {
-  id         String   @id @default(cuid())
+  id         String      @id @default(cuid())
   eventId    String
   workerId   String?
   authorName String
@@ -257,9 +262,12 @@ model Message {
   fileId     String?
   lat        Float?
   lng        Float?
-  createdAt  DateTime @default(now())
-  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  worker     Worker?  @relation(fields: [workerId], references: [id], onDelete: SetNull)
+  // Chat de un grupo del evento (null = chat general del evento)
+  groupId    String?
+  createdAt  DateTime    @default(now())
+  event      Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  worker     Worker?     @relation(fields: [workerId], references: [id], onDelete: SetNull)
+  group      EventGroup? @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@index([eventId, createdAt])
 }

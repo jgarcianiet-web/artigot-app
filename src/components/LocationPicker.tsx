@@ -81,6 +81,11 @@ export function LocationPicker({
     }
   }
 
+  // El círculo sigue al radio de fichaje del evento
+  useEffect(() => {
+    layers.current?.circle.setRadius(radius);
+  }, [radius]);
+
   useEffect(() => {
     if (!point || !map.current) return;
     import("leaflet").then((L) => {

@@ -31,6 +31,8 @@ type Event = {
   needMozos: number;
   guests: number | null;
   autoConvokeDays: number | null;
+  clockRadius?: number | null;
+  groupChats?: boolean;
   venueId: string | null;
   clientId: string | null;
 };
@@ -87,6 +89,9 @@ export function EventForm({
   const ratio = automation.ratios[type];
   const isNew = !event;
   const [autoOn, setAutoOn] = useState(isNew ? automation.convoke.defaultOn : v.autoConvokeDays != null);
+  // Radio de fichaje del evento (vacío = el general)
+  const [clockRadius, setClockRadius] = useState(v.clockRadius != null ? String(v.clockRadius) : "");
+  const effectiveRadius = Number(clockRadius) >= 50 ? Math.min(3000, Number(clockRadius)) : radius;
 
   return (
     <ActionForm action={action} className="card max-w-3xl space-y-5" noValidate={!!draft}>
@@ -222,10 +227,26 @@ export function EventForm({
 
       <fieldset className="rounded-lg border border-stone-200 p-4">
         <legend className="px-1 text-sm font-semibold">Ubicación para el fichaje</legend>
+        <label className="mb-2 flex flex-wrap items-center gap-2 text-sm">
+          Radio de fichaje
+          <input
+            name="clockRadius"
+            type="number"
+            min={50}
+            max={3000}
+            step={50}
+            inputMode="numeric"
+            className="input h-9 w-28"
+            value={clockRadius}
+            onChange={(e) => setClockRadius(e.target.value)}
+            placeholder={String(radius)}
+          />
+          m <span className="text-xs text-stone-500">(vacío: {radius} m; en recintos grandes, p. ej. 500 m)</span>
+        </label>
         <p className="mb-2 text-xs text-stone-500">
-          El personal solo puede fichar a menos de {radius} m de este punto. Si ficha más de 30 min antes de su citación o más de 30 min después de la hora de fin, tiene que escribir el motivo.
+          El personal solo puede fichar a menos de {effectiveRadius} m de este punto. Si ficha más de 30 min antes de su citación o más de 30 min después de la hora de fin, tiene que escribir el motivo.
         </p>
-        <LocationPicker key={pickerKey} initial={point} radius={radius} />
+        <LocationPicker key={pickerKey} initial={point} radius={effectiveRadius} />
       </fieldset>
 
       <fieldset className="rounded-lg border border-stone-200 p-4">
@@ -237,7 +258,7 @@ export function EventForm({
               name="guests"
               type="number"
               min={1}
-              max={5000}
+              max={20000}
               inputMode="numeric"
               className="input h-10"
               value={guests}
@@ -291,6 +312,13 @@ export function EventForm({
         <label className="mt-3 flex items-start gap-2 text-sm">
           <input type="checkbox" name="autoReplace" value="1" defaultChecked={v.autoReplace ?? true} className="mt-0.5 size-4 shrink-0" />
           <span>Reposición automática: si alguien rechaza o se retira, se convoca solo al siguiente mejor puntuado del mismo puesto.</span>
+        </label>
+        <label className="mt-3 flex items-start gap-2 text-sm">
+          <input type="checkbox" name="groupChats" value="1" defaultChecked={v.groupChats ?? false} className="mt-0.5 size-4 shrink-0" />
+          <span>
+            Chat por grupos (eventos grandes): cada grupo tiene su chat con su maître o responsable, y el chat general del evento es solo de avisos (escriben
+            RRHH y los maîtres).
+          </span>
         </label>
         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
           <label className="flex items-center gap-2">

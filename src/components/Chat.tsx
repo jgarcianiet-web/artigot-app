@@ -23,11 +23,19 @@ export function Chat({
   initial,
   me,
   className = "",
+  groupId,
+  readOnlyText,
+  emptyText = "Aún no hay mensajes. Aquí se coordina el evento: RRHH y el personal confirmado.",
 }: {
   eventId: string;
   initial: ChatMessage[];
   me: Me;
   className?: string;
+  /** Chat de un grupo del evento (eventos grandes con «chat por grupos») */
+  groupId?: string;
+  /** Si se indica, no se puede escribir (chat general de avisos) y se muestra este texto */
+  readOnlyText?: string;
+  emptyText?: string;
 }) {
   const router = useRouter();
   const [messages, setMessages] = useState(initial);
@@ -37,25 +45,26 @@ export function Chat({
   const [error, setError] = useState<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const base = `/api/chat/${eventId}`;
+  const q = groupId ? `?grupo=${groupId}` : "";
 
   // Después de marcar como leído se refresca la página para que bajen los números de los menús
   const markRead = useCallback(() => {
     if (document.visibilityState === "visible")
-      fetch(`${base}/read`, { method: "POST" })
+      fetch(`${base}/read${q}`, { method: "POST" })
         .then((r) => r.ok && router.refresh())
         .catch(() => {});
-  }, [base, router]);
+  }, [base, q, router]);
 
   // Tiempo real: Server-Sent Events. Al (re)conectar se recupera lo que se haya podido perder.
   useEffect(() => {
-    const es = new EventSource(`${base}/stream`);
+    const es = new EventSource(`${base}/stream${q}`);
     es.addEventListener("message", (e) => {
       setMessages((prev) => merge(prev, [JSON.parse((e as MessageEvent).data)]));
       markRead();
     });
     es.onopen = () => {
       setOnline(true);
-      fetch(`${base}/messages`)
+      fetch(`${base}/messages${q}`)
         .then((r) => (r.ok ? r.json() : []))
         .then((list: ChatMessage[]) => setMessages((prev) => merge(prev, list)))
         .catch(() => {});
@@ -68,7 +77,7 @@ export function Chat({
       es.close();
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [base, markRead]);
+  }, [base, q, markRead]);
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: "end" });
@@ -78,7 +87,7 @@ export function Chat({
     setSending(true);
     setError(null);
     try {
-      const res = await fetch(`${base}/messages`, { method: "POST", ...init });
+      const res = await fetch(`${base}/messages${q}`, { method: "POST", ...init });
       if (!res.ok) throw new Error(res.status === 400 ? await res.text() : "");
       const m: ChatMessage = await res.json();
       setMessages((prev) => merge(prev, [m]));
@@ -133,7 +142,7 @@ export function Chat({
       <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
         {messages.length === 0 && (
           <p className="mx-auto mt-6 max-w-xs rounded-lg bg-white/70 p-3 text-center text-sm text-stone-600">
-            Aún no hay mensajes. Aquí se coordina el evento: RRHH y el personal confirmado.
+            {emptyText}
           </p>
         )}
         {messages.map((m) => {
@@ -185,49 +194,53 @@ export function Chat({
         <div ref={bottom} />
       </div>
       {error && <div className="bg-red-50 px-3 py-1 text-xs text-red-700">{error}</div>}
-      <form
-        className="flex items-end gap-2 border-t border-stone-200 bg-stone-50 p-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          send();
-        }}
-      >
-        <label className={`btn h-10 w-10 shrink-0 cursor-pointer rounded-full p-0 ${sending ? "pointer-events-none opacity-50" : ""}`} title="Enviar foto">
-          📷
-          <input
-            type="file"
-            accept="image/*"
-            className="sr-only"
-            aria-label="Enviar foto"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              e.target.value = "";
-              if (f) sendPhoto(f);
-            }}
-          />
-        </label>
-        <button type="button" className="btn h-10 w-10 shrink-0 rounded-full p-0" title="Compartir mi ubicación" disabled={sending} onClick={sendLocation}>
-          📍
-        </button>
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && !("ontouchstart" in window)) {
-              e.preventDefault();
-              send();
-            }
+      {readOnlyText ? (
+        <p className="border-t border-stone-200 bg-stone-50 p-3 text-center text-xs text-stone-500">{readOnlyText}</p>
+      ) : (
+        <form
+          className="flex items-end gap-2 border-t border-stone-200 bg-stone-50 p-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            send();
           }}
-          rows={1}
-          maxLength={2000}
-          placeholder="Escribe un mensaje"
-          aria-label="Mensaje"
-          className="input max-h-32 min-h-10 flex-1 resize-none rounded-2xl text-base sm:text-sm"
-        />
-        <button className="btn btn-primary h-10 rounded-full px-4" disabled={sending || !text.trim()}>
-          Enviar
-        </button>
-      </form>
+        >
+          <label className={`btn h-10 w-10 shrink-0 cursor-pointer rounded-full p-0 ${sending ? "pointer-events-none opacity-50" : ""}`} title="Enviar foto">
+            📷
+            <input
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              aria-label="Enviar foto"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) sendPhoto(f);
+              }}
+            />
+          </label>
+          <button type="button" className="btn h-10 w-10 shrink-0 rounded-full p-0" title="Compartir mi ubicación" disabled={sending} onClick={sendLocation}>
+            📍
+          </button>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && !("ontouchstart" in window)) {
+                e.preventDefault();
+                send();
+              }
+            }}
+            rows={1}
+            maxLength={2000}
+            placeholder="Escribe un mensaje"
+            aria-label="Mensaje"
+            className="input max-h-32 min-h-10 flex-1 resize-none rounded-2xl text-base sm:text-sm"
+          />
+          <button className="btn btn-primary h-10 rounded-full px-4" disabled={sending || !text.trim()}>
+            Enviar
+          </button>
+        </form>
+      )}
     </div>
   );
 }

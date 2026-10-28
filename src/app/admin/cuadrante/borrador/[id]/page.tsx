@@ -27,7 +27,7 @@ export default async function Draft({ params, searchParams }: { params: Promise<
     id: d.id, name: f.name ?? d.name, type: f.type ?? "BODA", date: f.date ?? d.date, startTime: f.startTime ?? "18:00", endTime: f.endTime || null, unloadTime: f.unloadTime || null,
     venue: f.venue ?? "", lat: num("lat"), lng: num("lng"), client: f.client || null, salesRep: f.salesRep || null, budget: num("budget"), budgetNote: f.budgetNote || null,
     notes: f.notes || null, checklist: f.checklist || null, needCamareros: num("needCamareros") ?? 0, needMaitres: num("needMaitres") ?? 0, needResponsables: num("needResponsables") ?? 0,
-    needMozos: num("needMozos") ?? 0, autoReplace: f.autoReplace === "1", guests: num("guests"), autoConvokeDays: f.autoConvoke === "1" ? (num("autoConvokeDays") ?? 7) : null, venueId: f.venueId || null, clientId: f.clientId || null,
+    needMozos: num("needMozos") ?? 0, autoReplace: f.autoReplace === "1", guests: num("guests"), clockRadius: num("clockRadius"), groupChats: f.groupChats === "1", autoConvokeDays: f.autoConvoke === "1" ? (num("autoConvokeDays") ?? 7) : null, venueId: f.venueId || null, clientId: f.clientId || null,
   };
 
   const [workers, busy, off, otherDrafts, rates, options] = await Promise.all([
