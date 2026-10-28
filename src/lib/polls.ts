@@ -1,5 +1,6 @@
 import { db } from "./db";
-import { addDays, today, workerRoles } from "./domain";
+import { addDays, formatDate, today, workerRoles } from "./domain";
+import { notify } from "./push";
 
 /**
  * Sondeos de disponibilidad: RRHH pregunta «¿qué días puedes trabajar?» antes de convocar.
@@ -54,4 +55,39 @@ export async function answerPoll(workerId: string, pollId: string, date: string,
 export async function availableOn(date: string) {
   const rows = await db.pollAnswer.findMany({ where: { date, available: true, poll: { closedAt: null } }, select: { workerId: true } });
   return new Set(rows.map((r) => r.workerId));
+}
+
+/** Personal activo al que va dirigido un sondeo (por puesto; sin puestos = todos). */
+export async function pollTargets(roles: string[]) {
+  const workers = await db.worker.findMany({ where: { active: true }, select: { id: true, role: true, roles: true } });
+  return workers.filter((w) => !roles.length || workerRoles(w).some((r) => roles.includes(r)));
+}
+
+type Defer = (job: () => Promise<unknown>) => void;
+const now: Defer = (job) => void job().catch((e) => console.error("avisos del sondeo", e));
+
+/** Crea el sondeo y avisa al personal (`defer`: p. ej. `after` para no esperar a los avisos en una petición). */
+export async function sendPoll(data: { title: string; message: string | null; dates: string[]; roles: string[]; createdBy: string }, defer: Defer = now) {
+  const poll = await db.availabilityPoll.create({
+    data: { ...data, title: data.title || `Disponibilidad del ${formatDate(data.dates[0])} al ${formatDate(data.dates.at(-1)!)}` },
+  });
+  const people = await pollTargets(data.roles);
+  defer(() => notify({
+    workerIds: people.map((p) => p.id),
+    workerUrl: "/app",
+    title: "¿Qué días puedes trabajar?",
+    body: `${poll.title}. Marca en la app los días que puedes (${data.dates.length} días).`,
+    tag: `sondeo-${poll.id}`,
+  }));
+  return { poll, people: people.length };
+}
+
+/** Recordatorio a quien aún no ha contestado a un sondeo. Devuelve a cuántos. */
+export async function remindPollPending(pollId: string, defer: Defer = now) {
+  const poll = await db.availabilityPoll.findUniqueOrThrow({ where: { id: pollId }, include: { answers: { select: { workerId: true } } } });
+  const answered = new Set(poll.answers.map((a) => a.workerId));
+  const pending = (await pollTargets(poll.roles)).filter((w) => !answered.has(w.id));
+  if (pending.length)
+    defer(() => notify({ workerIds: pending.map((p) => p.id), workerUrl: "/app", title: "¿Qué días puedes trabajar?", body: `Aún no has respondido: ${poll.title}.`, tag: `sondeo-${pollId}` }));
+  return { poll, pending: pending.length };
 }

@@ -10,7 +10,7 @@ const ROLES: [string, string][] = [
   ["MOZO", "Mozo (montaje y descarga)"],
 ];
 
-export function ApplyForm() {
+export function ApplyForm({ countries }: { countries: string[] }) {
   const [r, run, pending] = useActionState(apply, null);
   if (r?.ok) {
     return <p role="status" className="card bg-emerald-50 text-emerald-900">{r.message}</p>;
@@ -45,6 +45,36 @@ export function ApplyForm() {
           {ROLES.map(([v, l]) => (
             <label key={v} className="flex items-center gap-2 text-sm"><input type="checkbox" name="roles" value={v} className="size-4" /> {l}</label>
           ))}
+        </div>
+      </fieldset>
+      <fieldset className="space-y-3 rounded-lg border border-stone-200 p-3">
+        <legend className="px-1 text-sm font-semibold">Datos para darte de alta</legend>
+        <p className="text-xs text-stone-500">Solo se usan si te contratamos, para darte de alta en la Seguridad Social sin hacerte esperar.</p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block text-sm">DNI / NIE<input name="dni" className="input mt-1 text-base uppercase" required autoComplete="off" placeholder="12345678Z" /></label>
+          <label className="block text-sm">Fecha de nacimiento<input name="birthDate" type="date" className="input mt-1 text-base" required /></label>
+          <fieldset>
+            <legend className="mb-1 text-sm">Sexo</legend>
+            <div className="flex gap-6 pt-2">
+              <label className="flex items-center gap-2 text-sm"><input type="radio" name="sex" value="Mujer" className="size-4" required /> Mujer</label>
+              <label className="flex items-center gap-2 text-sm"><input type="radio" name="sex" value="Hombre" className="size-4" /> Hombre</label>
+            </div>
+          </fieldset>
+          <label className="block text-sm">
+            Nacionalidad
+            <select name="nationality" className="input mt-1 text-base" defaultValue={countries.includes("ESPAÑA") ? "ESPAÑA" : ""} required>
+              <option value="">— Elige —</option>
+              {countries.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
+          <label className="block text-sm">
+            Nº de la Seguridad Social <span className="text-stone-400">(si lo tienes)</span>
+            <input name="nss" inputMode="numeric" className="input mt-1 text-base" autoComplete="off" placeholder="12 cifras" />
+          </label>
+          <label className="block text-sm">
+            IBAN para cobrar <span className="text-stone-400">(si lo tienes)</span>
+            <input name="iban" className="input mt-1 text-base uppercase" autoComplete="off" placeholder="ES00 0000 0000 0000 0000 0000" />
+          </label>
         </div>
       </fieldset>
       <label className="block text-sm">Experiencia<textarea name="experience" rows={3} className="input mt-1 text-base" placeholder="Dónde has trabajado, cuántos años, idiomas…" /></label>

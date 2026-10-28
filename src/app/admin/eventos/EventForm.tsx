@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { saveEvent } from "@/app/actions";
 import { ActionForm, SubmitButton } from "@/components/client";
 import { LocationPicker } from "@/components/LocationPicker";
+import { staffForGuests, type AutomationSettings } from "@/lib/automation";
 import { EVENT_TYPE_LABEL, EVENT_TYPES } from "@/lib/domain";
 
 type Event = {
@@ -28,6 +29,8 @@ type Event = {
   needResponsables: number;
   autoReplace: boolean;
   needMozos: number;
+  guests: number | null;
+  autoConvokeDays: number | null;
   venueId: string | null;
   clientId: string | null;
 };
@@ -45,6 +48,7 @@ export function EventForm({
   defaultDate,
   draft,
   templateId,
+  automation,
 }: {
   event?: Event;
   /** Valores iniciales de un evento nuevo (p. ej. desde una plantilla) */
@@ -58,6 +62,8 @@ export function EventForm({
   draft?: { id?: string; action: (prev: string | null, form: FormData) => Promise<string | null> };
   /** Plantilla de la que sale el evento nuevo (para crear también sus grupos) */
   templateId?: string;
+  /** Proporciones por invitados y convocatoria automática (Ajustes → Automatizaciones) */
+  automation: Pick<AutomationSettings, "ratios" | "convoke">;
 }) {
   const [error, action] = useActionState(draft?.action ?? saveEvent, null);
   const v = { ...defaults, ...event };
@@ -70,6 +76,17 @@ export function EventForm({
     v.lat != null && v.lng != null ? { lat: v.lat, lng: v.lng } : selectedVenue?.lat != null && selectedVenue.lng != null ? { lat: selectedVenue.lat, lng: selectedVenue.lng } : null,
   );
   const [pickerKey, setPickerKey] = useState(0);
+  // Personal necesario: se puede escribir a mano o se calcula con los invitados y el tipo de evento
+  const [type, setType] = useState(v.type ?? "BODA");
+  const [guests, setGuests] = useState(v.guests != null ? String(v.guests) : "");
+  const [need, setNeed] = useState({ needCamareros: v.needCamareros ?? 0, needMaitres: v.needMaitres ?? 0, needResponsables: v.needResponsables ?? 0, needMozos: v.needMozos ?? 0 });
+  const recalc = (g: string, t: string) => {
+    const s = staffForGuests(Number(g), automation.ratios[t]);
+    if (Number(g) > 0) setNeed((n) => ({ ...n, needCamareros: s.CAMARERO ?? 0, needMaitres: s.MAITRE ?? 0, needMozos: s.MOZO ?? 0 }));
+  };
+  const ratio = automation.ratios[type];
+  const isNew = !event;
+  const [autoOn, setAutoOn] = useState(isNew ? automation.convoke.defaultOn : v.autoConvokeDays != null);
 
   return (
     <ActionForm action={action} className="card max-w-3xl space-y-5" noValidate={!!draft}>
@@ -83,7 +100,15 @@ export function EventForm({
         </div>
         <div>
           <label className="label">Tipo</label>
-          <select name="type" className="input" defaultValue={v.type ?? "BODA"}>
+          <select
+            name="type"
+            className="input"
+            value={type}
+            onChange={(e) => {
+              setType(e.target.value);
+              recalc(guests, e.target.value);
+            }}
+          >
             {EVENT_TYPES.map((t) => (
               <option key={t} value={t}>{EVENT_TYPE_LABEL[t]}</option>
             ))}
@@ -205,16 +230,54 @@ export function EventForm({
 
       <fieldset className="rounded-lg border border-stone-200 p-4">
         <legend className="px-1 text-sm font-semibold">Personal necesario</legend>
+        <div className="mb-3 flex flex-wrap items-end gap-3">
+          <label className="flex w-36 flex-col gap-1">
+            <span className="label mb-0">Invitados</span>
+            <input
+              name="guests"
+              type="number"
+              min={1}
+              max={5000}
+              inputMode="numeric"
+              className="input h-10"
+              value={guests}
+              onChange={(e) => {
+                setGuests(e.target.value);
+                recalc(e.target.value, type);
+              }}
+              placeholder="p. ej. 180"
+            />
+          </label>
+          <p className="min-w-60 flex-1 pb-2 text-xs text-stone-500">
+            Al poner los invitados se calcula el personal ({EVENT_TYPE_LABEL[type] ?? type}:{" "}
+            {[
+              ratio.camareros > 0 && `1 camarero cada ${ratio.camareros}`,
+              (ratio.maitres > 0 || ratio.minMaitres > 0) && `1 maître cada ${ratio.maitres || "—"}${ratio.minMaitres ? ` (mínimo ${ratio.minMaitres})` : ""}`,
+              ratio.mozos > 0 && `1 mozo cada ${ratio.mozos}`,
+            ]
+              .filter(Boolean)
+              .join(", ") || "sin proporciones"}
+            ; se cambia en Ajustes → Automatizaciones). Puedes ajustar los números a mano.
+          </p>
+        </div>
         <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
-          {[
-            { name: "needCamareros", label: "Camareros", value: v.needCamareros },
-            { name: "needMaitres", label: "Maîtres", value: v.needMaitres },
-            { name: "needResponsables", label: "Responsables", value: v.needResponsables, title: "Camareros responsables: hacen de maître en eventos pequeños" },
-            { name: "needMozos", label: "Mozos", value: v.needMozos },
-          ].map((f) => (
-            <label key={f.name} className="flex flex-col gap-1" title={f.title}>
+          {([
+            { name: "needCamareros", label: "Camareros" },
+            { name: "needMaitres", label: "Maîtres" },
+            { name: "needResponsables", label: "Responsables", title: "Camareros responsables: hacen de maître en eventos pequeños" },
+            { name: "needMozos", label: "Mozos" },
+          ] as const).map((f) => (
+            <label key={f.name} className="flex flex-col gap-1" title={"title" in f ? f.title : undefined}>
               <span className="label mb-0 truncate">{f.label}</span>
-              <input name={f.name} type="number" min={0} inputMode="numeric" className="input h-10" defaultValue={f.value ?? 0} />
+              <input
+                name={f.name}
+                type="number"
+                min={0}
+                inputMode="numeric"
+                className="input h-10"
+                value={need[f.name]}
+                onChange={(e) => setNeed((n) => ({ ...n, [f.name]: e.target.value === "" ? "" : Number(e.target.value) }))}
+              />
             </label>
           ))}
           <label className="flex flex-col gap-1">
@@ -229,6 +292,26 @@ export function EventForm({
           <input type="checkbox" name="autoReplace" value="1" defaultChecked={v.autoReplace ?? true} className="mt-0.5 size-4 shrink-0" />
           <span>Reposición automática: si alguien rechaza o se retira, se convoca solo al siguiente mejor puntuado del mismo puesto.</span>
         </label>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+          <label className="flex items-center gap-2">
+            <input type="checkbox" name="autoConvoke" value="1" checked={autoOn} onChange={(e) => setAutoOn(e.target.checked)} className="size-4 shrink-0" />
+            <span>Convocatoria automática</span>
+          </label>
+          {autoOn && (
+            <>
+              <input
+                name="autoConvokeDays"
+                type="number"
+                min={0}
+                max={60}
+                className="input h-8 w-16 py-0"
+                defaultValue={v.autoConvokeDays ?? automation.convoke.days}
+                aria-label="Días antes"
+              />
+              <span>días antes, a partir de las {automation.convoke.hour}: se convoca solo a los mejor puntuados libres hasta cubrir el personal necesario.</span>
+            </>
+          )}
+        </div>
       </fieldset>
 
       <div className="grid gap-4 sm:grid-cols-2">

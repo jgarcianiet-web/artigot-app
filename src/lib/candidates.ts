@@ -5,7 +5,9 @@ import { db } from "./db";
 import { isRole, ROLE_LABEL, type Role } from "./domain";
 import { deleteStoredFile, storeCandidateFile } from "./files";
 import { mailEnabled, sendMail } from "./mail";
+import { ageOn, MIN_AGE } from "./minors";
 import { notify } from "./push";
+import { validDniNie, validIban, validNss } from "./staff";
 
 export const CANDIDATE_STATUS: Record<string, { label: string; cls: string }> = {
   NUEVO: { label: "Nuevo", cls: "bg-sky-100 text-sky-800" },
@@ -68,6 +70,21 @@ export async function applyAsCandidate(form: FormData): Promise<ApplyResult> {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, message: "El email no es válido." };
   if (!roles.length) return { ok: false, message: "Marca al menos un puesto." };
   if (car !== "1" && car !== "0") return { ok: false, message: "Indica si tienes coche." };
+  // Datos para el alta en A3 (NSS e IBAN, si los tiene)
+  const dni = String(form.get("dni") ?? "").trim().toUpperCase().replace(/[\s-]/g, "");
+  const birthDate = String(form.get("birthDate") ?? "");
+  const sex = String(form.get("sex") ?? "");
+  const nationality = String(form.get("nationality") ?? "").trim().toLocaleUpperCase("es-ES").slice(0, 60);
+  const nss = String(form.get("nss") ?? "").replace(/\D/g, "");
+  const iban = String(form.get("iban") ?? "").trim().toUpperCase().replace(/\s/g, "");
+  if (!validDniNie(dni)) return { ok: false, message: "El DNI/NIE no es correcto: revisa los números y la letra." };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) return { ok: false, message: "Escribe tu fecha de nacimiento." };
+  if (ageOn(birthDate) < MIN_AGE) return { ok: false, message: `Para trabajar con nosotros tienes que tener al menos ${MIN_AGE} años.` };
+  if (ageOn(birthDate) > 90) return { ok: false, message: "Revisa la fecha de nacimiento." };
+  if (sex !== "Hombre" && sex !== "Mujer") return { ok: false, message: "Indica el sexo (lo pide la Seguridad Social)." };
+  if (!nationality) return { ok: false, message: "Elige tu nacionalidad." };
+  if (nss && !validNss(nss)) return { ok: false, message: "El número de la Seguridad Social no es correcto (son 12 cifras). Si no lo sabes, déjalo en blanco." };
+  if (iban && !validIban(iban)) return { ok: false, message: "El IBAN no es correcto. Si no lo tienes a mano, déjalo en blanco." };
   if (form.get("consent") !== "1") return { ok: false, message: "Tienes que aceptar el tratamiento de tus datos para poder enviarla." };
 
   const existing = await db.candidate.findFirst({ where: { phoneKey: phoneKey(phone), status: { in: OPEN_STATUSES } } });
@@ -93,6 +110,7 @@ export async function applyAsCandidate(form: FormData): Promise<ApplyResult> {
       experience: String(form.get("experience") ?? "").trim().slice(0, 2000) || null,
       availability: String(form.get("availability") ?? "").trim().slice(0, 500) || null,
       hasCar: car === "1",
+      dni, birthDate, sex, nationality, nss: nss || null, iban: iban || null,
       fileId,
       consentAt: new Date(),
     },
@@ -132,11 +150,19 @@ export async function hireCandidate(id: string, role: Role, by = "RRHH") {
     .filter(Boolean)
     .join("\n") || null;
   const existing = await db.worker.findUnique({ where: { phoneKey: key } });
+  // Datos para el alta en A3 que dio al apuntarse (a quien ya existía solo se le completan los que falten)
+  const ids = { dni: c.dni, birthDate: c.birthDate, sex: c.sex, nationality: c.nationality, nss: c.nss, iban: c.iban };
+  // El DNI no se repite: si ya lo tiene otra ficha, se deja para que RRHH lo revise
+  if (ids.dni && (await db.worker.findFirst({ where: { dni: ids.dni, NOT: existing ? { id: existing.id } : undefined }, select: { id: true } }))) ids.dni = null;
+  if (existing) {
+    const fill = Object.fromEntries(Object.entries(ids).filter(([k, v]) => v && !existing[k as keyof typeof ids]));
+    if (Object.keys(fill).length) await db.worker.update({ where: { id: existing.id }, data: fill });
+  }
   const worker =
     existing ??
     (await db.worker.create({
       data: {
-        name: c.name, phone: c.phone, phoneKey: key, email: c.email, zone: c.zone, role, roles, accessCode: newAccessCode(), notes,
+        name: c.name, phone: c.phone, phoneKey: key, email: c.email, zone: c.zone, role, roles, accessCode: newAccessCode(), notes, ...ids,
         newcomerSince: new Date(),
         ...(c.rating && { rating: c.rating }),
         // Con coche: se le proponen 3 plazas por defecto al elegir «Llevo coche» (las puede cambiar)
