@@ -224,14 +224,13 @@ export async function sendA3DailyEmail(now = new Date()) {
       ? ["", "⚠ Trabajan mañana pero les faltan datos para el alta en A3 (complétalos y hazles el alta en Altas y bajas → A3):", ...r.incomplete.map((x) => `• ${x.name}: falta ${x.problems.join(", ")}`)]
       : []),
     "",
-    "Importa los Excel en A3 y comunica las altas y bajas en RED como siempre. Después márcalas como comunicadas en:",
-    `${appUrl()}/admin/altas`,
+    "Importa los Excel en A3 y comunica las altas y bajas en RED como siempre. Después márcalas como comunicadas en la app.",
   ];
   const to = await a3Recipients(s.to);
   let sent = 0;
   for (const email of to) {
     try {
-      await sendMail(email, `A3: altas de mañana ${formatDate(r.tomorrow)}${r.bajas ? " y bajas de hoy" : ""}`, lines.join("\n"), r.files);
+      await sendMail(email, `A3: altas de mañana ${formatDate(r.tomorrow)}${r.bajas ? " y bajas de hoy" : ""}`, lines.join("\n"), r.files, { button: { label: "Ir a Altas y bajas", url: `${appUrl()}/admin/altas` } });
       sent++;
     } catch (e) {
       console.error("email A3", email, e);

@@ -275,7 +275,9 @@ export async function runReminders(now = new Date()) {
         await sendMail(
           w.email,
           "Completa tus datos en la app de Artigot",
-          `Hola ${w.name.split(" ")[0]}, en la app de Artigot te falta: ${missingText(w.missing)}.\nEntra en ${loginUrl()} con tu ${loginId(w)?.label ?? "DNI"} y tu código de acceso y complétalo en tu perfil. Si no tienes el código, pídeselo a RRHH.`,
+          `Hola ${w.name.split(" ")[0]},\n\nen la app de Artigot te falta: ${missingText(w.missing)}. Sin ello no podemos darte de alta ni pagarte.\nEntra con tu ${loginId(w)?.label ?? "DNI"} y tu código de acceso y complétalo en tu perfil. Si no tienes el código, pídeselo a RRHH.`,
+          [],
+          { button: { label: "Completar mis datos", url: loginUrl() } },
         ).catch((e) => console.error("email datos", w.id, e));
       }
       sent.push(key);

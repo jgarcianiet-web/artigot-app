@@ -1,6 +1,8 @@
 import { lookup } from "node:dns/promises";
 import nodemailer from "nodemailer";
+import { getCompany } from "./contracts";
 import { loginId, loginUrl } from "./domain";
+import { mailHtml, mailText, type MailOptions } from "./mailTemplate";
 
 /**
  * Envío de emails, de dos formas:
@@ -38,16 +40,14 @@ async function transporter() {
   }
 }
 
-const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
 export type MailAttachment = { filename: string; content: Buffer };
 
-export async function sendMail(to: string, subject: string, text: string, attachments: MailAttachment[] = []) {
+/** Envía un email con la plantilla de Artigot (logo, botón y pie de empresa) y su versión en texto. */
+export async function sendMail(to: string, subject: string, body: string, attachments: MailAttachment[] = [], options: MailOptions = {}) {
   if (!mailEnabled()) throw new Error("El envío de emails no está configurado (SMTP_HOST).");
-  const html = `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;color:#1c1917">${esc(text)
-    .split("\n")
-    .map((l) => (l ? `<p style="margin:0 0 8px">${l.replace(/(https?:\/\/\S+)/g, '<a href="$1">$1</a>')}</p>` : ""))
-    .join("")}</div>`;
+  const company = await getCompany().catch(() => ({ name: "", cif: "", address: "", city: "" }));
+  const html = mailHtml(subject, body, options, company);
+  const text = mailText(body, options);
   const from = process.env.MAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || "";
   if (process.env.BREVO_API_KEY) return sendBrevo(from, to, subject, text, html, attachments);
   await (await transporter()).sendMail({ from, to, subject, text, html, attachments });
@@ -100,7 +100,24 @@ export async function sendAccessEmail(w: AccessWorker): Promise<string | null> {
   if (!w.email) return "No tiene email.";
   if (!mailEnabled()) return "El envío de emails no está configurado; copia las instrucciones y envíaselas tú.";
   try {
-    await sendMail(w.email, "Tu acceso a la app de Artigot", accessText(w));
+    const id = loginId(w);
+    await sendMail(
+      w.email,
+      "Tu acceso a la app de Artigot",
+      `Hola ${w.name.split(" ")[0]},\n\nya tienes acceso a la app de Artigot para ver tus convocatorias, confirmar, fichar y hablar en el chat de cada evento. Entra con estos datos:`,
+      [],
+      {
+        box: [[id ? `Usuario (${id.label})` : "Usuario", id?.value ?? "Tu DNI (dáselo a RRHH)"], ["Código", w.accessCode]],
+        button: { label: "Entrar en la app", url: loginUrl() },
+        after: [
+          process.env.ANDROID_APK_URL && `App Android: ${process.env.ANDROID_APK_URL}`,
+          process.env.IOS_APP_URL && `App iPhone: ${process.env.IOS_APP_URL}`,
+          "La primera vez te pediremos tu foto de perfil, tus datos y tus documentos.",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      },
+    );
     return null;
   } catch (e) {
     console.error("Email de acceso", e);
