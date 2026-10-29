@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { currentAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { GroupForm } from "../../GroupForm";
-import { pickableWorkers } from "../../workers";
+import { pickableWorkers } from "@/lib/pickableWorkers";
 
 export default async function EditGroup({ params }: { params: Promise<{ groupId: string }> }) {
   if (!(await currentAdmin())) redirect("/login");

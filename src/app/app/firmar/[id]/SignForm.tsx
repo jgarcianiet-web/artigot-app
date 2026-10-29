@@ -14,7 +14,7 @@ export function SignForm({ id, kind, medicalChoice = true }: { id: string; kind:
       <div className="card space-y-2 bg-emerald-50">
         <p className="text-emerald-900">{r.message}</p>
         <FileLink href={`/api/contracts/${id}/pdf`} className="btn">Ver PDF firmado</FileLink>
-        {kind.startsWith("PRL_") && <Link href="/app" className="btn btn-primary">Seguir ›</Link>}
+        {(kind.startsWith("PRL_") || kind === "DOCUMENTO") && <Link href="/app" className="btn btn-primary">Seguir ›</Link>}
       </div>
     );
   }
@@ -41,6 +41,8 @@ export function SignForm({ id, kind, medicalChoice = true }: { id: string; kind:
             ? "He revisado mi registro de jornada de este mes."
             : kind.startsWith("PRL_")
               ? "He leído el documento y declaro que es correcto."
+              : kind === "DOCUMENTO"
+                ? "He leído el documento entero y lo firmo."
               : "He leído el documento y estoy conforme con las condiciones."}
       </label>
       {kind === "JORNADA" && (

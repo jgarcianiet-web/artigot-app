@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentAdmin } from "@/lib/auth";
 import { GroupForm } from "../GroupForm";
-import { pickableWorkers } from "../workers";
+import { pickableWorkers } from "@/lib/pickableWorkers";
 
 export default async function NewGroup() {
   if (!(await currentAdmin())) redirect("/login");

@@ -497,6 +497,13 @@ export async function signContract(contractId: string, _prev: FormResult, form: 
     },
   });
   await audit(me.name, "Trabajador", "Documento", "Firmado", `${me.name} firma «${c.title}»${note ? ` con observaciones: ${note}` : ""}`, { entityId: me.id });
+  // Documento enviado por RRHH: cuando firma el último, se avisa a RRHH
+  if (c.requestId && !(await db.contract.count({ where: { requestId: c.requestId, signedAt: null } }))) {
+    const total = await db.contract.count({ where: { requestId: c.requestId } });
+    after(() =>
+      notify({ admins: true, adminUrl: `/admin/documentos/firmar/${c.requestId}`, title: "✍️ Documento firmado por todos", body: `«${c.title}»: han firmado las ${total} ${total === 1 ? "persona" : "personas"}.`, tag: `firma-${c.requestId}` }),
+    );
+  }
   if (note) {
     after(() =>
       notify({

@@ -8,7 +8,7 @@ import { isEventLead } from "./reviews";
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
 
-export type Scope = "CHAT" | "INCIDENT" | "DOC" | "CANDIDATE" | "SIGNATURE" | "PHOTO" | "STAFF" | "PAYSLIP" | "DM" | "GROUP";
+export type Scope = "CHAT" | "INCIDENT" | "DOC" | "CANDIDATE" | "SIGNATURE" | "PHOTO" | "STAFF" | "PAYSLIP" | "DM" | "GROUP" | "SIGNDOC";
 
 /** Guarda una imagen subida (las fotos se reducen en el móvil antes de enviarlas). */
 export async function storeImage(file: File, opts: { eventId: string; scope: Scope; incidentId?: string }) {
@@ -32,6 +32,14 @@ export async function storeDmImage(file: File, workerId: string) {
 export async function storeGroupImage(file: File, groupId: string) {
   if (!IMAGE_TYPES.includes(file.type)) throw new Error("Solo se pueden enviar fotos (JPG, PNG, WEBP o HEIC).");
   return store(file, { scope: "GROUP", groupId });
+}
+
+/** PDF que RRHH envía a firmar (hasta 10 MB): lo ven RRHH y las personas a las que se envía. */
+export const MAX_SIGNDOC_BYTES = 10 * 1024 * 1024;
+export async function storeSignDoc(file: File) {
+  if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) throw new Error("El documento tiene que ser un PDF.");
+  if (file.size === 0 || file.size > MAX_SIGNDOC_BYTES) throw new Error("El PDF es demasiado grande (máximo 10 MB).");
+  return save(Buffer.from(await file.arrayBuffer()), { scope: "SIGNDOC", mime: "application/pdf" });
 }
 
 /** Foto del chat interno de RRHH (solo la ve RRHH). */
@@ -131,9 +139,12 @@ export async function sweepOrphanFiles() {
  * - Fotos de incidencias: RRHH y el maître / camarero responsable del evento.
  * - Documentos y nóminas del trabajador: RRHH y el propio trabajador.
  * - Fotos de un grupo con el personal: RRHH y los miembros del grupo.
+ * - Documentos enviados a firmar: RRHH y las personas a las que se envió.
  */
-export async function canReadFile(viewer: Viewer, file: { scope: string; eventId: string | null; workerId: string | null; groupId?: string | null }) {
+export async function canReadFile(viewer: Viewer, file: { id?: string; scope: string; eventId: string | null; workerId: string | null; groupId?: string | null }) {
   if (viewer.kind === "admin") return true;
+  if (file.scope === "SIGNDOC")
+    return !!file.id && !!(await db.contract.findFirst({ where: { workerId: viewer.id, request: { fileId: file.id } }, select: { id: true } }));
   if (file.scope === "GROUP")
     return !!file.groupId && !!(await db.workerGroupMember.findUnique({ where: { groupId_workerId: { groupId: file.groupId, workerId: viewer.id } } }));
   if (file.scope === "DOC" || file.scope === "SIGNATURE" || file.scope === "PHOTO" || file.scope === "PAYSLIP" || file.scope === "DM") return file.workerId === viewer.id;

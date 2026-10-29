@@ -62,6 +62,8 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
   const privacy = await privacySignature(worker.id);
   const minor = await minorStatus(worker);
   const prl = await prlStatus(worker.id);
+  // Documentos que RRHH le ha enviado a firmar
+  const sent = await db.contract.findMany({ where: { workerId: worker.id, kind: "DOCUMENTO" }, select: { id: true, title: true, signedAt: true, createdAt: true }, orderBy: { createdAt: "desc" } });
   const missing = worker.active ? ((await incompleteWorkers([worker.id]))[0]?.missing ?? []) : [];
 
   const instructions = accessText(worker);
@@ -123,6 +125,7 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
           </div>
         <div className="flex flex-wrap gap-2">
           <Link href={`/admin/mensajes/personal/${worker.id}`} className="btn">💬 Mensaje</Link>
+          <Link href={`/admin/documentos/firmar/nuevo?trabajador=${worker.id}`} className="btn">✍️ Enviar documento</Link>
           <Link href={`/admin/personal/${worker.id}/editar`} className="btn">Editar</Link>
           <form action={toggleNewcomer.bind(null, worker.id)}>
             <SubmitButton className="btn">{isNew ? "Quitar «Nuevo»" : "Marcar como nuevo"}</SubmitButton>
@@ -270,6 +273,22 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
                 </div>
               ))}
             </dd>
+            {sent.length > 0 && (
+              <>
+                <dt className="text-stone-500">Documentos enviados</dt>
+                <dd className="space-y-0.5">
+                  {sent.map((d) => (
+                    <div key={d.id}>
+                      {d.signedAt ? (
+                        <span className="text-emerald-700">✓ {d.title} · firmado el {formatDate(d.signedAt.toISOString().slice(0, 10))} · <a href={`/api/contracts/${d.id}/pdf`} target="_blank" className="link">PDF</a></span>
+                      ) : (
+                        <span className="text-amber-700">{d.title}: pendiente de firmar</span>
+                      )}
+                    </div>
+                  ))}
+                </dd>
+              </>
+            )}
             <dt className="text-stone-500">DNI / NIE</dt><dd>{worker.dni ?? <Missing />}</dd>
             <dt className="text-stone-500">Seguridad Social</dt><dd>{worker.nss ?? <Missing />}</dd>
             <dt className="text-stone-500">IBAN</dt><dd className="font-mono text-xs">{worker.iban ? formatIban(worker.iban) : <Missing />}</dd>

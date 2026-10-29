@@ -344,6 +344,7 @@ model StoredFile {
   workerId    String?
   worker      Worker?         @relation("workerFiles", fields: [workerId], references: [id], onDelete: Cascade)
   photoOf     Worker?         @relation("workerPhoto")
+  signRequest SignRequest?
   // Fotos de un grupo de chat con el personal (scope GROUP): las ven RRHH y los miembros del grupo
   groupId     String?
   group       WorkerGroup?    @relation(fields: [groupId], references: [id], onDelete: Cascade)
@@ -545,31 +546,49 @@ model Candidate {
 
 // Documento de condiciones del servicio para firmar por el trabajador (texto congelado al generarlo)
 model Contract {
-  id              String      @id @default(cuid())
+  id              String       @id @default(cuid())
   // CONDICIONES: condiciones del servicio de un evento. RGPD: cláusula de protección de datos
-  kind            String      @default("CONDICIONES")
+  kind            String       @default("CONDICIONES")
   // Versión del texto de protección de datos firmada (si cambia, hay que volver a firmar)
   version         Int?
-  assignmentId    String?     @unique
+  assignmentId    String?      @unique
   workerId        String
   eventId         String?
   title           String
   body            String
   createdBy       String
-  createdAt       DateTime    @default(now())
+  createdAt       DateTime     @default(now())
   signedAt        DateTime?
   signerName      String?
   signerIp        String?
-  signatureFileId String?     @unique
+  signatureFileId String?      @unique
   // Datos estructurados (registro de jornada: días y horas) y observaciones del trabajador al firmar
   data            Json?
   signerNote      String?
-  assignment      Assignment? @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  worker          Worker      @relation(fields: [workerId], references: [id], onDelete: Cascade)
-  signature       StoredFile? @relation(fields: [signatureFileId], references: [id], onDelete: SetNull)
+  // Documento que RRHH envía a firmar (kind DOCUMENTO): el PDF y el envío al que pertenece
+  requestId       String?
+  request         SignRequest? @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  assignment      Assignment?  @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  worker          Worker       @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  signature       StoredFile?  @relation(fields: [signatureFileId], references: [id], onDelete: SetNull)
 
   @@index([eventId])
   @@index([workerId, kind])
+  @@index([requestId])
+}
+
+// Documento en PDF que RRHH envía a una o varias personas para que lo firmen en la app (cambio de contrato, anexos…)
+model SignRequest {
+  id        String     @id @default(cuid())
+  title     String
+  message   String?
+  fileId    String     @unique
+  createdBy String
+  createdAt DateTime   @default(now())
+  file      StoredFile @relation(fields: [fileId], references: [id])
+  contracts Contract[]
+
+  @@index([createdAt])
 }
 
 // Quincena de pago (pagamos a quincena vencida: 1-15 el día 22, 16-fin la primera semana del mes siguiente).

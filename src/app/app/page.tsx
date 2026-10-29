@@ -65,7 +65,7 @@ export default async function WorkerHome() {
   const [uniform, toSign, polls] = await Promise.all([
     getUniform(),
     db.contract.findMany({
-      where: { workerId: me.id, signedAt: null, OR: [{ assignment: { status: "CONFIRMADO" } }, { kind: { in: ["RGPD", "JORNADA", ...PRL_DOCS.map((d) => d.kind)] } }] },
+      where: { workerId: me.id, signedAt: null, OR: [{ assignment: { status: "CONFIRMADO" } }, { kind: { in: ["RGPD", "JORNADA", "DOCUMENTO", ...PRL_DOCS.map((d) => d.kind)] } }] },
       select: { id: true, title: true, kind: true },
       orderBy: { createdAt: "asc" },
     }),
