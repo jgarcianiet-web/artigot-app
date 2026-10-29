@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { auditAdmin } from "@/lib/audit";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { parseExternals } from "@/lib/externalSign";
 import { cancelPending, createSignRequest, deleteSignRequest, remindSignRequest } from "@/lib/signRequests";
 
 export async function sendSignRequest(_prev: string | null, form: FormData) {
@@ -18,6 +19,7 @@ export async function sendSignRequest(_prev: string | null, form: FormData) {
       message: String(form.get("message") ?? "") || null,
       file,
       workerIds: form.getAll("members").map(String),
+      externals: parseExternals(JSON.parse(String(form.get("externals") || "[]"))),
     });
     await auditAdmin(by, "Documento", "Enviado a firmar", `«${request.title}» enviado a firmar a ${recipients} ${recipients === 1 ? "persona" : "personas"}`, { entityId: request.id });
     id = request.id;

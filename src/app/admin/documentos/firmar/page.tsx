@@ -12,14 +12,14 @@ export default async function SignRequests() {
   const requests = await db.signRequest.findMany({
     orderBy: { createdAt: "desc" },
     take: 200,
-    include: { contracts: { select: { signedAt: true } } },
+    include: { contracts: { select: { signedAt: true } }, externals: { select: { signedAt: true } } },
   });
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1>Documentos</h1>
-          <p className="text-sm text-stone-500">Envía un PDF (cambio de contrato, anexo, normas…) a una o varias personas para que lo firmen en la app.</p>
+          <p className="text-sm text-stone-500">Envía un PDF (cambio de contrato, anexo, normas…) para que lo firme el personal en la app o gente de fuera con un enlace.</p>
         </div>
         <Link href="/admin/documentos/firmar/nuevo" className="btn btn-primary">+ Enviar documento para firmar</Link>
       </div>
@@ -29,8 +29,9 @@ export default async function SignRequests() {
       ) : (
         <ul className="card divide-y divide-stone-100 p-0">
           {requests.map((r) => {
-            const signed = r.contracts.filter((c) => c.signedAt).length;
-            const total = r.contracts.length;
+            const all = [...r.contracts, ...r.externals];
+            const signed = all.filter((c) => c.signedAt).length;
+            const total = all.length;
             return (
               <li key={r.id}>
                 <Link href={`/admin/documentos/firmar/${r.id}`} className="flex flex-wrap items-center gap-3 px-4 py-3 hover:bg-stone-50">
