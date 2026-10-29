@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { rejectDocument, verifyAllDocuments, verifyDocument } from "@/app/actions";
 import { Empty } from "@/components/ui";
+import { DocTabs } from "./DocTabs";
 import { PhotoReview } from "@/components/PhotoReview";
 import { pendingPhotos } from "@/lib/photo";
 import { db } from "@/lib/db";
@@ -42,12 +43,9 @@ export default async function Documents({ searchParams }: { searchParams: Promis
     <div className="space-y-4">
       <div>
         <h1>Documentos</h1>
-        <p className="text-sm text-stone-500">Revisa las fotos de perfil y los documentos que sube el personal. Si algo no vale, recházalo indicando el motivo: se le avisa para que lo suba de nuevo.</p>
+        <p className="text-sm text-stone-500">Revisa las fotos de perfil y los documentos que sube el personal, y envía documentos para que los firmen en la app. Si algo no vale, recházalo indicando el motivo: se le avisa para que lo suba de nuevo.</p>
       </div>
-      <nav className="flex gap-1 text-sm">
-        <Link href="/admin/documentos" className={`rounded-md px-3 py-1.5 ${view === "revisar" ? "bg-stone-900 text-white" : "bg-stone-100 hover:bg-stone-200"}`}>Por revisar ({pendingCount + photosCount})</Link>
-        <Link href="/admin/documentos?ver=caducan" className={`rounded-md px-3 py-1.5 ${view === "caducan" ? "bg-stone-900 text-white" : "bg-stone-100 hover:bg-stone-200"}`}>Caducados o a punto ({expiringCount})</Link>
-      </nav>
+      <DocTabs active={view} review={pendingCount + photosCount} expiring={expiringCount} />
 
       {view === "revisar" && photos.length > 0 && (
         <section className="card space-y-3">

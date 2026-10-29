@@ -236,6 +236,24 @@ export async function runReminders(now = new Date()) {
   // 10. Altas y bajas automáticas según el personal confirmado
   await syncAutoEmployments().catch((e) => console.error("altas automáticas", e));
 
+  // 12. Documentos enviados a firmar: a los 2 días, un recordatorio a quien aún no ha firmado (una sola vez)
+  const unsigned = await db.contract.findMany({
+    where: { kind: "DOCUMENTO", signedAt: null, createdAt: { lt: new Date(now.getTime() - 2 * 864e5) } },
+    select: { id: true, workerId: true, title: true, requestId: true },
+  });
+  for (const c of unsigned) {
+    if (!(await claim(`firma-recordatorio:${c.id}`))) continue;
+    await notify({
+      workerIds: [c.workerId],
+      workerUrl: `/app/firmar/${c.id}`,
+      title: "✍️ Tienes un documento sin firmar",
+      body: `Falta tu firma en «${c.title}». Ábrelo en la app y fírmalo.`,
+      tag: `firma-${c.requestId}`,
+      emailFallback: true,
+    });
+    sent.push(`firma-recordatorio:${c.id}`);
+  }
+
   // 11. Automatizaciones: convocatoria automática, disponibilidad semanal y email diario de A3
   sent.push(...(await runAutomations(now)));
 

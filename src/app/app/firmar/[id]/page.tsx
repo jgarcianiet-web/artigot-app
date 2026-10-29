@@ -18,7 +18,15 @@ export default async function SignContract({ params }: { params: Promise<{ id: s
     <div className="space-y-4">
       <Link href={c.kind === "RGPD" ? "/app/perfil" : c.kind === "JORNADA" ? "/app/nomina" : "/app"} className="text-sm text-stone-500">‹ Volver</Link>
       <h1>{c.title}</h1>
-      <article className="card text-sm leading-relaxed whitespace-pre-line">{c.body}</article>
+      {c.kind === "DOCUMENTO" ? (
+        <>
+          <p className="text-sm text-stone-500">Te lo envía {c.createdBy} (RRHH). Léelo entero antes de firmar.</p>
+          {c.body && <article className="card text-sm leading-relaxed whitespace-pre-line">{c.body}</article>}
+          {!c.signedAt && <FileLink href={`/api/contracts/${c.id}/pdf`} title={c.title} className="btn btn-primary w-full">📄 Leer el documento</FileLink>}
+        </>
+      ) : (
+        <article className="card text-sm leading-relaxed whitespace-pre-line">{c.body}</article>
+      )}
       {c.kind.startsWith("PRL_") && !c.signedAt && (
         <FileLink href={`/api/contracts/${c.id}/pdf`} title={c.title} className="btn w-full">📄 Ver el documento con mis datos</FileLink>
       )}
