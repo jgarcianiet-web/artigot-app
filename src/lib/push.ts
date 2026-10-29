@@ -129,8 +129,11 @@ async function emailWithoutDevices(workerIds: string[], title: string, body: str
   const workers = await db.worker.findMany({ where: { id: { in: workerIds }, active: true, email: { not: null }, devices: { none: {} } }, select: { id: true, name: true, email: true } });
   const done: string[] = [];
   for (const w of workers) {
-    const text = [`Hola ${w.name.split(" ")[0]},`, "", body, "", `Entra en la app para responder: ${appUrl()}${url ?? "/app"}`, "", "Activa los avisos en la app para enterarte al momento."].join("\n");
-    await sendMail(w.email!, title, text).then(() => done.push(w.id)).catch((e) => console.error("email aviso", e));
+    const text = [`Hola ${w.name.split(" ")[0]},`, "", body].join("\n");
+    await sendMail(w.email!, title, text, [], {
+      button: { label: "Abrir la app", url: `${appUrl()}${url ?? "/app"}` },
+      after: "Activa los avisos en la app para enterarte al momento.",
+    }).then(() => done.push(w.id)).catch((e) => console.error("email aviso", e));
   }
   return done;
 }

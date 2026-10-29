@@ -1,6 +1,7 @@
 import { after } from "next/server";
 import { auditAdmin, audit } from "./audit";
 import { db } from "./db";
+import { appUrl } from "./domain";
 import { deleteStoredFile, storeProfilePhoto } from "./files";
 import { mailEnabled, sendMail } from "./mail";
 import { notify } from "./push";
@@ -50,7 +51,7 @@ export async function reviewPhoto(workerId: string, accept: boolean, reason: str
   const body = `Tu foto de perfil no vale: ${note}. Sube otra desde tu perfil en la app.`;
   after(async () => {
     await notify({ workerIds: [workerId], workerUrl: "/app/perfil#foto", title: "Sube otra foto de perfil", body, tag: "foto" });
-    if (!w._count.devices && w.email && mailEnabled()) await sendMail(w.email, "Sube otra foto de perfil", body).catch((e) => console.error("email foto", e));
+    if (!w._count.devices && w.email && mailEnabled()) await sendMail(w.email, "Sube otra foto de perfil", body, [], { button: { label: "Subir otra foto", url: `${appUrl()}/app/perfil#foto` } }).catch((e) => console.error("email foto", e));
   });
 }
 
