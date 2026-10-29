@@ -9,6 +9,7 @@ import { eventFormOptions } from "@/lib/catalog";
 import { CLOCK_RADIUS_M } from "@/lib/clockRules";
 import { db } from "@/lib/db";
 import { addDays, euro, formatDate, isFixed, isRole, payable, rateFor, hoursBetween, callTime, ROLE_LABEL, ROLE_PLURAL, ROLES, type Role } from "@/lib/domain";
+import { slotConflict } from "@/lib/slots";
 import { ConfirmDraft } from "./ConfirmDraft";
 
 type Staff = { workerId: string; role: Role }[];
@@ -33,13 +34,14 @@ export default async function Draft({ params, searchParams }: { params: Promise<
   const [workers, busy, off, otherDrafts, rates, options] = await Promise.all([
     db.worker.findMany({ where: { active: true }, select: { id: true, name: true, role: true, roles: true, zone: true, phone: true, contractCode: true, customRates: true }, orderBy: { name: "asc" } }),
     db.assignment.findMany({ where: { status: { in: ["CONVOCADO", "CONFIRMADO"] }, event: { date: ev.date, status: { not: "CANCELADO" } } }, select: { workerId: true, event: { select: { name: true } } } }),
-    db.unavailability.findMany({ where: { date: ev.date }, select: { workerId: true } }),
+    db.unavailability.findMany({ where: { date: ev.date }, select: { workerId: true, only: true } }),
     db.eventDraft.findMany({ where: { date: ev.date, id: { not: d.id } }, select: { name: true, staff: true } }),
     db.rate.findMany(),
     eventFormOptions(),
   ]);
   const busyBy = new Map(busy.map((b) => [b.workerId, b.event.name]));
-  const offSet = new Set(off.map((u) => u.workerId));
+  // No disponibles: todo el día, o solo pueden la otra franja (mañana/tarde) que la del evento
+  const offSet = new Set(off.filter((u) => !u.only || slotConflict(u.only, ev.startTime)).map((u) => u.workerId));
   const draftBy = new Map(otherDrafts.flatMap((o) => (o.staff as Staff).map((x) => [x.workerId, o.name] as const)));
   const byId = new Map(workers.map((w) => [w.id, w]));
   const planned = new Set(staff.map((x) => x.workerId));

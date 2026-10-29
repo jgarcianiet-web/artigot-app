@@ -12,7 +12,7 @@ import { addDays, callTime, clocksIn, isLeadRole, formatDate, num, ROLE_LABEL, t
 import { Checklist } from "@/components/StaffForms";
 import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
 import { checklistFor, getUniform, lines } from "@/lib/staff";
-import { respond, startPrivacySignature, toggleUnavailable } from "./actions";
+import { respond, startPrivacySignature, setAvailability } from "./actions";
 import { Onboarding } from "@/components/Onboarding";
 import { incompleteWorkers } from "@/lib/completeness";
 import { privacySignature } from "@/lib/privacy";
@@ -99,7 +99,7 @@ export default async function WorkerHome() {
   ];
   const blocked = toReview.some((p) => p.overdue);
 
-  const unavailable = new Set(worker.unavailabilities.map((u) => u.date));
+  const marks = Object.fromEntries(worker.unavailabilities.map((u) => [u.date, (u.only ?? "NO") as "NO" | "MANANA" | "TARDE"]));
   const busy = new Set(worker.assignments.filter((a) => ["CONVOCADO", "CONFIRMADO"].includes(a.status)).map((a) => a.event.date));
 
   const ChatLink = ({ eventId }: { eventId: string }) => {
@@ -243,14 +243,15 @@ export default async function WorkerHome() {
       <section className="space-y-3">
         <h2>Mi disponibilidad</h2>
         <p className="text-sm text-stone-500">
-          Toca un día para marcarlo como <strong className="text-red-600">no disponible</strong> (o para quitarlo).
+          Toca un día para decir si puedes <strong>solo por la mañana</strong> (hasta las 15:00), <strong>solo por la tarde</strong> (desde las 15:00) o si{" "}
+          <strong className="text-red-600">no puedes</strong>. Los días sin marcar puedes todo el día.
         </p>
         <AvailabilityCalendar
           today={t}
           monthsAhead={MONTHS_AHEAD}
-          unavailable={[...unavailable]}
+          marks={marks}
           busy={[...busy]}
-          toggle={toggleUnavailable}
+          save={setAvailability}
         />
       </section>
 

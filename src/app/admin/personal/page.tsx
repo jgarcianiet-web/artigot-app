@@ -31,7 +31,7 @@ export default async function StaffList({
           ] : undefined,
     },
     include: {
-      unavailabilities: { where: { date: t }, select: { id: true } },
+      unavailabilities: { where: { date: t, only: null }, select: { id: true } },
       _count: { select: { assignments: { where: { status: "CONFIRMADO" } }, devices: true } },
     },
     orderBy: [{ role: "asc" }, { name: "asc" }],

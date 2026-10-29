@@ -45,7 +45,8 @@ export default async function Calendar({ searchParams }: { searchParams: Promise
     }),
     db.worker.count({ where: { active: true } }),
     db.unavailability.findMany({
-      where: { date: { gte: gridStart, lte: gridEnd }, worker: { active: true } },
+      // Quien solo puede media jornada sigue contando como libre ese día
+      where: { date: { gte: gridStart, lte: gridEnd }, only: null, worker: { active: true } },
       select: { date: true, workerId: true },
     }),
     db.assignment.findMany({

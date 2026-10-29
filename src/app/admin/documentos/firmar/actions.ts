@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { auditAdmin } from "@/lib/audit";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { cancelPending, createSignRequest, remindSignRequest } from "@/lib/signRequests";
+import { cancelPending, createSignRequest, deleteSignRequest, remindSignRequest } from "@/lib/signRequests";
 
 export async function sendSignRequest(_prev: string | null, form: FormData) {
   const by = await requireAdmin();
@@ -43,4 +43,14 @@ export async function cancelSignAction(requestId: string) {
   await auditAdmin(by, "Documento", "Anulado", `«${r?.title}»: anuladas ${cancelled} firmas pendientes${deleted ? " (envío borrado)" : ""}`, { entityId: requestId });
   revalidatePath("/admin/documentos/firmar");
   redirect(deleted ? "/admin/documentos/firmar" : `/admin/documentos/firmar/${requestId}`);
+}
+
+/** Borra el envío entero (p. ej. uno de prueba), también las firmas ya hechas. */
+export async function deleteSignAction(requestId: string) {
+  const by = await requireAdmin();
+  const r = await deleteSignRequest(requestId);
+  if (r) await auditAdmin(by, "Documento", "Borrado", `«${r.title}»: envío borrado (${r.signed} de ${r.total} firmados)`, { entityId: requestId });
+  revalidatePath("/admin/documentos/firmar");
+  revalidatePath("/admin/documentos");
+  redirect("/admin/documentos/firmar");
 }

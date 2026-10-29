@@ -34,6 +34,7 @@ import { DocumentUploadForm } from "@/components/StaffForms";
 import { DOC_LABEL, docState, formatIban } from "@/lib/staff";
 import { db } from "@/lib/db";
 import { CENTER_LABEL, CONTRACT_SHORT, euro, formatDate, isFixed, num, ownRatesText, today, workedHours } from "@/lib/domain";
+import { type Slot, SLOT_SHORT } from "@/lib/slots";
 
 const DEVICE_LABEL: Record<string, string> = { web: "Navegador / web app", fcm: "App Android", apns: "App iPhone" };
 
@@ -451,7 +452,9 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
               {worker.unavailabilities.map((u) => (
                 <li key={u.id} className="flex items-center justify-between py-1.5">
                   <span>
-                    {formatDate(u.date)} {u.reason && <span className="text-stone-500">· {u.reason}</span>}
+                    {formatDate(u.date)}
+                    {u.only && <span className="text-amber-800"> · {SLOT_SHORT[u.only as Slot]}</span>}
+                    {u.reason && <span className="text-stone-500"> · {u.reason}</span>}
                   </span>
                   <form action={removeUnavailability.bind(null, u.id)}>
                     <button className="text-xs text-red-600 hover:underline">Quitar</button>

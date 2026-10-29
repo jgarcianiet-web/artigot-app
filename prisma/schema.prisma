@@ -98,6 +98,8 @@ model Unavailability {
   workerId String
   date     String
   reason   String?
+  /// Solo puede esa franja: MANANA (hasta las 15:00) o TARDE (desde las 15:00). Vacío = no disponible en todo el día
+  only     String?
   worker   Worker  @relation(fields: [workerId], references: [id], onDelete: Cascade)
 
   @@unique([workerId, date])
@@ -709,6 +711,8 @@ model PollAnswer {
   workerId   String
   date       String
   available  Boolean
+  /// Si puede: DIA (todo el día), MANANA (hasta las 15:00) o TARDE (desde las 15:00)
+  slot       String?
   answeredAt DateTime         @default(now())
   poll       AvailabilityPoll @relation(fields: [pollId], references: [id], onDelete: Cascade)
   worker     Worker           @relation(fields: [workerId], references: [id], onDelete: Cascade)

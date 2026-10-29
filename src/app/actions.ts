@@ -380,7 +380,7 @@ export async function addUnavailability(workerId: string, form: FormData) {
     await db.unavailability.upsert({
       where: { workerId_date: { workerId, date: d } },
       create: { workerId, date: d, reason },
-      update: { reason },
+      update: { reason, only: null },
     });
   }
   revalidatePath(`/admin/personal/${workerId}`);

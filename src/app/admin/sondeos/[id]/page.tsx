@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ConfirmButton, SubmitButton } from "@/components/client";
 import { db } from "@/lib/db";
 import { formatDate, ROLE_LABEL, workerRoles, type Role } from "@/lib/domain";
+import { SLOT_SHORT, type Slot } from "@/lib/slots";
 import { closePoll, deletePoll, remindPoll } from "../actions";
 
 export default async function PollDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -51,7 +52,24 @@ export default async function PollDetail({ params }: { params: Promise<{ id: str
                   <td className="whitespace-nowrap font-medium">{formatDate(d)}</td>
                   <td className="text-right font-semibold text-emerald-700">{yes.length}</td>
                   <td className="text-right text-stone-500">{day.length - yes.length}</td>
-                  <td className="min-w-64">{yes.map((a) => a.worker.name).join(", ") || <span className="text-stone-400">—</span>}</td>
+                  <td className="min-w-64">
+                    {yes.length ? (
+                      yes.map((a, i) => (
+                        <span key={a.id}>
+                          {i > 0 && ", "}
+                          {a.worker.name}
+                          {a.slot && a.slot !== "DIA" && <span className="text-xs text-sky-700"> ({SLOT_SHORT[a.slot as Slot]})</span>}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-stone-400">—</span>
+                    )}
+                    {yes.some((a) => a.slot && a.slot !== "DIA") && (
+                      <div className="mt-1 text-xs text-stone-500">
+                        Todo el día {yes.filter((a) => !a.slot || a.slot === "DIA").length} · mañana {yes.filter((a) => a.slot === "MANANA").length} · tarde {yes.filter((a) => a.slot === "TARDE").length}
+                      </div>
+                    )}
+                  </td>
                   <td className="whitespace-nowrap">
                     {evs.map((e) => <Link key={e.id} href={`/admin/eventos/${e.id}`} className="link block">{e.name}</Link>)}
                     <Link href={`/admin/eventos/nuevo?fecha=${d}`} className="text-xs text-stone-500 hover:underline">+ Nuevo evento</Link>
