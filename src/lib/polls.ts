@@ -1,11 +1,13 @@
 import { db } from "./db";
 import { addDays, formatDate, today, workerRoles } from "./domain";
 import { notify } from "./push";
+import type { DayAnswer, Slot } from "./slots";
 
 /**
  * Sondeos de disponibilidad: RRHH pregunta «¿qué días puedes trabajar?» antes de convocar.
  * - «No puedo» marca ese día como no disponible (así no se le convoca).
- * - «Puedo» le pone primero en la lista de candidatos de los eventos de ese día y en el autocompletar.
+ * - «Puedo» le pone primero en la lista de candidatos de los eventos de ese día y en el autocompletar. Tiene que
+ *   elegir la franja: todo el día, mañana o tarde; «solo mañana/tarde» queda también en su disponibilidad.
  */
 
 export const POLL_REASON = "Sondeo";
@@ -35,26 +37,37 @@ export async function openPollsFor(worker: { id: string; role: string; roles: st
     .filter((p) => p.dates.length > 0);
 }
 
-/** Guarda la respuesta de un día y actualiza su disponibilidad. */
-export async function answerPoll(workerId: string, pollId: string, date: string, available: boolean) {
+/** Guarda la respuesta de un día (una franja o «NO») y actualiza su disponibilidad. */
+export async function answerPoll(workerId: string, pollId: string, date: string, answer: DayAnswer) {
   const poll = await db.availabilityPoll.findUnique({ where: { id: pollId } });
   if (!poll || poll.closedAt || !poll.dates.includes(date) || date < today()) return false;
+  const available = answer !== "NO";
+  const slot = available ? answer : null;
   await db.pollAnswer.upsert({
     where: { pollId_workerId_date: { pollId, workerId, date } },
-    create: { pollId, workerId, date, available },
-    update: { available, answeredAt: new Date() },
+    create: { pollId, workerId, date, available, slot },
+    update: { available, slot, answeredAt: new Date() },
   });
+  // Solo se toca la disponibilidad que puso el propio sondeo (no la que marcó a mano en su calendario)
   const un = await db.unavailability.findUnique({ where: { workerId_date: { workerId, date } } });
-  if (!available && !un) await db.unavailability.create({ data: { workerId, date, reason: POLL_REASON } });
-  // Solo se quita la no disponibilidad que puso el propio sondeo (no la que marcó a mano)
-  if (available && un?.reason === POLL_REASON) await db.unavailability.delete({ where: { id: un.id } });
+  if (un && un.reason !== POLL_REASON) return true;
+  if (answer === "DIA") {
+    if (un) await db.unavailability.delete({ where: { id: un.id } });
+  } else {
+    const only = answer === "NO" ? null : answer;
+    await db.unavailability.upsert({
+      where: { workerId_date: { workerId, date } },
+      create: { workerId, date, reason: POLL_REASON, only },
+      update: { only },
+    });
+  }
   return true;
 }
 
-/** Quién ha dicho que puede trabajar ese día (en sondeos abiertos). */
+/** Quién ha dicho que puede trabajar ese día (en sondeos abiertos) y en qué franja. */
 export async function availableOn(date: string) {
-  const rows = await db.pollAnswer.findMany({ where: { date, available: true, poll: { closedAt: null } }, select: { workerId: true } });
-  return new Set(rows.map((r) => r.workerId));
+  const rows = await db.pollAnswer.findMany({ where: { date, available: true, poll: { closedAt: null } }, select: { workerId: true, slot: true } });
+  return new Map(rows.map((r) => [r.workerId, (r.slot ?? "DIA") as Slot]));
 }
 
 /** Personal activo al que va dirigido un sondeo (por puesto; sin puestos = todos). */

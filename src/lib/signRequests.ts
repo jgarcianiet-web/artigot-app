@@ -78,6 +78,16 @@ export async function cancelPending(requestId: string) {
   return { cancelled: count, deleted: !left };
 }
 
+/** Borra el envío entero: las firmas (también las ya firmadas, con su imagen de firma) y el PDF. */
+export async function deleteSignRequest(requestId: string) {
+  const r = await db.signRequest.findUnique({ where: { id: requestId }, include: { contracts: { select: { signatureFileId: true } } } });
+  if (!r) return null;
+  await db.signRequest.delete({ where: { id: requestId } }); // las firmas se borran en cascada
+  for (const c of r.contracts) if (c.signatureFileId) await deleteStoredFile(c.signatureFileId);
+  await deleteStoredFile(r.fileId);
+  return { title: r.title, signed: r.contracts.filter((c) => c.signatureFileId).length, total: r.contracts.length };
+}
+
 function wrap(text: string, font: PDFFont, size: number, width: number) {
   const out: string[] = [];
   for (const para of safe(text).split("\n")) {

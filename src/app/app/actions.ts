@@ -17,6 +17,7 @@ import { ensurePrivacyDoc, privacySignature } from "@/lib/privacy";
 import { checkIdentityDocs, storeIdentityDocs } from "@/lib/identityDocs";
 import { eventTransport, isTransport, MAX_SEATS } from "@/lib/transport";
 import { answerPoll } from "@/lib/polls";
+import { type DayAnswer, isDayAnswer } from "@/lib/slots";
 import { DOC_LABEL, validDniNie, validIban } from "@/lib/staff";
 import { clocksIn, formatDate, isLeadRole, isRole, nowTime, type Role, today } from "@/lib/domain";
 import { autoReplace } from "@/lib/staffing";
@@ -273,12 +274,19 @@ export async function clockOffline(
   return { ok: true, done: true, message: `${kind === "in" ? "Entrada" : "Salida"} de las ${time} registrada (fichada sin cobertura).` };
 }
 
-export async function toggleUnavailable(date: string) {
+/** «Mi disponibilidad»: un día puede ser todo el día (nada guardado), solo mañana, solo tarde o no puede. */
+export async function setAvailability(date: string, answer: DayAnswer) {
   const worker = await requireWorker();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today()) return;
-  const existing = await db.unavailability.findUnique({ where: { workerId_date: { workerId: worker.id, date } } });
-  if (existing) await db.unavailability.delete({ where: { id: existing.id } });
-  else await db.unavailability.create({ data: { workerId: worker.id, date } });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today() || !isDayAnswer(answer)) return;
+  if (answer === "DIA") await db.unavailability.deleteMany({ where: { workerId: worker.id, date } });
+  else {
+    const only = answer === "NO" ? null : answer;
+    await db.unavailability.upsert({
+      where: { workerId_date: { workerId: worker.id, date } },
+      create: { workerId: worker.id, date, only },
+      update: { only, reason: null },
+    });
+  }
   revalidatePath("/app");
 }
 
@@ -654,9 +662,9 @@ export async function leaveRide(assignmentId: string) {
 
 // ---------- Sondeos de disponibilidad ----------
 
-export async function answerPollAction(pollId: string, date: string, available: boolean) {
+export async function answerPollAction(pollId: string, date: string, answer: DayAnswer) {
   const me = await requireWorker();
-  if (await answerPoll(me.id, pollId, date, available)) {
+  if (isDayAnswer(answer) && (await answerPoll(me.id, pollId, date, answer))) {
     revalidatePath("/app");
     revalidatePath(`/admin/sondeos/${pollId}`);
   }
