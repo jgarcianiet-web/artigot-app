@@ -17,6 +17,7 @@ import { ensurePrivacyDoc, privacySignature } from "@/lib/privacy";
 import { checkIdentityDocs, storeIdentityDocs } from "@/lib/identityDocs";
 import { eventTransport, isTransport, MAX_SEATS } from "@/lib/transport";
 import { answerPoll } from "@/lib/polls";
+import { notifyIfAllSigned } from "@/lib/signRequests";
 import { type DayAnswer, isDayAnswer } from "@/lib/slots";
 import { DOC_LABEL, validDniNie, validIban } from "@/lib/staff";
 import { clocksIn, formatDate, isLeadRole, isRole, nowTime, type Role, today } from "@/lib/domain";
@@ -506,11 +507,9 @@ export async function signContract(contractId: string, _prev: FormResult, form: 
   });
   await audit(me.name, "Trabajador", "Documento", "Firmado", `${me.name} firma «${c.title}»${note ? ` con observaciones: ${note}` : ""}`, { entityId: me.id });
   // Documento enviado por RRHH: cuando firma el último, se avisa a RRHH
-  if (c.requestId && !(await db.contract.count({ where: { requestId: c.requestId, signedAt: null } }))) {
-    const total = await db.contract.count({ where: { requestId: c.requestId } });
-    after(() =>
-      notify({ admins: true, adminUrl: `/admin/documentos/firmar/${c.requestId}`, title: "✍️ Documento firmado por todos", body: `«${c.title}»: han firmado las ${total} ${total === 1 ? "persona" : "personas"}.`, tag: `firma-${c.requestId}` }),
-    );
+  if (c.requestId) {
+    const requestId = c.requestId;
+    after(() => notifyIfAllSigned(requestId, c.title));
   }
   if (note) {
     after(() =>

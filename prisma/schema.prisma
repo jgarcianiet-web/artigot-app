@@ -330,30 +330,31 @@ model Review {
 // Archivo subido (fotos del chat e incidencias). Se guarda en la base de datos: sin servicios externos.
 // scope: CHAT | INCIDENT. El acceso se comprueba según el evento al que pertenece.
 model StoredFile {
-  id          String          @id @default(cuid())
-  eventId     String?
-  scope       String
-  mime        String
-  size        Int
+  id                  String          @id @default(cuid())
+  eventId             String?
+  scope               String
+  mime                String
+  size                Int
   // Contenido: en el almacén de archivos (storageKey, cifrado) o, si no hay almacén configurado, aquí
-  data        Bytes?
-  storageKey  String?
-  createdAt   DateTime        @default(now())
-  event       Event?          @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  incidentId  String?
-  incident    Incident?       @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  data                Bytes?
+  storageKey          String?
+  createdAt           DateTime        @default(now())
+  event               Event?          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  incidentId          String?
+  incident            Incident?       @relation(fields: [incidentId], references: [id], onDelete: Cascade)
   // Documentos del trabajador (scope DOC): solo los ven RRHH y el propio trabajador
-  workerId    String?
-  worker      Worker?         @relation("workerFiles", fields: [workerId], references: [id], onDelete: Cascade)
-  photoOf     Worker?         @relation("workerPhoto")
-  signRequest SignRequest?
+  workerId            String?
+  worker              Worker?         @relation("workerFiles", fields: [workerId], references: [id], onDelete: Cascade)
+  photoOf             Worker?         @relation("workerPhoto")
+  signRequest         SignRequest?
   // Fotos de un grupo de chat con el personal (scope GROUP): las ven RRHH y los miembros del grupo
-  groupId     String?
-  group       WorkerGroup?    @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  document    WorkerDocument?
-  candidate   Candidate?
-  signatureOf Contract?
-  payslip     Payslip?
+  groupId             String?
+  group               WorkerGroup?    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  document            WorkerDocument?
+  candidate           Candidate?
+  signatureOf         Contract?
+  externalSignatureOf ExternalSigner? @relation("ExternalSignature")
+  payslip             Payslip?
 }
 
 // Incidencia del evento. type: ROTURA | QUEJA | ACCIDENTE | PERSONAL | OTRO
@@ -581,16 +582,48 @@ model Contract {
 
 // Documento en PDF que RRHH envía a una o varias personas para que lo firmen en la app (cambio de contrato, anexos…)
 model SignRequest {
-  id        String     @id @default(cuid())
+  id        String           @id @default(cuid())
   title     String
   message   String?
-  fileId    String     @unique
+  fileId    String           @unique
   createdBy String
-  createdAt DateTime   @default(now())
-  file      StoredFile @relation(fields: [fileId], references: [id])
+  createdAt DateTime         @default(now())
+  file      StoredFile       @relation(fields: [fileId], references: [id])
   contracts Contract[]
+  externals ExternalSigner[]
 
   @@index([createdAt])
+}
+
+/// Persona de fuera de la plataforma (candidato, antiguo trabajador, proveedor…) que firma un documento con un enlace
+/// personal y un código que se le envía por email.
+model ExternalSigner {
+  id              String      @id @default(cuid())
+  requestId       String
+  name            String
+  dni             String?
+  email           String
+  phone           String?
+  /// Enlace personal: /firmar/<token>
+  token           String      @unique
+  expiresAt       DateTime
+  /// Código de 6 cifras enviado por email (solo su huella), su caducidad e intentos fallidos
+  codeHash        String?
+  codeSentAt      DateTime?
+  codeTries       Int         @default(0)
+  /// Sesión abierta tras escribir bien el código (huella de la cookie)
+  sessionHash     String?
+  verifiedAt      DateTime?
+  signedAt        DateTime?
+  signerIp        String?
+  signerNote      String?
+  signatureFileId String?     @unique
+  createdBy       String
+  createdAt       DateTime    @default(now())
+  request         SignRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  signature       StoredFile? @relation("ExternalSignature", fields: [signatureFileId], references: [id], onDelete: SetNull)
+
+  @@index([requestId])
 }
 
 // Quincena de pago (pagamos a quincena vencida: 1-15 el día 22, 16-fin la primera semana del mes siguiente).

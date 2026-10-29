@@ -66,6 +66,12 @@ export async function storeSignature(png: Buffer, workerId: string) {
   return save(png, { scope: "SIGNATURE", workerId, mime: "image/png" });
 }
 
+/** Firma de una persona de fuera de la plataforma (solo la ve RRHH). */
+export async function storeExternalSignature(png: Buffer) {
+  if (png.length === 0 || png.length > 500_000) throw new Error("Firma no válida.");
+  return save(png, { scope: "SIGNATURE", mime: "image/png" });
+}
+
 /** Nómina de A3 de un trabajador (PDF generado al separar el de todo el mes). */
 export async function storePayslipFile(pdf: Buffer, workerId: string) {
   return save(pdf, { scope: "PAYSLIP", workerId, mime: "application/pdf" });

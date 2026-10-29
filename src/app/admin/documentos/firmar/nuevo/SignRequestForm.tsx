@@ -3,6 +3,7 @@
 import { startTransition, useActionState } from "react";
 import { WorkerChooser, type ChooserWorker } from "@/components/WorkerChooser";
 import { sendSignRequest } from "../actions";
+import { ExternalRows } from "./ExternalRows";
 
 /** Enviar un PDF a firmar: título, mensaje opcional, el PDF y a quién. */
 export function SignRequestForm({ workers, initial }: { workers: ChooserWorker[]; initial: string[] }) {
@@ -32,10 +33,11 @@ export function SignRequestForm({ workers, initial }: { workers: ChooserWorker[]
         </label>
       </div>
       <WorkerChooser workers={workers} initial={initial} title="Quién tiene que firmarlo" />
+      <ExternalRows />
       {msg && <p className="text-sm text-red-700">{msg}</p>}
       <button className="btn btn-primary w-full" disabled={pending}>{pending ? "Enviando…" : "Enviar para firmar"}</button>
       <p className="text-xs text-stone-500">
-        Les llega un aviso al móvil (o un email si no tienen avisos). Firman con el dedo en la app y su copia firmada lleva la firma en cada página y una
+        Al personal le llega un aviso al móvil (o un email si no tiene avisos); a los de fuera, un email con su enlace. Firman con el dedo en la app y su copia firmada lleva la firma en cada página y una
         hoja final con quién, cuándo y la huella del documento. A los 2 días se le recuerda a quien no haya firmado.
       </p>
     </form>

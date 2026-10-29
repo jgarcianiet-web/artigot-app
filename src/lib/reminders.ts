@@ -2,6 +2,7 @@ import { claim } from "./reminderLog";
 import { runAutomations } from "./automationJobs";
 import { clockWindow, hhmm, madridTime } from "./clockRules";
 import { db } from "./db";
+import { inviteExternal } from "./externalSign";
 import { mailEnabled, sendMail } from "./mail";
 import { addDays, appUrl, callTime, loginId, loginUrl, formatDate, isLeadRole, LEAD_ROLES, ROLE_LABEL, type Role } from "./domain";
 import { notify } from "./push";
@@ -252,6 +253,16 @@ export async function runReminders(now = new Date()) {
       emailFallback: true,
     });
     sent.push(`firma-recordatorio:${c.id}`);
+  }
+  // Y a las personas de fuera, por email (con el enlace vigente)
+  const externals = await db.externalSigner.findMany({
+    where: { signedAt: null, expiresAt: { gt: now }, createdAt: { lt: new Date(now.getTime() - 2 * 864e5) } },
+    include: { request: { select: { title: true, message: true, createdBy: true } } },
+  });
+  for (const x of externals) {
+    if (!(await claim(`firma-recordatorio:${x.id}`))) continue;
+    await inviteExternal(x, x.request, true).catch((e) => console.error("recordatorio firma externa", x.email, e));
+    sent.push(`firma-recordatorio:${x.id}`);
   }
 
   // 11. Automatizaciones: convocatoria automática, disponibilidad semanal y email diario de A3
