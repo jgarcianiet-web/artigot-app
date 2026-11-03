@@ -18,6 +18,7 @@ import { migrateFilesToStorage, sweepOrphanFiles } from "./files";
 import { storageEnabled } from "./storage";
 import { getConvocationSettings } from "./convocation";
 import { autoReplace } from "./staffing";
+import { getAutomation } from "./automation";
 import { CANDIDATE_RETENTION_MONTHS, purgeOldCandidates } from "./candidates";
 
 /**
@@ -268,8 +269,9 @@ export async function runReminders(now = new Date()) {
   // 11. Automatizaciones: convocatoria automática, disponibilidad semanal y email diario de A3
   sent.push(...(await runAutomations(now)));
 
-  // 8. Datos incompletos: recordatorio al trabajador cada 3 días (cada día si tiene servicio en la próxima semana)
-  if (now >= madridTime(today, REMINDERS.DATA_REMINDER_HOUR)) {
+  // 8. Datos incompletos: recordatorio al trabajador cada 3 días (cada día si tiene servicio en la próxima semana).
+  // Se puede pausar en Ajustes → Automatizaciones (p. ej. mientras el personal aún no tiene su código de acceso).
+  if (now >= madridTime(today, REMINDERS.DATA_REMINDER_HOUR) && (await getAutomation()).dataReminder.enabled) {
     const dayNumber = Math.floor(new Date(`${today}T12:00:00Z`).getTime() / 864e5);
     for (const w of await incompleteWorkers()) {
       const key = w.upcoming ? `datos:${w.id}:${today}` : `datos:${w.id}:c${Math.floor(dayNumber / REMINDERS.DATA_EVERY_DAYS)}`;
