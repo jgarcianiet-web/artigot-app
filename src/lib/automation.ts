@@ -7,6 +7,7 @@ import { EVENT_TYPES, type Role } from "./domain";
  * - Disponibilidad semanal: un día a la semana se pregunta a todo el personal qué días puede trabajar la siguiente.
  * - Personal por invitados: proporciones por tipo de evento para calcular el personal necesario.
  * - Email diario de A3: los Excel de las altas de mañana (y las bajas de hoy) a RRHH.
+ * - Recordatorio de completar datos: al personal al que le faltan datos o documentos (apagado hasta que tengan su código).
  */
 
 export type Ratio = {
@@ -23,6 +24,7 @@ export type AutomationSettings = {
   availability: { enabled: boolean; weekday: number; hour: string; days: number[]; remind: boolean };
   ratios: Record<string, Ratio>;
   a3Email: { enabled: boolean; hour: string; to: string };
+  dataReminder: { enabled: boolean };
 };
 
 export const AUTOMATION_DEFAULTS: AutomationSettings = {
@@ -35,6 +37,8 @@ export const AUTOMATION_DEFAULTS: AutomationSettings = {
     OTRO: { camareros: 20, maitres: 0, mozos: 0, minMaitres: 0 },
   },
   a3Email: { enabled: true, hour: "18:00", to: "" },
+  // Apagado hasta que el personal tenga su código de acceso: si no, le pedimos entrar en una app en la que aún no puede
+  dataReminder: { enabled: false },
 };
 
 const KEY = "automatizaciones";
@@ -48,6 +52,7 @@ export async function getAutomation(): Promise<AutomationSettings> {
     availability: { ...d.availability, ...saved.availability },
     ratios: Object.fromEntries(EVENT_TYPES.map((t) => [t, { ...d.ratios[t], ...saved.ratios?.[t] }])),
     a3Email: { ...d.a3Email, ...saved.a3Email },
+    dataReminder: { ...d.dataReminder, ...saved.dataReminder },
   };
 }
 

@@ -40,6 +40,7 @@ export async function saveAutomationAction(_prev: string | null, form: FormData)
       ]),
     ),
     a3Email: { enabled: form.get("a3Enabled") === "1", hour: hour("a3Hour", cur.a3Email.hour), to: String(form.get("a3To") ?? "").trim().slice(0, 500) },
+    dataReminder: { enabled: form.get("dataEnabled") === "1" },
   };
   if (value.availability.enabled && !value.availability.days.length) return "Marca al menos un día de la semana para la disponibilidad.";
   await saveAutomation(value);
@@ -47,7 +48,7 @@ export async function saveAutomationAction(_prev: string | null, form: FormData)
     by,
     "Ajustes",
     "Automatizaciones",
-    `Convocatoria automática ${value.convoke.defaultOn ? `por defecto ${value.convoke.days} días antes` : "a mano por defecto"} (${value.convoke.hour}); disponibilidad ${value.availability.enabled ? `los ${WEEKDAY_LABEL[value.availability.weekday].toLowerCase()} a las ${value.availability.hour}` : "desactivada"}; email de A3 ${value.a3Email.enabled ? `a las ${value.a3Email.hour}` : "desactivado"}`,
+    `Convocatoria automática ${value.convoke.defaultOn ? `por defecto ${value.convoke.days} días antes` : "a mano por defecto"} (${value.convoke.hour}); disponibilidad ${value.availability.enabled ? `los ${WEEKDAY_LABEL[value.availability.weekday].toLowerCase()} a las ${value.availability.hour}` : "desactivada"}; email de A3 ${value.a3Email.enabled ? `a las ${value.a3Email.hour}` : "desactivado"}; recordatorio de completar datos ${value.dataReminder.enabled ? "activado" : "en pausa"}`,
   );
   revalidatePath("/admin/ajustes/automatizaciones");
   return "Guardado.";

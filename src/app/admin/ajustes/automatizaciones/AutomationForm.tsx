@@ -112,6 +112,19 @@ export function AutomationForm({ s, mail }: { s: AutomationSettings; mail: boole
         </div>
       </section>
 
+      <section className="card space-y-3">
+        <h2>5. Recordatorio de completar datos</h2>
+        <p className="text-sm text-stone-600">
+          A quien le faltan datos o documentos (DNI, Seguridad Social, IBAN, foto, protección de datos…) se le recuerda que los complete: cada día si tiene
+          un servicio en los próximos 7 días y, si no, cada 3 días. Le llega un aviso en la app o, si aún no ha entrado, un email. Actívalo cuando el personal
+          ya tenga su código de acceso.
+        </p>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="dataEnabled" value="1" defaultChecked={s.dataReminder.enabled} className="size-4" />
+          Recordar al personal que complete sus datos
+        </label>
+      </section>
+
       {msg && <p className="text-sm">{msg}</p>}
       <SubmitButton>Guardar</SubmitButton>
     </ActionForm>

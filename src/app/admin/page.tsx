@@ -7,6 +7,7 @@ import { DOC_LABEL, DOC_WARN_DAYS } from "@/lib/staff";
 import { todayTasks } from "@/lib/todayTasks";
 import { syncAutoEmployments } from "@/lib/autoAltas";
 import { incompleteWorkers } from "@/lib/completeness";
+import { getAutomation } from "@/lib/automation";
 
 export default async function Dashboard() {
   const t = today();
@@ -27,11 +28,13 @@ export default async function Dashboard() {
     }),
   ]);
 
-  const [tasks, incomplete, docsPending] = await Promise.all([
+  const [tasks, incomplete, docsPending, automation] = await Promise.all([
     todayTasks(t),
     incompleteWorkers(),
     db.workerDocument.count({ where: { verified: false, worker: { active: true } } }),
+    getAutomation(),
   ]);
+  const dataReminderOn = automation.dataReminder.enabled;
   const incompleteSoon = incomplete.filter((w) => w.upcoming);
   const rows = events.map((e) => {
     const cov = coverage(e, e.assignments);
@@ -101,7 +104,14 @@ export default async function Dashboard() {
               <p>
                 <Link href="/admin/personal?incompletos=1" className="link">{incomplete.length} {incomplete.length === 1 ? "persona" : "personas"} con datos o documentos incompletos</Link>
                 {incompleteSoon.length > 0 && <span className="font-medium text-red-700">, {incompleteSoon.length} con servicio en los próximos 7 días: {incompleteSoon.map((w) => w.name).join(", ")}</span>}
-                . Se les recuerda automáticamente.
+                .{" "}
+                {dataReminderOn ? (
+                  "Se les recuerda automáticamente."
+                ) : (
+                  <>
+                    El recordatorio está en pausa (<Link href="/admin/ajustes/automatizaciones" className="link">Ajustes → Automatizaciones</Link>).
+                  </>
+                )}
               </p>
             )}
           </div>
