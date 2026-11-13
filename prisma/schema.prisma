@@ -602,8 +602,11 @@ model ExternalSigner {
   requestId       String
   name            String
   dni             String?
-  email           String
+  email           String?
   phone           String?
+  /// Cómo se le envía el enlace y cómo se identifica: EMAIL (código de 6 cifras a su email) o WHATSAPP (RRHH le manda
+  /// el enlace por WhatsApp y al abrirlo escribe su DNI/NIE)
+  channel         String      @default("EMAIL")
   /// Enlace personal: /firmar/<token>
   token           String      @unique
   expiresAt       DateTime

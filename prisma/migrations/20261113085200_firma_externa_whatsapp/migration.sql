@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "ExternalSigner" ADD COLUMN     "channel" TEXT NOT NULL DEFAULT 'EMAIL',
+ALTER COLUMN "email" DROP NOT NULL;

@@ -255,9 +255,9 @@ export async function runReminders(now = new Date()) {
     });
     sent.push(`firma-recordatorio:${c.id}`);
   }
-  // Y a las personas de fuera, por email (con el enlace vigente)
+  // Y a las personas de fuera que van por email (a las de WhatsApp se lo recuerda RRHH desde el envío)
   const externals = await db.externalSigner.findMany({
-    where: { signedAt: null, expiresAt: { gt: now }, createdAt: { lt: new Date(now.getTime() - 2 * 864e5) } },
+    where: { signedAt: null, channel: "EMAIL", expiresAt: { gt: now }, createdAt: { lt: new Date(now.getTime() - 2 * 864e5) } },
     include: { request: { select: { title: true, message: true, createdBy: true } } },
   });
   for (const x of externals) {

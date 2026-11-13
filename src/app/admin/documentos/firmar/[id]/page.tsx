@@ -4,7 +4,7 @@ import { ConfirmButton, CopyButton, SubmitButton } from "@/components/client";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { isExpired, signLink } from "@/lib/externalSign";
+import { isExpired, signLink, whatsappText } from "@/lib/externalSign";
 import { cancelSignAction, deleteSignAction, remindSignAction } from "../actions";
 
 const when = (d: Date) => new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(d);
@@ -23,6 +23,7 @@ export default async function SignRequestPage({ params }: { params: Promise<{ id
   const total = r.contracts.length + r.externals.length;
   const pending = [...r.contracts, ...r.externals].filter((c) => !c.signedAt);
   const signed = total - pending.length;
+  const waPending = r.externals.filter((x) => x.channel === "WHATSAPP" && !x.signedAt && !x.verifiedAt && !isExpired(x));
   return (
     <div className="space-y-4">
       <div className="space-y-1">
@@ -54,6 +55,12 @@ export default async function SignRequestPage({ params }: { params: Promise<{ id
           </ConfirmButton>
         </form>
       </div>
+      {waPending.length > 0 && (
+        <p className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900 ring-1 ring-emerald-200">
+          💬 Envía el enlace por WhatsApp a <b>{waPending.map((x) => x.name).join(", ")}</b>: pulsa «Enviar por WhatsApp» en su fila. Al abrirlo
+          tendrán que escribir su DNI/NIE.
+        </p>
+      )}
       <div className="card overflow-x-auto p-0">
         <table className="table text-sm">
           <thead><tr><th>Persona</th><th>DNI</th><th>Estado</th><th /></tr></thead>
@@ -75,8 +82,9 @@ export default async function SignRequestPage({ params }: { params: Promise<{ id
             {r.externals.map((x) => (
               <tr key={x.id} className="align-top">
                 <td>
-                  {x.name} <span className="ml-1 rounded bg-stone-100 px-1.5 text-[11px] text-stone-600">de fuera</span>
-                  <div className="text-xs text-stone-500">{x.email}{x.phone ? ` · ${x.phone}` : ""}</div>
+                  {x.name}{" "}
+                  <span className="ml-1 rounded bg-stone-100 px-1.5 text-[11px] text-stone-600">de fuera · {x.channel === "WHATSAPP" ? "por WhatsApp" : "por email"}</span>
+                  <div className="text-xs text-stone-500">{[x.email, x.phone].filter(Boolean).join(" · ")}</div>
                 </td>
                 <td className="text-stone-500">{x.dni ?? "—"}</td>
                 <td>
@@ -86,7 +94,7 @@ export default async function SignRequestPage({ params }: { params: Promise<{ id
                     <span className="text-red-700">Enlace caducado · «Recordar» lo renueva</span>
                   ) : (
                     <span className="text-amber-700">
-                      Pendiente{x.verifiedAt ? " · ha abierto el documento" : x.codeSentAt ? " · ha pedido el código" : ""}
+                      Pendiente{x.verifiedAt ? " · ha abierto el documento" : x.codeSentAt ? " · ha pedido el código" : x.codeTries ? ` · ${x.codeTries} intentos fallidos` : ""}
                       <span className="block text-xs text-stone-500">El enlace vale hasta el {when(x.expiresAt)}</span>
                     </span>
                   )}
@@ -98,9 +106,15 @@ export default async function SignRequestPage({ params }: { params: Promise<{ id
                     !isExpired(x) && (
                       <span className="flex flex-wrap justify-end gap-1.5">
                         <CopyButton text={signLink(x.token)} label="Copiar enlace" />
-                        <WhatsAppButton phone={x.phone} text={`Hola ${x.name.split(" ")[0]}, te envío «${r.title}» de Artigot Catering para que lo firmes. Abre este enlace; te llegará un código a tu email para abrirlo: ${signLink(x.token)}`}>
-                          WhatsApp
-                        </WhatsAppButton>
+                        {x.channel === "WHATSAPP" ? (
+                          <WhatsAppButton phone={x.phone} text={whatsappText(x, r.title)} className="btn btn-sm btn-success">
+                            💬 Enviar por WhatsApp
+                          </WhatsAppButton>
+                        ) : (
+                          <WhatsAppButton phone={x.phone} text={`Hola ${x.name.split(" ")[0]}, te envío «${r.title}» de Artigot Catering para que lo firmes. Abre este enlace; te llegará un código a tu email para abrirlo: ${signLink(x.token)}`}>
+                            WhatsApp
+                          </WhatsAppButton>
+                        )}
                       </span>
                     )
                   )}

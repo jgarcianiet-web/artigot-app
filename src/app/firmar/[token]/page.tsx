@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { Logo } from "@/components/Logo";
 import { hasSession, isExpired, maskEmail, sessionCookie, signerByToken } from "@/lib/externalSign";
-import { CodeStep, SignStep } from "./ExternalSign";
+import { CodeStep, DniStep, SignStep } from "./ExternalSign";
 
 export const metadata: Metadata = { title: "Firmar documento · Artigot", robots: { index: false } };
 
@@ -28,9 +28,12 @@ export default async function ExternalSignPage({ params }: { params: Promise<{ t
             <h1>{s.request.title}</h1>
             <p className="text-sm text-stone-500">Te lo envía {s.request.createdBy}, de RRHH de Artigot Catering.</p>
           </div>
+          {s.signedAt && !session && s.channel === "WHATSAPP" && <DniStep token={token} signed />}
           {s.signedAt ? (
             <div className="card space-y-2 bg-emerald-50">
-              <p className="text-emerald-900">✓ Lo firmaste el {when.format(s.signedAt)}. Te enviamos tu copia firmada por email.</p>
+              <p className="text-emerald-900">
+                ✓ Lo firmaste el {when.format(s.signedAt)}.{s.channel === "EMAIL" && " Te enviamos tu copia firmada por email."}
+              </p>
               {session && <a href={`/api/firma/${token}/pdf`} target="_blank" className="btn">Ver mi copia firmada</a>}
             </div>
           ) : isExpired(s) ? (
@@ -38,7 +41,7 @@ export default async function ExternalSignPage({ params }: { params: Promise<{ t
               <p className="text-sm">Este enlace ha caducado. Pide a RRHH de Artigot que te lo envíe de nuevo.</p>
             </div>
           ) : !session ? (
-            <CodeStep token={token} email={maskEmail(s.email)} sent={!!s.codeHash} />
+            s.channel === "WHATSAPP" ? <DniStep token={token} signed={false} /> : <CodeStep token={token} email={maskEmail(s.email ?? "")} sent={!!s.codeHash} />
           ) : (
             <>
               {s.request.message && <article className="card text-sm leading-relaxed whitespace-pre-line">{s.request.message}</article>}
