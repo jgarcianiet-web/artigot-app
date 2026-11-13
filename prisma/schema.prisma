@@ -330,7 +330,7 @@ model Review {
 // Archivo subido (fotos del chat e incidencias). Se guarda en la base de datos: sin servicios externos.
 // scope: CHAT | INCIDENT. El acceso se comprueba según el evento al que pertenece.
 model StoredFile {
-  id                  String          @id @default(cuid())
+  id                  String           @id @default(cuid())
   eventId             String?
   scope               String
   mime                String
@@ -338,22 +338,23 @@ model StoredFile {
   // Contenido: en el almacén de archivos (storageKey, cifrado) o, si no hay almacén configurado, aquí
   data                Bytes?
   storageKey          String?
-  createdAt           DateTime        @default(now())
-  event               Event?          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdAt           DateTime         @default(now())
+  event               Event?           @relation(fields: [eventId], references: [id], onDelete: Cascade)
   incidentId          String?
-  incident            Incident?       @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  incident            Incident?        @relation(fields: [incidentId], references: [id], onDelete: Cascade)
   // Documentos del trabajador (scope DOC): solo los ven RRHH y el propio trabajador
   workerId            String?
-  worker              Worker?         @relation("workerFiles", fields: [workerId], references: [id], onDelete: Cascade)
-  photoOf             Worker?         @relation("workerPhoto")
+  worker              Worker?          @relation("workerFiles", fields: [workerId], references: [id], onDelete: Cascade)
+  photoOf             Worker?          @relation("workerPhoto")
   signRequest         SignRequest?
+  signRequestFile     SignRequestFile?
   // Fotos de un grupo de chat con el personal (scope GROUP): las ven RRHH y los miembros del grupo
   groupId             String?
-  group               WorkerGroup?    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  group               WorkerGroup?     @relation(fields: [groupId], references: [id], onDelete: Cascade)
   document            WorkerDocument?
   candidate           Candidate?
   signatureOf         Contract?
-  externalSignatureOf ExternalSigner? @relation("ExternalSignature")
+  externalSignatureOf ExternalSigner?  @relation("ExternalSignature")
   payslip             Payslip?
 }
 
@@ -582,17 +583,32 @@ model Contract {
 
 // Documento en PDF que RRHH envía a una o varias personas para que lo firmen en la app (cambio de contrato, anexos…)
 model SignRequest {
-  id        String           @id @default(cuid())
+  id        String            @id @default(cuid())
   title     String
   message   String?
-  fileId    String           @unique
+  fileId    String            @unique
   createdBy String
-  createdAt DateTime         @default(now())
-  file      StoredFile       @relation(fields: [fileId], references: [id])
+  createdAt DateTime          @default(now())
+  file      StoredFile        @relation(fields: [fileId], references: [id])
   contracts Contract[]
   externals ExternalSigner[]
+  /// Los PDF del envío, en orden (el primero es también `fileId`). Se firman todos de una vez y cada uno sale firmado
+  files     SignRequestFile[]
 
   @@index([createdAt])
+}
+
+/// Un documento de un envío a firmar
+model SignRequestFile {
+  id        String      @id @default(cuid())
+  requestId String
+  fileId    String      @unique
+  title     String
+  position  Int         @default(0)
+  request   SignRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  file      StoredFile  @relation(fields: [fileId], references: [id])
+
+  @@index([requestId, position])
 }
 
 /// Persona de fuera de la plataforma (candidato, antiguo trabajador, proveedor…) que firma un documento con un enlace

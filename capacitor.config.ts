@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 /**
- * Las apps nativas cargan la web desplegada (CAP_SERVER_URL, p. ej. https://artigot.up.railway.app).
+ * Las apps nativas cargan la web desplegada (CAP_SERVER_URL, p. ej. https://portal-artigot.artigotcatering.com).
  * Así cualquier mejora de la web llega a las apps sin publicar una versión nueva;
  * la parte nativa aporta el icono en el móvil y las notificaciones push del sistema.
  */

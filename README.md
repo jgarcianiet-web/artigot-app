@@ -204,7 +204,7 @@ Sin ubicación fijada, el evento muestra un aviso y el personal no puede fichar.
    | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` (referencia a la base de datos) |
    | `ADMIN_PASSWORD` | clave de instalación: solo sirve para crear el primer usuario de RRHH en `/login` |
    | `SESSION_SECRET` | una cadena aleatoria de 40+ caracteres |
-   | `APP_URL` | la URL pública (paso 5), p. ej. `https://artigot-production.up.railway.app` |
+   | `APP_URL` | la URL pública (paso 5), p. ej. `https://portal-artigot.artigotcatering.com` |
    | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | ejecuta `npm run vapid` en tu ordenador y copia las dos claves |
    | `VAPID_SUBJECT` | `mailto:` + un email de contacto de la empresa |
 

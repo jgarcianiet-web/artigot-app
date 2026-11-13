@@ -56,14 +56,34 @@ export function DniStep({ token, signed }: { token: string; signed: boolean }) {
   );
 }
 
-/** Paso 2: firmar. */
-export function SignStep({ token }: { token: string }) {
+/** Botones para leer cada documento del envío (o descargarlo firmado). */
+export function DocLinks({ token, docs, signed }: { token: string; docs: string[]; signed: boolean }) {
+  const href = (i: number) => `/api/firma/${token}/pdf${i ? `?doc=${i}` : ""}`;
+  if (docs.length <= 1)
+    return (
+      <a href={href(0)} target="_blank" className={`btn w-full ${signed ? "" : "btn-primary"}`}>
+        {signed ? "Ver mi copia firmada" : "📄 Leer el documento"}
+      </a>
+    );
+  return (
+    <div className="space-y-2">
+      {docs.map((t, i) => (
+        <a key={i} href={href(i)} target="_blank" className={`btn w-full justify-start text-left ${signed ? "" : "btn-primary"}`}>
+          {signed ? `✓ ${t} · PDF firmado` : `📄 ${i + 1}. ${t}`}
+        </a>
+      ))}
+    </div>
+  );
+}
+
+/** Paso 2: firmar (una firma para todos los documentos del envío). */
+export function SignStep({ token, docs }: { token: string; docs: string[] }) {
   const [r, run] = useActionState(signExternal.bind(null, token), null);
   if (r?.ok)
     return (
       <div className="card space-y-2 bg-emerald-50">
         <p className="text-emerald-900">{r.message}</p>
-        <a href={`/api/firma/${token}/pdf`} target="_blank" className="btn">Ver mi copia firmada</a>
+        <DocLinks token={token} docs={docs} signed />
       </div>
     );
   return (
@@ -71,7 +91,7 @@ export function SignStep({ token }: { token: string }) {
       <SignaturePad />
       <label className="flex items-start gap-2 text-sm">
         <input type="checkbox" name="accept" value="1" className="mt-0.5 size-4" required />
-        He leído el documento entero y lo firmo.
+        {docs.length > 1 ? `He leído los ${docs.length} documentos enteros y los firmo.` : "He leído el documento entero y lo firmo."}
       </label>
       <label className="block text-sm">
         Observaciones <span className="text-stone-500">(opcional)</span>

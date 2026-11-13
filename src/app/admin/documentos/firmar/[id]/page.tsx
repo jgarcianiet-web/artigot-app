@@ -17,6 +17,7 @@ export default async function SignRequestPage({ params }: { params: Promise<{ id
     include: {
       contracts: { include: { worker: { select: { id: true, name: true, dni: true } } }, orderBy: [{ signedAt: { sort: "asc", nulls: "first" } }, { worker: { name: "asc" } }] },
       externals: { orderBy: [{ signedAt: { sort: "asc", nulls: "first" } }, { name: "asc" }] },
+      files: { orderBy: { position: "asc" }, select: { id: true, title: true, fileId: true } },
     },
   });
   if (!r) notFound();
@@ -31,9 +32,18 @@ export default async function SignRequestPage({ params }: { params: Promise<{ id
         <h1>{r.title}</h1>
         <p className="text-sm text-stone-500">
           Enviado el {when(r.createdAt)} por {r.createdBy} · {signed} de {total} han firmado ·{" "}
-          <a href={`/api/files/${r.fileId}`} target="_blank" className="link">Ver el PDF enviado</a>
+          {r.files.length > 1 ? `${r.files.length} documentos` : <a href={`/api/files/${r.fileId}`} target="_blank" className="link">Ver el PDF enviado</a>}
         </p>
         {r.message && <p className="card text-sm whitespace-pre-line">{r.message}</p>}
+        {r.files.length > 1 && (
+          <ol className="card list-inside list-decimal space-y-1 text-sm">
+            {r.files.map((f) => (
+              <li key={f.id}>
+                <a href={`/api/files/${f.fileId}`} target="_blank" className="link">{f.title}</a>
+              </li>
+            ))}
+          </ol>
+        )}
       </div>
       <div className="flex flex-wrap gap-2">
         {pending.length > 0 && (
@@ -76,7 +86,7 @@ export default async function SignRequestPage({ params }: { params: Promise<{ id
                     <span className="text-amber-700">Pendiente</span>
                   )}
                 </td>
-                <td className="text-right">{c.signedAt && <a href={`/api/contracts/${c.id}/pdf`} target="_blank" className="link">PDF firmado</a>}</td>
+                <td className="text-right">{c.signedAt && <SignedLinks base={`/api/contracts/${c.id}/pdf`} docs={r.files} />}</td>
               </tr>
             ))}
             {r.externals.map((x) => (
@@ -101,7 +111,7 @@ export default async function SignRequestPage({ params }: { params: Promise<{ id
                 </td>
                 <td className="text-right">
                   {x.signedAt ? (
-                    <a href={`/api/firma-externa/${x.id}/pdf`} target="_blank" className="link">PDF firmado</a>
+                    <SignedLinks base={`/api/firma-externa/${x.id}/pdf`} docs={r.files} />
                   ) : (
                     !isExpired(x) && (
                       <span className="flex flex-wrap justify-end gap-1.5">
@@ -125,5 +135,19 @@ export default async function SignRequestPage({ params }: { params: Promise<{ id
         </table>
       </div>
     </div>
+  );
+}
+
+/** Enlaces a los PDF firmados de una persona: uno, o uno por documento del envío. */
+function SignedLinks({ base, docs }: { base: string; docs: { id: string; title: string }[] }) {
+  if (docs.length <= 1) return <a href={base} target="_blank" className="link">PDF firmado</a>;
+  return (
+    <span className="flex flex-col items-end gap-0.5">
+      {docs.map((d, i) => (
+        <a key={d.id} href={`${base}${i ? `?doc=${i}` : ""}`} target="_blank" className="link max-w-56 truncate" title={d.title}>
+          {d.title}
+        </a>
+      ))}
+    </span>
   );
 }

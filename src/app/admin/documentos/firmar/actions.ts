@@ -10,18 +10,18 @@ import { cancelPending, createSignRequest, deleteSignRequest, remindSignRequest 
 
 export async function sendSignRequest(_prev: string | null, form: FormData) {
   const by = await requireAdmin();
-  const file = form.get("file");
-  if (!(file instanceof File) || file.size === 0) return "Adjunta el documento en PDF.";
+  const files = form.getAll("file").filter((f): f is File => f instanceof File && f.size > 0);
+  if (!files.length) return "Adjunta el documento en PDF.";
   let id: string;
   try {
     const { request, recipients } = await createSignRequest(by, {
       title: String(form.get("title") ?? ""),
       message: String(form.get("message") ?? "") || null,
-      file,
+      files,
       workerIds: form.getAll("members").map(String),
       externals: parseExternals(JSON.parse(String(form.get("externals") || "[]"))),
     });
-    await auditAdmin(by, "Documento", "Enviado a firmar", `«${request.title}» enviado a firmar a ${recipients} ${recipients === 1 ? "persona" : "personas"}`, { entityId: request.id });
+    await auditAdmin(by, "Documento", "Enviado a firmar", `«${request.title}»${files.length > 1 ? ` (${files.length} documentos)` : ""} enviado a firmar a ${recipients} ${recipients === 1 ? "persona" : "personas"}`, { entityId: request.id });
     id = request.id;
   } catch (e) {
     return (e as Error).message;

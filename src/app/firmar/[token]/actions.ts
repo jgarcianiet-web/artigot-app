@@ -47,10 +47,20 @@ export async function signExternal(token: string, _prev: Result, form: FormData)
   after(async () => {
     // Su copia firmada, por email (por WhatsApp la descarga desde el mismo enlace)
     if (email) {
-      const pdf = Buffer.from(await externalPdf(s.id));
-      await sendMail(email, `Documento firmado: ${s.request.title}`, `Hola ${s.name.split(" ")[0]},\n\nhas firmado «${s.request.title}». Te adjuntamos tu copia firmada en PDF.`, [
-        { filename: `${s.request.title.replace(/[^\w\sáéíóúñü-]/gi, "").trim().slice(0, 60) || "documento"} - firmado.pdf`, content: pdf },
-      ]).catch((e) => console.error("copia firmada externa", e));
+      // Un PDF firmado por cada documento del envío
+      const docs = s.request.files.length > 1 ? s.request.files : [{ title: s.request.title }];
+      const attachments = [];
+      for (let i = 0; i < docs.length; i++) {
+        const pdf = await externalPdf(s.id, i);
+        if (pdf) attachments.push({ filename: `${docs[i].title.replace(/[^\w\sáéíóúñü-]/gi, "").trim().slice(0, 60) || "documento"} - firmado.pdf`, content: Buffer.from(pdf) });
+      }
+      const many = attachments.length > 1;
+      await sendMail(
+        email,
+        `${many ? "Documentos firmados" : "Documento firmado"}: ${s.request.title}`,
+        `Hola ${s.name.split(" ")[0]},\n\nhas firmado «${s.request.title}». Te adjuntamos ${many ? `tus ${attachments.length} documentos firmados` : "tu copia firmada"} en PDF.`,
+        attachments,
+      ).catch((e) => console.error("copia firmada externa", e));
     }
     await notifyIfAllSigned(s.request.id, s.request.title);
   });
