@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { formatDate, num } from "@/lib/domain";
 import type { RecordData } from "@/lib/timeRecord";
 import { SignForm } from "./SignForm";
+import { requestDocs } from "@/lib/signDocs";
 import { canChooseMedical } from "@/lib/prl";
 
 const when = new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", dateStyle: "long", timeStyle: "short" });
@@ -14,15 +15,29 @@ export default async function SignContract({ params }: { params: Promise<{ id: s
   const me = await requireWorker();
   const c = await db.contract.findUnique({ where: { id: (await params).id } });
   if (!c || c.workerId !== me.id) notFound();
+  // Documentos que envía RRHH: puede ser más de un PDF; se firman todos de una vez
+  const docs = c.kind === "DOCUMENTO" && c.requestId ? await requestDocs(c.requestId) : [];
+  const docHref = (i: number) => `/api/contracts/${c.id}/pdf${i ? `?doc=${i}` : ""}`;
   return (
     <div className="space-y-4">
       <Link href={c.kind === "RGPD" ? "/app/perfil" : c.kind === "JORNADA" ? "/app/nomina" : "/app"} className="text-sm text-stone-500">‹ Volver</Link>
       <h1>{c.title}</h1>
       {c.kind === "DOCUMENTO" ? (
         <>
-          <p className="text-sm text-stone-500">Te lo envía {c.createdBy} (RRHH). Léelo entero antes de firmar.</p>
+          <p className="text-sm text-stone-500">
+            Te lo envía {c.createdBy} (RRHH). {docs.length > 1 ? `Son ${docs.length} documentos: léelos enteros antes de firmar.` : "Léelo entero antes de firmar."}
+          </p>
           {c.body && <article className="card text-sm leading-relaxed whitespace-pre-line">{c.body}</article>}
-          {!c.signedAt && <FileLink href={`/api/contracts/${c.id}/pdf`} title={c.title} className="btn btn-primary w-full">📄 Leer el documento</FileLink>}
+          {!c.signedAt &&
+            (docs.length > 1 ? (
+              <div className="space-y-2">
+                {docs.map((d, i) => (
+                  <FileLink key={d.id} href={docHref(i)} title={d.title} className="btn btn-primary w-full justify-start text-left">📄 {i + 1}. {d.title}</FileLink>
+                ))}
+              </div>
+            ) : (
+              <FileLink href={docHref(0)} title={c.title} className="btn btn-primary w-full">📄 Leer el documento</FileLink>
+            ))}
         </>
       ) : (
         <article className="card text-sm leading-relaxed whitespace-pre-line">{c.body}</article>
@@ -56,11 +71,15 @@ export default async function SignContract({ params }: { params: Promise<{ id: s
         <div className="card space-y-2 bg-emerald-50">
           <p className="text-emerald-900">✓ Firmado el {when.format(c.signedAt)}.</p>
           {c.signerNote && <p className="text-sm text-stone-700">Tus observaciones: {c.signerNote}</p>}
-          <FileLink href={`/api/contracts/${c.id}/pdf`} title={c.title} className="btn">Ver PDF firmado</FileLink>
+          {docs.length > 1 ? (
+            docs.map((d, i) => <FileLink key={d.id} href={docHref(i)} title={d.title} className="btn w-full justify-start text-left">✓ {d.title} · PDF firmado</FileLink>)
+          ) : (
+            <FileLink href={docHref(0)} title={c.title} className="btn">Ver PDF firmado</FileLink>
+          )}
           {c.kind === "RGPD" && <Link href="/app/perfil" className="btn btn-primary">Subir mis documentos ›</Link>}
         </div>
       ) : (
-        <SignForm id={c.id} kind={c.kind} medicalChoice={canChooseMedical(me)} />
+        <SignForm id={c.id} kind={c.kind} medicalChoice={canChooseMedical(me)} docs={docs.map((d) => d.title)} />
       )}
     </div>
   );

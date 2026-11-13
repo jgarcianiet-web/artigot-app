@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { Logo } from "@/components/Logo";
 import { hasSession, isExpired, maskEmail, sessionCookie, signerByToken } from "@/lib/externalSign";
-import { CodeStep, DniStep, SignStep } from "./ExternalSign";
+import { CodeStep, DniStep, DocLinks, SignStep } from "./ExternalSign";
 
 export const metadata: Metadata = { title: "Firmar documento · Artigot", robots: { index: false } };
 
@@ -13,6 +13,8 @@ export default async function ExternalSignPage({ params }: { params: Promise<{ t
   const { token } = await params;
   const s = await signerByToken(token);
   const session = s ? hasSession(s, (await cookies()).get(sessionCookie(s.id))?.value) : false;
+  // Un envío puede llevar varios documentos: se leen uno a uno y se firman todos de una vez
+  const docs = s && s.request.files.length > 1 ? s.request.files.map((f) => f.title) : [];
   return (
     <main className="mx-auto max-w-lg space-y-4 p-4 py-8">
       <Logo height={44} className="mb-4" />
@@ -24,7 +26,7 @@ export default async function ExternalSignPage({ params }: { params: Promise<{ t
       ) : (
         <>
           <div className="space-y-1">
-            <p className="text-sm text-stone-500">Documento para firmar · {s.name}</p>
+            <p className="text-sm text-stone-500">{docs.length ? `${docs.length} documentos para firmar` : "Documento para firmar"} · {s.name}</p>
             <h1>{s.request.title}</h1>
             <p className="text-sm text-stone-500">Te lo envía {s.request.createdBy}, de RRHH de Artigot Catering.</p>
           </div>
@@ -34,7 +36,7 @@ export default async function ExternalSignPage({ params }: { params: Promise<{ t
               <p className="text-emerald-900">
                 ✓ Lo firmaste el {when.format(s.signedAt)}.{s.channel === "EMAIL" && " Te enviamos tu copia firmada por email."}
               </p>
-              {session && <a href={`/api/firma/${token}/pdf`} target="_blank" className="btn">Ver mi copia firmada</a>}
+              {session && <DocLinks token={token} docs={docs} signed />}
             </div>
           ) : isExpired(s) ? (
             <div className="card">
@@ -45,9 +47,11 @@ export default async function ExternalSignPage({ params }: { params: Promise<{ t
           ) : (
             <>
               {s.request.message && <article className="card text-sm leading-relaxed whitespace-pre-line">{s.request.message}</article>}
-              <a href={`/api/firma/${token}/pdf`} target="_blank" className="btn btn-primary w-full">📄 Leer el documento</a>
-              <p className="text-sm text-stone-600">Léelo entero. Después firma con el dedo (o con el ratón) en el recuadro.</p>
-              <SignStep token={token} />
+              <DocLinks token={token} docs={docs} signed={false} />
+              <p className="text-sm text-stone-600">
+                {docs.length ? `Lee los ${docs.length} documentos enteros. Después firma una vez con el dedo (o con el ratón): la firma vale para todos.` : "Léelo entero. Después firma con el dedo (o con el ratón) en el recuadro."}
+              </p>
+              <SignStep token={token} docs={docs} />
             </>
           )}
         </>

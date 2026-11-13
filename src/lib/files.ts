@@ -150,7 +150,7 @@ export async function sweepOrphanFiles() {
 export async function canReadFile(viewer: Viewer, file: { id?: string; scope: string; eventId: string | null; workerId: string | null; groupId?: string | null }) {
   if (viewer.kind === "admin") return true;
   if (file.scope === "SIGNDOC")
-    return !!file.id && !!(await db.contract.findFirst({ where: { workerId: viewer.id, request: { fileId: file.id } }, select: { id: true } }));
+    return !!file.id && !!(await db.contract.findFirst({ where: { workerId: viewer.id, request: { files: { some: { fileId: file.id } } } }, select: { id: true } }));
   if (file.scope === "GROUP")
     return !!file.groupId && !!(await db.workerGroupMember.findUnique({ where: { groupId_workerId: { groupId: file.groupId, workerId: viewer.id } } }));
   if (file.scope === "DOC" || file.scope === "SIGNATURE" || file.scope === "PHOTO" || file.scope === "PAYSLIP" || file.scope === "DM") return file.workerId === viewer.id;

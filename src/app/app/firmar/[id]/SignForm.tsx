@@ -7,13 +7,17 @@ import { signContract } from "@/app/app/actions";
 import { ActionForm, SubmitButton } from "@/components/client";
 import { SignaturePad } from "@/components/SignaturePad";
 
-export function SignForm({ id, kind, medicalChoice = true }: { id: string; kind: string; medicalChoice?: boolean }) {
+export function SignForm({ id, kind, medicalChoice = true, docs = [] }: { id: string; kind: string; medicalChoice?: boolean; docs?: string[] }) {
   const [r, run] = useActionState(signContract.bind(null, id), null);
   if (r?.ok) {
     return (
       <div className="card space-y-2 bg-emerald-50">
         <p className="text-emerald-900">{r.message}</p>
-        <FileLink href={`/api/contracts/${id}/pdf`} className="btn">Ver PDF firmado</FileLink>
+        {docs.length > 1 ? (
+          docs.map((t, i) => <FileLink key={i} href={`/api/contracts/${id}/pdf${i ? `?doc=${i}` : ""}`} title={t} className="btn w-full justify-start text-left">✓ {t} · PDF firmado</FileLink>)
+        ) : (
+          <FileLink href={`/api/contracts/${id}/pdf`} className="btn">Ver PDF firmado</FileLink>
+        )}
         {(kind.startsWith("PRL_") || kind === "DOCUMENTO") && <Link href="/app" className="btn btn-primary">Seguir ›</Link>}
       </div>
     );
@@ -42,7 +46,9 @@ export function SignForm({ id, kind, medicalChoice = true }: { id: string; kind:
             : kind.startsWith("PRL_")
               ? "He leído el documento y declaro que es correcto."
               : kind === "DOCUMENTO"
-                ? "He leído el documento entero y lo firmo."
+                ? docs.length > 1
+                  ? `He leído los ${docs.length} documentos enteros y los firmo.`
+                  : "He leído el documento entero y lo firmo."
               : "He leído el documento y estoy conforme con las condiciones."}
       </label>
       {kind === "JORNADA" && (

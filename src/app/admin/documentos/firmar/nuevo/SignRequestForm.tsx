@@ -24,8 +24,11 @@ export function SignRequestForm({ workers, initial }: { workers: ChooserWorker[]
           <input name="title" className="input mt-1" required maxLength={120} placeholder="P. ej. Anexo al contrato: cambio de jornada" />
         </label>
         <label className="block text-sm font-medium">
-          Documento (PDF, hasta 10 MB)
-          <input name="file" type="file" accept="application/pdf,.pdf" required className="mt-1 block w-full text-sm" />
+          Documentos (PDF)
+          <span className="block text-xs font-normal text-stone-500">
+            Puedes elegir varios a la vez (hasta 10, de 10 MB cada uno): se firman todos de una vez y cada uno sale firmado por separado.
+          </span>
+          <input name="file" type="file" accept="application/pdf,.pdf" multiple required className="mt-1 block w-full text-sm" />
         </label>
         <label className="block text-sm font-medium">
           Mensaje para el personal <span className="font-normal text-stone-500">(opcional)</span>

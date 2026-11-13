@@ -5,7 +5,7 @@ import { isPrl, prlPdf } from "@/lib/prl";
 import { SIGN_KIND, signedDocPdf } from "@/lib/signRequests";
 
 /** PDF del documento de condiciones: RRHH o el propio trabajador. */
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const viewer = await currentViewer();
   if (!viewer) return new Response("No autorizado", { status: 401 });
@@ -13,11 +13,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!c || (viewer.kind === "worker" && viewer.id !== c.workerId)) return new Response("No encontrado", { status: 404 });
   // Documentos de PRL: la plantilla de la empresa rellenada; el resto, el documento de la app
   // Documentos que envía RRHH: su PDF (firmado: con la firma en cada página y la hoja de firma)
-  const bytes = isPrl(c.kind) ? await prlPdf(id) : c.kind === SIGN_KIND ? await signedDocPdf(id) : await contractPdf(id);
+  // Un envío puede llevar varios documentos: ?doc=0, 1, 2…
+  const doc = Math.max(0, Number(new URL(req.url).searchParams.get("doc")) || 0);
+  const bytes = isPrl(c.kind) ? await prlPdf(id) : c.kind === SIGN_KIND ? await signedDocPdf(id, doc) : await contractPdf(id);
+  if (!bytes) return new Response("No encontrado", { status: 404 });
   return new Response(new Uint8Array(bytes), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="${isPrl(c.kind) ? c.kind.toLowerCase() : c.kind === SIGN_KIND ? "documento" : "condiciones"}_${id}${c.signedAt ? "_firmado" : ""}.pdf"`,
+      "Content-Disposition": `inline; filename="${isPrl(c.kind) ? c.kind.toLowerCase() : c.kind === SIGN_KIND ? `documento${doc ? `_${doc + 1}` : ""}` : "condiciones"}_${id}${c.signedAt ? "_firmado" : ""}.pdf"`,
       "Cache-Control": "private, no-store",
     },
   });

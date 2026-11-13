@@ -3,6 +3,7 @@ import { db } from "./db";
 import { appUrl } from "./domain";
 import { readStoredFile, storeExternalSignature } from "./files";
 import { mailEnabled, sendMail } from "./mail";
+import { requestDoc } from "./signDocs";
 import { stampSignedPdf } from "./signedPdf";
 import { validDniNie } from "./staff";
 
@@ -100,7 +101,12 @@ export async function inviteExternal(s: { name: string; email: string | null; ch
 /** La persona del enlace, con el documento. */
 export function signerByToken(token: string) {
   if (!/^[A-Za-z0-9_-]{20,64}$/.test(token)) return Promise.resolve(null);
-  return db.externalSigner.findUnique({ where: { token }, include: { request: { select: { id: true, title: true, message: true, createdBy: true, fileId: true } } } });
+  return db.externalSigner.findUnique({ where: { token }, include: {
+      request: {
+        select: { id: true, title: true, message: true, createdBy: true, files: { orderBy: { position: "asc" }, select: { id: true, title: true } } },
+      },
+    },
+  });
 }
 export type Signer = NonNullable<Awaited<ReturnType<typeof signerByToken>>>;
 
@@ -170,24 +176,25 @@ export async function signAsExternal(s: Signer, png: Buffer, ip: string | null, 
   return count === 1;
 }
 
-/** El PDF para una persona externa: el original, o firmado si ya lo ha firmado. */
-export async function externalPdf(id: string) {
+/** Un documento del envío para una persona externa: el original, o firmado si ya lo ha firmado. */
+export async function externalPdf(id: string, index = 0) {
   const s = await db.externalSigner.findUniqueOrThrow({
     where: { id },
-    include: { signature: { select: { data: true, storageKey: true } }, request: { include: { file: { select: { data: true, storageKey: true } } } } },
+    include: { signature: { select: { data: true, storageKey: true } }, request: { select: { createdBy: true } } },
   });
-  const original = await readStoredFile(s.request.file);
-  if (!s.signedAt) return new Uint8Array(original);
-  return stampSignedPdf(original, {
-    id: s.id, title: s.request.title, name: s.name, dni: s.dni, signedAt: s.signedAt, ip: s.signerIp, note: s.signerNote,
+  const doc = await requestDoc(s.requestId, index);
+  if (!doc) return null;
+  if (!s.signedAt) return new Uint8Array(doc.original);
+  return stampSignedPdf(doc.original, {
+    id: s.id, title: doc.title, name: s.name, dni: s.dni, signedAt: s.signedAt, ip: s.signerIp, note: s.signerNote,
     sentBy: s.request.createdBy, sentAt: s.createdAt, signature: s.signature ? await readStoredFile(s.signature) : null,
     ...(s.channel === "WHATSAPP"
       ? {
-          extra: [["Enlace enviado por WhatsApp", `al ${s.phone ?? "—"}; identificado con su DNI/NIE${s.verifiedAt ? ` el ${when(s.verifiedAt)}` : ""}`]] as [string, string][],
+          extra: [...doc.extra, ["Enlace enviado por WhatsApp", `al ${s.phone ?? "—"}; identificado con su DNI/NIE${s.verifiedAt ? ` el ${when(s.verifiedAt)}` : ""}`]] as [string, string][],
           how: "lo firmó con su firma manuscrita desde un enlace personal enviado por WhatsApp a su móvil, tras identificarse con su DNI/NIE",
         }
       : {
-          extra: [["Email verificado", `${s.email}${s.verifiedAt ? ` (código enviado y comprobado el ${when(s.verifiedAt)})` : ""}`]] as [string, string][],
+          extra: [...doc.extra, ["Email verificado", `${s.email}${s.verifiedAt ? ` (código enviado y comprobado el ${when(s.verifiedAt)})` : ""}`]] as [string, string][],
           how: "lo firmó con su firma manuscrita desde un enlace personal, tras identificarse con un código de un solo uso enviado a su email",
         }),
   });
