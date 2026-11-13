@@ -32,9 +32,15 @@ export async function sendSignRequest(_prev: string | null, form: FormData) {
 
 export async function remindSignAction(requestId: string) {
   const by = await requireAdmin();
-  const n = await remindSignRequest(requestId);
+  const { notified: n, whatsapp } = await remindSignRequest(requestId);
   const r = await db.signRequest.findUnique({ where: { id: requestId }, select: { title: true } });
-  await auditAdmin(by, "Documento", "Recordatorio", `«${r?.title}»: recordatorio a ${n} ${n === 1 ? "persona" : "personas"} sin firmar`, { entityId: requestId });
+  await auditAdmin(
+    by,
+    "Documento",
+    "Recordatorio",
+    `«${r?.title}»: recordatorio a ${n} ${n === 1 ? "persona" : "personas"} sin firmar${whatsapp ? ` y enlace renovado a ${whatsapp} por WhatsApp` : ""}`,
+    { entityId: requestId },
+  );
   revalidatePath(`/admin/documentos/firmar/${requestId}`);
 }
 

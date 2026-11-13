@@ -36,7 +36,7 @@ export async function createSignRequest(by: string, data: { title: string; messa
     data: {
       title, message: data.message?.trim().slice(0, 2000) || null, fileId: stored.id, createdBy: by,
       contracts: { create: workers.map((w) => ({ kind: SIGN_KIND, workerId: w.id, title, body: data.message?.trim().slice(0, 2000) || "", createdBy: by })) },
-      externals: { create: externals.map((x) => ({ name: x.name, dni: x.dni || null, email: x.email, phone: x.phone || null, token: newToken(), expiresAt: expiry(), createdBy: by })) },
+      externals: { create: externals.map((x) => ({ name: x.name, dni: x.dni || null, email: x.email || null, phone: x.phone || null, channel: x.channel, token: newToken(), expiresAt: expiry(), createdBy: by })) },
     },
     include: { externals: true },
   });
@@ -56,7 +56,10 @@ export async function createSignRequest(by: string, data: { title: string; messa
   return { request, recipients: workers.length + externals.length };
 }
 
-/** Recordatorio a quien aún no ha firmado (a los de fuera, por email y alargando su enlace). Devuelve a cuántos. */
+/**
+ * Recordatorio a quien aún no ha firmado. A los de fuera se les alarga el enlace: por email se les reenvía; a los de
+ * WhatsApp se lo vuelve a mandar RRHH con el botón. Devuelve a cuántos se ha avisado ya y cuántos van por WhatsApp.
+ */
 export async function remindSignRequest(requestId: string) {
   const pending = await db.contract.findMany({ where: { requestId, signedAt: null }, select: { workerId: true, title: true } });
   const r = await db.signRequest.findUniqueOrThrow({ where: { id: requestId }, include: { externals: { where: { signedAt: null } } } });
@@ -73,7 +76,8 @@ export async function remindSignRequest(requestId: string) {
       tag: `firma-${requestId}`,
       emailFallback: true,
     });
-  return pending.length + r.externals.length;
+  const whatsapp = r.externals.filter((x) => x.channel === "WHATSAPP").length;
+  return { notified: pending.length + r.externals.length - whatsapp, whatsapp };
 }
 
 /** Anula las firmas pendientes (las ya firmadas se quedan). Si no queda ninguna, se borra el envío y el PDF. */

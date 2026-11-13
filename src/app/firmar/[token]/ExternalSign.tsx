@@ -40,6 +40,22 @@ export function CodeStep({ token, email, sent }: { token: string; email: string;
   );
 }
 
+/** Paso 1 por WhatsApp: escribir su DNI/NIE. */
+export function DniStep({ token, signed }: { token: string; signed: boolean }) {
+  const [r, run] = useActionState(checkCode.bind(null, token), null);
+  return (
+    <ActionForm action={run} className="card space-y-3">
+      <p className="text-sm">{signed ? "Para descargar tu copia firmada, escribe tu DNI o NIE." : "Para comprobar que eres tú, escribe tu DNI o NIE."}</p>
+      <label className="block text-sm font-medium">
+        DNI o NIE
+        <input name="dni" autoComplete="off" autoCapitalize="characters" maxLength={12} required className="input mt-1 text-center text-xl uppercase tracking-widest" placeholder="12345678Z" />
+      </label>
+      {r && !r.ok && <p className="text-sm text-red-600">{r.message}</p>}
+      <SubmitButton className="btn btn-primary w-full">{signed ? "Ver mi copia firmada" : "Abrir el documento"}</SubmitButton>
+    </ActionForm>
+  );
+}
+
 /** Paso 2: firmar. */
 export function SignStep({ token }: { token: string }) {
   const [r, run] = useActionState(signExternal.bind(null, token), null);

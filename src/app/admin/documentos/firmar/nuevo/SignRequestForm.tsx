@@ -37,7 +37,7 @@ export function SignRequestForm({ workers, initial }: { workers: ChooserWorker[]
       {msg && <p className="text-sm text-red-700">{msg}</p>}
       <button className="btn btn-primary w-full" disabled={pending}>{pending ? "Enviando…" : "Enviar para firmar"}</button>
       <p className="text-xs text-stone-500">
-        Al personal le llega un aviso al móvil (o un email si no tiene avisos); a los de fuera, un email con su enlace. Firman con el dedo en la app y su copia firmada lleva la firma en cada página y una
+        Al personal le llega un aviso al móvil (o un email si no tiene avisos); a los de fuera, su enlace por email o por WhatsApp. Firman con el dedo en la app y su copia firmada lleva la firma en cada página y una
         hoja final con quién, cuándo y la huella del documento. A los 2 días se le recuerda a quien no haya firmado.
       </p>
     </form>
