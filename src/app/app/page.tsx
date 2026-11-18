@@ -85,8 +85,14 @@ export default async function WorkerHome() {
     {
       key: "foto",
       title: "Sube tu foto de perfil",
-      text: worker.photoStatus === "RECHAZADA" ? `Tu foto no vale (${worker.photoNote ?? "sube otra"}). Sube otra de frente, con la cara bien visible.` : "De frente y con la cara bien visible. RRHH la revisa.",
-      done: !!worker.photoFileId && worker.photoStatus !== "RECHAZADA",
+      // Obligatoria y la aprueba RRHH: hasta entonces no cuenta como hecha
+      text: worker.photoStatus === "RECHAZADA"
+        ? `Tu foto no vale (${worker.photoNote ?? "sube otra"}). Sube otra de frente, con la cara bien visible.`
+        : worker.photoFileId && worker.photoStatus !== "ACEPTADA"
+          ? "Ya la has subido: RRHH la está revisando. Te avisaremos cuando esté aprobada o si tienes que subir otra."
+          : "De frente y con la cara bien visible. RRHH la revisa.",
+      done: !!worker.photoFileId && worker.photoStatus === "ACEPTADA",
+      waiting: !!worker.photoFileId && worker.photoStatus !== "ACEPTADA",
     },
     { key: "rgpd", title: "Firma la información de protección de datos", text: "Lee qué datos tratamos y para qué, y fírmalo con el dedo.", done: !!privacy },
     { key: "datos", title: "Completa tus datos y documentos", text: `Necesitamos tu DNI, Seguridad Social e IBAN con sus documentos para darte de alta y pagarte.${dataMissing.length ? ` Te falta: ${dataMissing.join(", ")}.` : ""}`, done: !!privacy && dataMissing.length === 0 },

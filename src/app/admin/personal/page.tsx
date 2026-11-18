@@ -155,6 +155,9 @@ export default async function StaffList({
                       <span className="ml-2 rounded bg-amber-100 px-1.5 text-[11px] text-amber-900" title={`Falta: ${incomplete.get(w.id)!.join(", ")}`}>Datos incompletos</span>
                     )}
                     {w.englishLevel && w.englishLevel !== "Ninguno" && <span className="ml-2 text-[11px] text-stone-500" title={languagesText(w)}>🗣 {w.englishLevel === "Nativo" ? "inglés nativo" : `inglés ${w.englishLevel.toLowerCase()}`}</span>}
+                    {w.photoFileId && w.photoStatus === "PENDIENTE" && (
+                      <Link href="/admin/documentos" className="ml-2 rounded bg-amber-100 px-1.5 text-[11px] text-amber-900" title="Ha subido su foto de perfil y falta que RRHH la apruebe">📷 foto por aprobar</Link>
+                    )}
                     {w._count.devices === 0 && (
                       <span className="ml-2 text-[11px] text-amber-700" title="No ha activado los avisos de la app: no le llegan las convocatorias">🔕 sin avisos</span>
                     )}

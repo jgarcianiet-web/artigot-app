@@ -5,14 +5,15 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { EnablePushButton } from "./PushSetup";
 
-type Step = { key: string; title: string; text: string; done: boolean; href?: string };
+/** waiting: ya lo ha hecho y le toca a RRHH (p. ej. aprobar la foto): no cuenta como hecho, pero tampoco es el paso actual */
+type Step = { key: string; title: string; text: string; done: boolean; waiting?: boolean; href?: string };
 type PushConfig = { webPublicKey: string | null; fcm: boolean; apns: boolean };
 
 /** Bienvenida guiada: los pasos que necesita una persona nueva, en orden, con su progreso. */
 export function Onboarding({ name, steps, push, signAction }: { name: string; steps: Step[]; push: PushConfig; signAction: () => Promise<void> }) {
   const router = useRouter();
   const done = steps.filter((s) => s.done).length;
-  const current = steps.find((s) => !s.done)?.key;
+  const current = steps.find((s) => !s.done && !s.waiting)?.key;
   // El paso de los avisos se puede posponer (p. ej. en un ordenador o un navegador sin avisos)
   const [skipped, setSkipped] = useState(false);
   useEffect(() => {
@@ -37,10 +38,11 @@ export function Onboarding({ name, steps, push, signAction }: { name: string; st
         {steps.map((s, i) => (
           <li key={s.key} className={`flex gap-3 rounded-lg p-2 ${s.key === current ? "bg-stone-100" : ""}`}>
             <span className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${s.done ? "bg-emerald-600 text-white" : s.key === current ? "bg-stone-900 text-white" : "bg-stone-200 text-stone-600"}`}>
-              {s.done ? "✓" : i + 1}
+              {s.done ? "✓" : s.waiting ? "⏳" : i + 1}
             </span>
             <div className="min-w-0 flex-1 space-y-1.5">
               <p className={`text-sm font-medium ${s.done ? "text-stone-500 line-through" : ""}`}>{s.title}</p>
+              {s.waiting && <p className="text-xs text-amber-800">{s.text}</p>}
               {s.key === current && (
                 <>
                   <p className="text-xs text-stone-600">{s.text}</p>
