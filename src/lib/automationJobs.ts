@@ -9,7 +9,7 @@ import { syncAutoEmployments } from "./autoAltas";
 import { madridTime } from "./clockRules";
 import { db } from "./db";
 import { addDays, appUrl, formatDate, isRole, ROLE_LABEL, ROLE_PLURAL, ROLES, type Role } from "./domain";
-import { mailEnabled, sendMail, type MailAttachment } from "./mail";
+import { mailEnabled, sendAccessEmail, sendMail, type MailAttachment } from "./mail";
 import { getPaySettings } from "./pay";
 import { datesBetween, remindPollPending, sendPoll } from "./polls";
 import { notify } from "./push";
@@ -263,6 +263,52 @@ async function a3Daily(now: Date) {
   return [`a3-email:${r.files.length}`];
 }
 
+// ---------- Datos de acceso a quien aún no ha entrado ----------
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Personal activo con email que aún no ha entrado en la app y al que toca enviarle los datos de acceso: a quien
+ * nunca se le han enviado y, si `resendDays` > 0, una segunda vez a quien sigue sin entrar pasados esos días.
+ */
+export async function accessPending(resendDays: number, now = new Date()) {
+  const workers = await db.worker.findMany({
+    where: {
+      active: true,
+      firstLoginAt: null,
+      email: { not: null },
+      OR: [{ accessEmails: 0 }, ...(resendDays > 0 ? [{ accessEmails: 1, accessEmailedAt: { lt: new Date(now.getTime() - resendDays * 864e5) } }] : [])],
+    },
+    orderBy: [{ accessEmails: "asc" }, { createdAt: "asc" }, { name: "asc" }],
+    select: { id: true, name: true, phone: true, email: true, dni: true, accessCode: true, accessEmails: true },
+  });
+  return workers.filter((w) => EMAIL_RE.test(w.email!.trim()));
+}
+
+/** Envía los datos de acceso a los pendientes (como mucho `max`). Devuelve cuántos se han enviado y cuántos fallaron. */
+export async function sendAccessBatch(max: number, resendDays: number, now = new Date()) {
+  const pending = (await accessPending(resendDays, now)).slice(0, max);
+  let sent = 0;
+  const failed: string[] = [];
+  for (const w of pending) {
+    const err = await sendAccessEmail(w);
+    if (err) failed.push(`${w.name}: ${err}`);
+    else sent++;
+  }
+  if (sent || failed.length)
+    await audit(AUTO_ACTOR, "Sistema", "Trabajador", "Datos de acceso por email", `Datos de acceso enviados por email a ${sent} ${sent === 1 ? "persona" : "personas"} que aún no habían entrado${failed.length ? `; ${failed.length} sin enviar (${failed.slice(0, 3).join("; ")})` : ""}`);
+  return { sent, failed };
+}
+
+async function accessDaily(now: Date) {
+  const { accessEmail: s } = await getAutomation();
+  const today = madridDate(now);
+  if (!s.enabled || !mailEnabled() || now < madridTime(today, s.hour)) return [];
+  if (!(await claim(`acceso-email:${today}`))) return [];
+  const r = await sendAccessBatch(s.maxPerDay, s.resendDays, now);
+  return [`acceso-email:${r.sent}`];
+}
+
 /** Lo que se comprueba en cada vuelta de los avisos automáticos. */
 export async function runAutomations(now = new Date()) {
   const out: string[] = [];
@@ -270,6 +316,7 @@ export async function runAutomations(now = new Date()) {
     ["convocatoria automática", dueConvocations],
     ["disponibilidad semanal", weeklyAvailability],
     ["email de A3", a3Daily],
+    ["datos de acceso", accessDaily],
   ] as const) {
     try {
       out.push(...(await job(now)));

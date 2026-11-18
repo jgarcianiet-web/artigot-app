@@ -1,6 +1,7 @@
 import { lookup } from "node:dns/promises";
 import nodemailer from "nodemailer";
 import { getCompany } from "./contracts";
+import { db } from "./db";
 import { loginId, loginUrl } from "./domain";
 import { mailHtml, mailText, type MailOptions } from "./mailTemplate";
 
@@ -74,7 +75,7 @@ async function sendBrevo(from: string, to: string, subject: string, text: string
   if (!res.ok) throw new Error(`Brevo respondió ${res.status}: ${(await res.text()).slice(0, 300)}`);
 }
 
-type AccessWorker = { name: string; phone: string | null; email: string | null; dni?: string | null; accessCode: string };
+type AccessWorker = { id?: string; name: string; phone: string | null; email: string | null; dni?: string | null; accessCode: string };
 
 /** Texto con los datos para entrar en la app (se copia o se envía por email). */
 export function accessText(w: AccessWorker) {
@@ -118,6 +119,8 @@ export async function sendAccessEmail(w: AccessWorker): Promise<string | null> {
           .join("\n"),
       },
     );
+    // Queda apuntado (para no volver a enviárselo solo y para verlo en su ficha)
+    if (w.id) await db.worker.update({ where: { id: w.id }, data: { accessEmailedAt: new Date(), accessEmails: { increment: 1 } } }).catch(() => {});
     return null;
   } catch (e) {
     console.error("Email de acceso", e);

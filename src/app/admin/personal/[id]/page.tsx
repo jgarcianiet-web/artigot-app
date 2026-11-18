@@ -229,6 +229,19 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
             <div className="text-xs text-stone-500">Avisos activos en</div>
             <div className="text-sm">{deviceKinds.length ? deviceKinds.join(", ") : <span className="text-amber-700">ningún dispositivo todavía</span>}</div>
           </div>
+          <div>
+            <div className="text-xs text-stone-500">En la app</div>
+            <div className="text-sm">
+              {worker.firstLoginAt ? (
+                `Entró por primera vez el ${formatDate(worker.firstLoginAt.toISOString().slice(0, 10))}`
+              ) : (
+                <span className="text-amber-700">
+                  Aún no ha entrado
+                  {worker.accessEmailedAt && ` · datos de acceso enviados por email el ${formatDate(worker.accessEmailedAt.toISOString().slice(0, 10))}${worker.accessEmails > 1 ? ` (${worker.accessEmails} veces)` : ""}`}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
         {worker.lockedUntil && worker.lockedUntil > new Date() && (
           <p className="text-sm text-red-600">Bloqueado por intentos fallidos. Genera un código nuevo para desbloquearlo.</p>

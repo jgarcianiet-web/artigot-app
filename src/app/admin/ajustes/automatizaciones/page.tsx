@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { getAutomation } from "@/lib/automation";
 import { mailEnabled } from "@/lib/mail";
-import { AutomationForm, SendA3Now } from "./AutomationForm";
+import { accessPending } from "@/lib/automationJobs";
+import { AutomationForm, SendA3Now, SendAccessNow } from "./AutomationForm";
 
 export default async function AutomationPage() {
+  const s = await getAutomation();
+  const pending = (await accessPending(s.accessEmail.resendDays)).length;
   return (
     <div className="space-y-4">
       <div>
@@ -11,8 +14,9 @@ export default async function AutomationPage() {
         <h1>Automatizaciones</h1>
         <p className="text-sm text-stone-500">Lo que la app hace sola con los eventos y el personal, para que RRHH solo revise.</p>
       </div>
-      <AutomationForm s={await getAutomation()} mail={mailEnabled()} />
+      <AutomationForm s={s} mail={mailEnabled()} />
       <SendA3Now mail={mailEnabled()} />
+      <SendAccessNow mail={mailEnabled()} pending={pending} />
     </div>
   );
 }
