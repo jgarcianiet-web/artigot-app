@@ -11,14 +11,16 @@ import { BulkBar, SelectAll } from "./BulkBar";
 export default async function StaffList({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; role?: string; inactivos?: string; orden?: string; incompletos?: string; sinavisos?: string; centro?: string; nuevos?: string }>;
+  searchParams: Promise<{ q?: string; role?: string; inactivos?: string; orden?: string; incompletos?: string; sinavisos?: string; centro?: string; nuevos?: string; app?: string }>;
 }) {
-  const { q = "", role = "", inactivos, orden = "puntuacion", incompletos, sinavisos, centro = "", nuevos } = await searchParams;
+  const { q = "", role = "", inactivos, orden = "puntuacion", incompletos, sinavisos, centro = "", nuevos, app = "" } = await searchParams;
   const t = today();
   const workers = await db.worker.findMany({
     where: {
       active: inactivos ? undefined : true,
       role: isRole(role) ? role : undefined,
+      // Alta en la app = ha entrado alguna vez con su usuario y código
+      firstLoginAt: app === "si" ? { not: null } : app === "no" ? null : undefined,
       // Centro de A3: «sin» = sin indicar (se les aplica el convenio de Madrid)
       AND: centro === "sin" ? [{ OR: [{ a3Center: null }, { a3Center: "" }] }] : centro ? [{ a3Center: centro }] : [],
       OR: q ? [
@@ -48,6 +50,8 @@ export default async function StaffList({
   if (orden === "puntuacion") {
     workers.sort((a, b) => a.role.localeCompare(b.role) || scores.get(b.id)!.score - scores.get(a.id)!.score);
   }
+  const inApp = await db.worker.count({ where: { active: true, firstLoginAt: { not: null } } });
+  const notInApp = await db.worker.count({ where: { active: true, firstLoginAt: null } });
   const counts = await db.worker.groupBy({ by: ["role"], where: { active: true }, _count: true });
   const repeated = (await duplicateGroups()).length;
 
@@ -86,6 +90,11 @@ export default async function StaffList({
             <option key={k} value={k}>{v}</option>
           ))}
           <option value="sin">Sin centro ({noCenter})</option>
+        </select>
+        <select name="app" defaultValue={app} className="input w-auto" aria-label="Alta en la app">
+          <option value="">Con y sin alta en la app</option>
+          <option value="si">Ya han entrado en la app ({inApp})</option>
+          <option value="no">Aún no han entrado ({notInApp})</option>
         </select>
         <select name="orden" defaultValue={orden} className="input w-auto">
           <option value="puntuacion">Por puntuación</option>
