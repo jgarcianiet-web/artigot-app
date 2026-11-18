@@ -120,7 +120,10 @@ export async function prlPdf(contractId: string) {
   // Las plantillas traen anotaciones encima («guantes de latex», la X de «NO DESEO»): se quitan y se ponen las de cada uno
   page.node.delete(PDFName.of("Annots"));
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const data = (c.data ?? {}) as { role?: string; choice?: "SI" | "NO" };
+  // Firmado: el nombre y el DNI con los que firmó (los anteriores a este cambio no los guardaban: los actuales)
+  const data = (c.data ?? {}) as { role?: string; choice?: "SI" | "NO"; name?: string; dni?: string | null };
+  const name = (c.signedAt && data.name) || c.worker.name;
+  const dni = (c.signedAt && data.dni) || c.worker.dni;
   const role = data.role ?? c.worker.role;
   const company = (await getCompany()).name || "Artigot Catering SL";
   const date = c.signedAt ? ddmmyyyy(c.signedAt) : "";
@@ -132,8 +135,8 @@ export async function prlPdf(contractId: string) {
     const w = bold.widthOfTextAtSize(text, s);
     page.drawText(text, { x: (L.value.x0 + L.value.x1 - w) / 2, y, size: s, font: bold, color: rgb(0, 0, 0) });
   };
-  center(c.worker.name.toLocaleUpperCase("es-ES"), L.rows.name);
-  center(c.worker.dni ?? "", L.rows.dni);
+  center(name.toLocaleUpperCase("es-ES"), L.rows.name);
+  center(dni ?? "", L.rows.dni);
   center((ROLE_LABEL[role as Role] ?? role).toLocaleUpperCase("es-ES"), L.rows.role);
   center(company.toLocaleUpperCase("es-ES"), L.rows.company);
   center(date, L.rows.date);
