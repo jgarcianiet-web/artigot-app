@@ -79,6 +79,7 @@ model Worker {
   reviewsGiven      Review[]            @relation("reviewer")
   incidentsReported Incident[]          @relation("incidentReporter")
   documents         WorkerDocument[]
+  docRequests       DocRequest[]
   loans             Loan[]
   swapsFrom         SwapRequest[]       @relation("swapFrom")
   swapsTo           SwapRequest[]       @relation("swapTo")
@@ -467,9 +468,32 @@ model WorkerDocument {
   createdAt  DateTime    @default(now())
   worker     Worker      @relation(fields: [workerId], references: [id], onDelete: Cascade)
   file       StoredFile? @relation(fields: [fileId], references: [id], onDelete: SetNull)
+  request    DocRequest?
 
   @@index([workerId])
   @@index([expiresAt])
+}
+
+// Documento que RRHH pide a un trabajador: lo sube en la propia petición y RRHH lo revisa.
+// status: PENDIENTE (por subir, o rechazado: ver rejectReason) | ENTREGADO (subido, por revisar) | APROBADO | ANULADO
+model DocRequest {
+  id           String          @id @default(cuid())
+  workerId     String
+  type         String
+  label        String?
+  message      String?
+  status       String          @default("PENDIENTE")
+  documentId   String?         @unique
+  rejectReason String?
+  requestedBy  String
+  createdAt    DateTime        @default(now())
+  uploadedAt   DateTime?
+  reviewedAt   DateTime?
+  worker       Worker          @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  document     WorkerDocument? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([workerId, status])
+  @@index([status])
 }
 
 // Intercambio de turno: quien no puede ir propone a un compañero, este acepta y RRHH lo aprueba.

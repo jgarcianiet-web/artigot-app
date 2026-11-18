@@ -34,6 +34,7 @@ import { sendAccessEmail } from "@/lib/mail";
 import { reviewPhoto, uploadPhoto } from "@/lib/photo";
 import { DEFAULT_PRIVACY_TEMPLATE, ensurePrivacyDoc, getPrivacy } from "@/lib/privacy";
 import { addDocument } from "@/lib/documents";
+import { approveRequests, createDocRequests, parseRequest, reopenRequest, requestTitle } from "@/lib/docRequests";
 import { createIncident, type IncidentResult } from "@/lib/incidents";
 import { DOC_LABEL, lines, validDniNie, validIban } from "@/lib/staff";
 import { checkIdentityDocs, storeIdentityDocs } from "@/lib/identityDocs";
@@ -778,6 +779,7 @@ export async function verifyDocument(id: string) {
   const by = await requireAdmin();
   const d = await db.workerDocument.update({ where: { id }, data: { verified: true }, include: { worker: { select: { name: true } } } });
   await auditAdmin(by, "Documento", "Revisado", `${d.worker.name}: documento ${d.type} revisado`, { entityId: d.workerId });
+  await approveRequests([id]);
   revalidatePath(`/admin/personal/${d.workerId}`);
   revalidatePath("/admin/documentos");
 }
@@ -785,7 +787,9 @@ export async function verifyDocument(id: string) {
 /** Marca como revisados todos los documentos pendientes de una persona. */
 export async function verifyAllDocuments(workerId: string) {
   const by = await requireAdmin();
-  const r = await db.workerDocument.updateMany({ where: { workerId, verified: false }, data: { verified: true } });
+  const ids = (await db.workerDocument.findMany({ where: { workerId, verified: false }, select: { id: true } })).map((d) => d.id);
+  const r = await db.workerDocument.updateMany({ where: { id: { in: ids } }, data: { verified: true } });
+  await approveRequests(ids);
   const w = await db.worker.findUnique({ where: { id: workerId }, select: { name: true } });
   if (r.count) await auditAdmin(by, "Documento", "Revisado", `${w?.name}: ${r.count} documentos revisados`, { entityId: workerId });
   revalidatePath("/admin", "layout");
@@ -795,16 +799,19 @@ export async function verifyAllDocuments(workerId: string) {
 export async function rejectDocument(id: string, form: FormData) {
   const by = await requireAdmin();
   const reason = String(form.get("reason") ?? "").trim().slice(0, 200) || "No es válido";
+  // Si lo había pedido RRHH, la petición vuelve a quedar pendiente con el motivo
+  const req = await reopenRequest(id, reason);
   const d = await db.workerDocument.delete({ where: { id }, include: { worker: { select: { name: true } } } });
   if (d.fileId) await deleteStoredFile(d.fileId);
-  const what = DOC_LABEL[d.type] ?? "Un documento";
+  const what = req ? requestTitle(req) : (DOC_LABEL[d.type] ?? "Un documento");
   await auditAdmin(by, "Documento", "Rechazado", `${d.worker.name}: ${what} rechazado (${reason})`, { entityId: d.workerId });
   after(() =>
     notify({
       workerIds: [d.workerId],
-      workerUrl: "/app/perfil",
+      workerUrl: req ? "/app/perfil#pedidos" : "/app/perfil",
       title: "Documento rechazado",
       body: `${what}: ${reason}. Súbelo de nuevo desde tu perfil.`,
+      emailFallback: !!req,
       tag: `doc-${d.workerId}`,
     }),
   );
@@ -813,10 +820,62 @@ export async function rejectDocument(id: string, form: FormData) {
 
 export async function deleteDocument(id: string) {
   const by = await requireAdmin();
+  await reopenRequest(id, null);
   const d = await db.workerDocument.delete({ where: { id }, include: { worker: { select: { name: true } } } });
   await auditAdmin(by, "Documento", "Borrado", `${d.worker.name}: borrado documento ${d.type}`, { entityId: d.workerId });
   if (d.fileId) await deleteStoredFile(d.fileId);
   revalidatePath(`/admin/personal/${d.workerId}`);
+}
+
+// ---------- Documentos pedidos por RRHH ----------
+
+/** Pedir un documento a varias personas a la vez (Documentos → Pedidos → Pedir documento). */
+export async function requestDocuments(_prev: string | null, form: FormData) {
+  const by = await requireAdmin();
+  const req = parseRequest(form);
+  if ("error" in req) return req.error!;
+  const ids = [...new Set(form.getAll("members").map(String))];
+  if (!ids.length) return "Elige a quién se lo pides.";
+  const workers = await db.worker.findMany({ where: { id: { in: ids }, active: true }, select: { id: true } });
+  const r = await createDocRequests(workers.map((w) => w.id), req, by);
+  if (!r.created) return "Todas esas personas ya tienen pedido ese documento.";
+  await auditAdmin(by, "Documento", "Pedido", `${requestTitle(req)} a ${r.created} ${r.created === 1 ? "persona" : "personas"}`);
+  revalidatePath("/admin", "layout");
+  redirect(`/admin/documentos/pedidos?ok=${r.created}${r.skipped ? `&ya=${r.skipped}` : ""}`);
+}
+
+/** Pedir un documento a una persona desde su ficha. */
+export async function requestDocumentFor(workerId: string, _prev: { ok: boolean; message: string } | null, form: FormData) {
+  const by = await requireAdmin();
+  const req = parseRequest(form);
+  if ("error" in req) return { ok: false, message: req.error! };
+  const r = await createDocRequests([workerId], req, by);
+  if (!r.created) return { ok: false, message: "Ya tiene pedido ese documento." };
+  const w = await db.worker.findUnique({ where: { id: workerId }, select: { name: true } });
+  await auditAdmin(by, "Documento", "Pedido", `${w?.name}: ${requestTitle(req)}`, { entityId: workerId });
+  revalidatePath(`/admin/personal/${workerId}`);
+  return { ok: true, message: "Pedido. Le ha llegado un aviso para que lo suba desde la app." };
+}
+
+export async function remindDocRequest(id: string) {
+  await requireAdmin();
+  const r = await db.docRequest.findUnique({ where: { id } });
+  if (!r || r.status !== "PENDIENTE") return;
+  await notify({
+    workerIds: [r.workerId],
+    workerUrl: "/app/perfil#pedidos",
+    title: "📎 Te falta subir un documento",
+    body: `RRHH te recuerda que suba: ${requestTitle(r)}.${r.rejectReason ? ` El anterior no valía: ${r.rejectReason}.` : ""}`,
+    tag: "doc-pedido",
+    emailFallback: true,
+  });
+}
+
+export async function cancelDocRequest(id: string) {
+  const by = await requireAdmin();
+  const r = await db.docRequest.update({ where: { id }, data: { status: "ANULADO" }, include: { worker: { select: { name: true } } } });
+  await auditAdmin(by, "Documento", "Petición anulada", `${r.worker.name}: ${requestTitle(r)}`, { entityId: r.workerId });
+  revalidatePath("/admin", "layout");
 }
 
 export async function addLoan(workerId: string, form: FormData) {

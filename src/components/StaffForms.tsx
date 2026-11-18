@@ -146,6 +146,78 @@ export function DocumentUploadForm({ action, title = "Subir documento" }: { acti
   );
 }
 
+/** Qué documento se pide: tipo, cuál exactamente y unas indicaciones. */
+export function RequestFields() {
+  return (
+    <>
+      <select name="type" className="input" required defaultValue="">
+        <option value="" disabled>Tipo de documento…</option>
+        {DOC_TYPES.map(([v, l]) => (
+          <option key={v} value={v}>{l}</option>
+        ))}
+      </select>
+      <input name="label" className="input" maxLength={100} placeholder="Qué documento exactamente (obligatorio si es «Otro»)" />
+      <textarea name="message" rows={2} maxLength={1000} className="input" placeholder="Indicaciones (opcional): p. ej. por las dos caras, que esté en vigor…" />
+    </>
+  );
+}
+
+/** Pedir un documento a una persona desde su ficha: le llega un aviso y lo sube en la app. */
+export function RequestDocForm({ action }: { action: Action }) {
+  const [r, run, pending] = useActionState(action, null);
+  const ref = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (r?.ok) ref.current?.reset();
+  }, [r]);
+  return (
+    <form
+      ref={ref}
+      className="card space-y-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const form = new FormData(e.currentTarget);
+        startTransition(() => run(form));
+      }}
+    >
+      <div>
+        <h2>Pedir documento</h2>
+        <p className="text-xs text-stone-500">Le llega un aviso y lo sube desde la app en esta misma petición. Después lo revisas en Documentos → Por revisar.</p>
+      </div>
+      <RequestFields />
+      <Message r={r} />
+      <button className="btn btn-primary w-full" disabled={pending}>{pending ? "Pidiendo…" : "Pedir documento"}</button>
+    </form>
+  );
+}
+
+/** El trabajador sube el documento que le ha pedido RRHH. */
+export function RequestedUploadForm({ action }: { action: Action }) {
+  const [r, run, pending] = useActionState(action, null);
+  return (
+    <form
+      className="space-y-2"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const form = new FormData(e.currentTarget);
+        const file = form.get("file");
+        if (file instanceof File && file.type.startsWith("image/")) form.set("file", await shrinkImage(file, 2000, 0.85));
+        startTransition(() => run(form));
+      }}
+    >
+      <label className="block text-sm">
+        Foto o PDF
+        <input name="file" type="file" accept="image/*,application/pdf" className="mt-1 block w-full text-sm" required />
+      </label>
+      <label className="block text-sm">
+        Caduca el <span className="text-stone-500">(si tiene caducidad)</span>
+        <input name="expiresAt" type="date" className="input mt-1" />
+      </label>
+      <Message r={r} />
+      <button className="btn btn-primary w-full" disabled={pending}>{pending ? "Subiendo…" : "Subir documento"}</button>
+    </form>
+  );
+}
+
 /** Lista de «qué llevar» con casillas que se recuerdan en este móvil. */
 export function Checklist({ id, uniform, extra, roleLabel }: { id: string; uniform: string[]; extra: string[]; roleLabel: string }) {
   const storageKey = `checklist:${id}`;

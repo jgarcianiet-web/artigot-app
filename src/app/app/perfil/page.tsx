@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { FileLink } from "@/components/FileLink";
-import { DocumentUploadForm, MyDataForm, PhotoForm } from "@/components/StaffForms";
+import { DocumentUploadForm, MyDataForm, PhotoForm, RequestedUploadForm } from "@/components/StaffForms";
+import { requestTitle } from "@/lib/docRequests";
 import { requireWorker } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDate, ROLE_LABEL, today, type Role } from "@/lib/domain";
 import { DOC_LABEL, docState } from "@/lib/staff";
 import { privacySignature } from "@/lib/privacy";
 import { identityDocStatus } from "@/lib/identityDocs";
-import { deleteMyDocument, logout, saveMyData, startPrivacySignature, testMyPush, uploadMyDocument, uploadMyPhoto } from "../actions";
+import { deleteMyDocument, logout, uploadRequestedDocument, saveMyData, startPrivacySignature, testMyPush, uploadMyDocument, uploadMyPhoto } from "../actions";
 import { MyPush } from "@/components/PushTest";
 import { pushConfig } from "@/lib/push";
 
@@ -25,6 +26,7 @@ export default async function MyProfile() {
     where: { id: me.id },
     include: {
       documents: { orderBy: { createdAt: "desc" } },
+      docRequests: { where: { status: { in: ["PENDIENTE", "ENTREGADO"] } }, orderBy: { createdAt: "asc" } },
       loans: { where: { returnedAt: null }, orderBy: { deliveredAt: "desc" } },
       contracts: { orderBy: { createdAt: "desc" }, take: 20, select: { id: true, title: true, signedAt: true } },
     },
@@ -36,6 +38,31 @@ export default async function MyProfile() {
         <p className="text-sm text-stone-500">{ROLE_LABEL[worker.role as Role]} · {worker.phone ?? worker.email}</p>
         <h1>{worker.name}</h1>
       </header>
+
+      {worker.docRequests.length > 0 && (
+        <section id="pedidos" className="card scroll-mt-4 space-y-3 border-amber-300 bg-amber-50">
+          <h2>📎 RRHH te pide</h2>
+          {worker.docRequests.map((r) => (
+            <div key={r.id} className="space-y-2 rounded-lg bg-white p-3 ring-1 ring-amber-200">
+              <div>
+                <div className="font-medium">{requestTitle(r)}</div>
+                {r.label && <div className="text-xs text-stone-500">{DOC_LABEL[r.type] ?? r.type}</div>}
+                {r.message && <p className="mt-1 whitespace-pre-line text-sm">{r.message}</p>}
+              </div>
+              {r.status === "ENTREGADO" ? (
+                <p className="text-sm text-emerald-700">✓ Subido. RRHH lo está revisando.</p>
+              ) : !privacy ? (
+                <p className="text-sm text-stone-600">🔒 Para subirlo, firma primero la protección de datos (más abajo).</p>
+              ) : (
+                <>
+                  {r.rejectReason && <p className="rounded bg-red-50 p-2 text-sm text-red-700">El que subiste no vale: {r.rejectReason}. Súbelo de nuevo.</p>}
+                  <RequestedUploadForm action={uploadRequestedDocument.bind(null, r.id)} />
+                </>
+              )}
+            </div>
+          ))}
+        </section>
+      )}
 
       <MyPush webKey={(await pushConfig()).webPublicKey} action={testMyPush} />
 

@@ -12,6 +12,7 @@ import { forgetDevice } from "@/lib/devices";
 import { checkClock, clockWindow, hhmm } from "@/lib/clockRules";
 import { createIncident, type IncidentResult } from "@/lib/incidents";
 import { addDocument } from "@/lib/documents";
+import { reopenRequest, requestTitle } from "@/lib/docRequests";
 import { storeSignature } from "@/lib/files";
 import { ensurePrivacyDoc, privacySignature } from "@/lib/privacy";
 import { checkIdentityDocs, storeIdentityDocs } from "@/lib/identityDocs";
@@ -454,10 +455,39 @@ export async function uploadMyDocument(_prev: FormResult, form: FormData): Promi
   return r;
 }
 
+/** Sube el documento que le ha pedido RRHH, en la propia petición. */
+export async function uploadRequestedDocument(requestId: string, _prev: FormResult, form: FormData): Promise<FormResult> {
+  const me = await requireWorker();
+  const r = await db.docRequest.findUnique({ where: { id: requestId } });
+  if (!r || r.workerId !== me.id || r.status !== "PENDIENTE") return { ok: false, message: "Esta petición ya no está pendiente." };
+  if (!(await privacySignature(me.id))) {
+    return { ok: false, message: "Antes de subir documentos tienes que firmar la cláusula de protección de datos." };
+  }
+  form.set("type", r.type);
+  form.set("label", r.label ?? "");
+  const res = await addDocument(me.id, form, me.name);
+  if (!res.ok || !("id" in res)) return { ok: false, message: res.message };
+  await db.docRequest.update({ where: { id: r.id }, data: { status: "ENTREGADO", documentId: res.id, uploadedAt: new Date() } });
+  await audit(me.name, "Trabajador", "Documento", "Subido (pedido por RRHH)", `${me.name}: ${requestTitle(r)}`, { entityId: me.id });
+  after(() =>
+    notify({
+      admins: true,
+      adminUrl: "/admin/documentos",
+      title: "📎 Documento pedido recibido",
+      body: `${me.name} ha subido: ${requestTitle(r)}. Revísalo en Documentos.`,
+      tag: `doc-${me.id}`,
+    }),
+  );
+  revalidatePath("/app/perfil");
+  revalidatePath("/app");
+  return { ok: true, message: "Subido. RRHH lo revisará y te avisaremos si hay algún problema." };
+}
+
 export async function deleteMyDocument(id: string) {
   const me = await requireWorker();
   const d = await db.workerDocument.findUnique({ where: { id } });
   if (!d || d.workerId !== me.id || d.verified) return; // los revisados por RRHH solo los borra RRHH
+  await reopenRequest(id, null);
   await db.workerDocument.delete({ where: { id } });
   if (d.fileId) await deleteStoredFile(d.fileId);
   revalidatePath("/app/perfil");
