@@ -6,7 +6,7 @@ import { getPrivacy } from "./privacy";
 /**
  * Qué le falta a cada persona para tener la ficha completa:
  * protección de datos firmada (versión vigente), foto de perfil, teléfono, DNI, nº de la Seguridad Social e IBAN,
- * cada uno con su documento.
+ * cada uno con su documento, email y nivel de inglés.
  */
 
 const LABEL: Record<string, string> = { dni: "DNI", nss: "nº de la Seguridad Social", iban: "IBAN" };
@@ -20,7 +20,7 @@ export async function incompleteWorkers(workerIds?: string[]): Promise<Incomplet
   const workers = await db.worker.findMany({
     where: { active: true, ...(workerIds && { id: { in: workerIds } }) },
     select: {
-      id: true, name: true, phone: true, email: true, dni: true, nss: true, iban: true, photoStatus: true, photoFileId: true,
+      id: true, name: true, phone: true, email: true, dni: true, nss: true, iban: true, englishLevel: true, photoStatus: true, photoFileId: true,
       _count: { select: { devices: true } },
       documents: { where: { type: { in: IDENTITY_DOCS.map((d) => d.type) } }, select: { type: true } },
       contracts: { where: { kind: "RGPD", version, signedAt: { not: null } }, select: { id: true }, take: 1 },
@@ -41,6 +41,7 @@ export async function incompleteWorkers(workerIds?: string[]): Promise<Incomplet
       else if (!docs.has(d.type)) missing.push(DOC_NAME[d.type]);
     }
     if (!w.email) missing.push("email");
+    if (!w.englishLevel) missing.push("nivel de inglés");
     if (missing.length) out.push({ id: w.id, name: w.name, phone: w.phone, email: w.email, dni: w.dni, devices: w._count.devices, missing, upcoming: w.assignments.length > 0 });
   }
   return out;

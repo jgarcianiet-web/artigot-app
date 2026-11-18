@@ -4,6 +4,7 @@ import { startTransition, useActionState, useEffect, useRef, useState } from "re
 import { ActionForm, SubmitButton } from "@/components/client";
 import { shrinkFormImages, shrinkImage } from "@/lib/image";
 import { IDENTITY_FILE_KEYS, IdentityFields } from "./IdentityFields";
+import { LanguageFields } from "./LanguageFields";
 
 type Result = { ok: boolean; message: string } | null;
 type Action = (prev: Result, form: FormData) => Promise<Result>;
@@ -22,7 +23,7 @@ function Message({ r }: { r: Result }) {
   return <p role="status" className={`rounded-lg p-2 text-sm ${r.ok ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>{r.message}</p>;
 }
 
-type Data = { dni: string | null; nss: string | null; iban: string | null; birthDate: string | null; address: string | null; email: string | null; sex?: string | null; nationality?: string | null; phone?: string | null };
+type Data = { dni: string | null; nss: string | null; iban: string | null; birthDate: string | null; address: string | null; email: string | null; sex?: string | null; nationality?: string | null; phone?: string | null; englishLevel?: string | null; otherLanguages?: string | null };
 
 type DocStatus = Record<string, { fileId: string | null; verified: boolean }>;
 
@@ -50,6 +51,7 @@ export function MyDataForm({ action, data, docs }: { action: Action; data: Data;
           </select>
         </label>
         <label className="text-sm">Nacionalidad<input name="nationality" className="input mt-1 text-base" defaultValue={data.nationality ?? ""} placeholder="España" /></label>
+        <LanguageFields english={data.englishLevel} other={data.otherLanguages} required inputClass="input mt-1 text-base" />
         <label className="text-sm">Email<input name="email" type="email" className="input mt-1 text-base" defaultValue={data.email ?? ""} required /></label>
         <label className="text-sm sm:col-span-2">Dirección<input name="address" className="input mt-1 text-base" defaultValue={data.address ?? ""} /></label>
       </div>

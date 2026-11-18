@@ -32,6 +32,7 @@ import { audit, diff } from "@/lib/audit";
 import { deleteStoredFile } from "@/lib/files";
 import { ageOn, MIN_AGE, minorStatus, TUTOR_RELATIONS, tutorText } from "@/lib/minors";
 import { canChooseMedical, isPrl } from "@/lib/prl";
+import { parseLanguages } from "@/lib/languages";
 
 export async function login(_prev: string | null, form: FormData) {
   const error = await workerLogin(String(form.get("phone") ?? ""), String(form.get("code") ?? ""));
@@ -393,6 +394,7 @@ export async function saveMyData(_prev: FormResult, form: FormData): Promise<For
   if (birthDate && !/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) return { ok: false, message: "Fecha de nacimiento no válida." };
   if (birthDate && ageOn(birthDate) < MIN_AGE) return { ok: false, message: `Para trabajar con nosotros tienes que tener al menos ${MIN_AGE} años. Revisa la fecha de nacimiento.` };
   if (!email) return { ok: false, message: "Escribe tu email." };
+  if (form.has("englishLevel") && !parseLanguages(form).englishLevel) return { ok: false, message: "Indica tu nivel de inglés." };
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, message: "Email no válido." };
   const before = await db.worker.findUniqueOrThrow({ where: { id: me.id } });
   // Quien entró con su email puede añadir su móvil (una sola vez; después lo cambia RRHH)
@@ -410,10 +412,11 @@ export async function saveMyData(_prev: FormResult, form: FormData): Promise<For
     data: { dni: dni || null, iban: iban || null, nss: nss || null, birthDate: birthDate || null, address: address || null, email: email || null,
       ...(form.has("sex") && { sex: sex === "Hombre" || sex === "Mujer" ? sex : null }),
       ...(form.has("nationality") && { nationality: nationality || null }),
+      ...(form.has("englishLevel") && parseLanguages(form)),
       ...phoneData,
     },
   });
-  const d = diff(before, after_, { dni: "DNI", nss: "NSS", iban: "IBAN", birthDate: "Nacimiento", address: "Dirección", email: "Email", sex: "Sexo", nationality: "Nacionalidad", phone: "Teléfono" });
+  const d = diff(before, after_, { dni: "DNI", nss: "NSS", iban: "IBAN", birthDate: "Nacimiento", address: "Dirección", email: "Email", sex: "Sexo", nationality: "Nacionalidad", englishLevel: "Inglés", otherLanguages: "Otros idiomas", phone: "Teléfono" });
   if (d.changed) await audit(me.name, "Trabajador", "Trabajador", "Datos (desde la app)", `${me.name}: ${d.text}`, { entityId: me.id, data: d.data });
   let stored: string[];
   try {

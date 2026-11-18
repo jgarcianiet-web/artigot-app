@@ -42,6 +42,7 @@ import { addDays, EVENT_TYPE_LABEL, EVENT_TYPES, formatDate, isRole, LEAD_ROLES,
 import { notify } from "@/lib/push";
 import { autoReplace, candidatesFor, fillGaps, notifyInvited } from "@/lib/staffing";
 import { deleteStoredFile } from "@/lib/files";
+import { ENGLISH_LEVELS } from "@/lib/languages";
 const time = z.string().regex(/^\d{2}:\d{2}$/);
 const optTime = z.union([time, z.literal("")]).transform((v) => v || null);
 const optText = z.string().trim().transform((v) => v || null);
@@ -167,6 +168,8 @@ const workerSchema = z.object({
   role: z.enum(ROLES),
   rating: z.coerce.number().int().min(1).max(5),
   zone: optText,
+  englishLevel: z.enum(ENGLISH_LEVELS).nullable().catch(null),
+  otherLanguages: optText,
   notes: optText,
   dni: optText,
   nss: optText,
@@ -180,7 +183,7 @@ const workerSchema = z.object({
 });
 
 const WORKER_LABELS = {
-  name: "Nombre", phone: "Teléfono", email: "Email", role: "Puesto", roles: "Puestos", rating: "Valoración", zone: "Zona",
+  name: "Nombre", phone: "Teléfono", email: "Email", role: "Puesto", roles: "Puestos", rating: "Valoración", zone: "Zona", englishLevel: "Inglés", otherLanguages: "Otros idiomas",
   dni: "DNI", nss: "NSS", iban: "IBAN", birthDate: "Nacimiento", address: "Dirección", a3Code: "Código A3", a3Center: "Centro A3", carSeats: "Plazas en coche", customRates: "Tarifa propia",
   contractCode: "Contrato", noClock: "No ficha", monthlySalary: "Nómina mensual",
 };

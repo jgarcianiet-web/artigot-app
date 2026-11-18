@@ -3,6 +3,7 @@
 import { startTransition, useActionState } from "react";
 import { shrinkImage } from "@/lib/image";
 import { apply } from "./actions";
+import { LanguageFields } from "@/components/LanguageFields";
 
 // La solicitud pública es solo para camareros y mozos (maîtres y responsables se gestionan desde RRHH)
 const ROLES: [string, string][] = [
@@ -47,6 +48,9 @@ export function ApplyForm({ countries }: { countries: string[] }) {
           ))}
         </div>
       </fieldset>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <LanguageFields required inputClass="input mt-1 text-base" />
+      </div>
       <fieldset className="space-y-3 rounded-lg border border-stone-200 p-3">
         <legend className="px-1 text-sm font-semibold">Datos para darte de alta</legend>
         <p className="text-xs text-stone-500">Solo se usan si te contratamos, para darte de alta en la Seguridad Social sin hacerte esperar.</p>
@@ -77,7 +81,7 @@ export function ApplyForm({ countries }: { countries: string[] }) {
           </label>
         </div>
       </fieldset>
-      <label className="block text-sm">Experiencia<textarea name="experience" rows={3} className="input mt-1 text-base" placeholder="Dónde has trabajado, cuántos años, idiomas…" /></label>
+      <label className="block text-sm">Experiencia<textarea name="experience" rows={3} className="input mt-1 text-base" placeholder="Dónde has trabajado, cuántos años…" /></label>
       <label className="block text-sm">Disponibilidad<input name="availability" className="input mt-1 text-base" placeholder="Fines de semana, entre semana, verano…" /></label>
       <label className="block text-sm">Currículum (PDF o foto)<input name="cv" type="file" accept="application/pdf,image/*" className="mt-1 block w-full text-sm" required /></label>
       {/* Campo trampa para robots: oculto a las personas */}

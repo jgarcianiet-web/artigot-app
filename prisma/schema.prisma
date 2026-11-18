@@ -40,6 +40,9 @@ model Worker {
   surname2          String?
   sex               String?
   nationality       String?
+  // Idiomas: nivel de inglés (ENGLISH_LEVELS) y otros idiomas en texto libre («Francés intermedio, alemán básico»)
+  englishLevel      String?
+  otherLanguages    String?
   education         String?
   a3Center          String?
   // Tarifa propia de esta persona por tipo de evento ({ "BODA": 14, "EVENTO": 12.5 }); manda sobre la del puesto
@@ -542,37 +545,39 @@ model Setting {
 // Candidato que se apunta desde el formulario público «Trabaja con nosotros».
 // status: NUEVO | CONTACTADO | DESCARTADO | CONTRATADO
 model Candidate {
-  id           String      @id @default(cuid())
-  name         String
-  phone        String
-  phoneKey     String
-  email        String?
-  zone         String?
-  roles        String[]
-  experience   String?
-  availability String?
+  id             String      @id @default(cuid())
+  name           String
+  phone          String
+  phoneKey       String
+  email          String?
+  zone           String?
+  roles          String[]
+  experience     String?
+  availability   String?
   // ¿Tiene coche para ir a los eventos?
-  hasCar       Boolean?
-  fileId       String?     @unique
-  status       String      @default("NUEVO")
-  notes        String?
-  consentAt    DateTime
-  workerId     String?     @unique
-  createdAt    DateTime    @default(now())
+  hasCar         Boolean?
+  fileId         String?     @unique
+  status         String      @default("NUEVO")
+  notes          String?
+  consentAt      DateTime
+  workerId       String?     @unique
+  createdAt      DateTime    @default(now())
   // Cuándo lo abrió RRHH por primera vez (hasta entonces cuenta como nuevo en el menú)
-  seenAt       DateTime?
+  seenAt         DateTime?
   // Entrevista: cuándo (estado ENTREVISTA) y valoración de RRHH (1-5), que pasa a su ficha al darle de alta
-  interviewAt  DateTime?
-  rating       Int?
+  interviewAt    DateTime?
+  rating         Int?
   // Datos para el alta en A3 (pasan a la ficha al darle de alta). NSS e IBAN son opcionales al apuntarse
-  dni          String?
-  birthDate    String?
-  sex          String?
-  nationality  String?
-  nss          String?
-  iban         String?
-  file         StoredFile? @relation(fields: [fileId], references: [id], onDelete: SetNull)
-  worker       Worker?     @relation(fields: [workerId], references: [id], onDelete: SetNull)
+  dni            String?
+  birthDate      String?
+  sex            String?
+  nationality    String?
+  englishLevel   String?
+  otherLanguages String?
+  nss            String?
+  iban           String?
+  file           StoredFile? @relation(fields: [fileId], references: [id], onDelete: SetNull)
+  worker         Worker?     @relation(fields: [workerId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
 }

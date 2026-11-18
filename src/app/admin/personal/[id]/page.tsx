@@ -40,6 +40,7 @@ import { db } from "@/lib/db";
 import { CENTER_LABEL, CONTRACT_SHORT, euro, formatDate, isFixed, loginId, num, ownRatesText, today, workedHours } from "@/lib/domain";
 import { getAutomation } from "@/lib/automation";
 import { type Slot, SLOT_SHORT } from "@/lib/slots";
+import { languagesText } from "@/lib/languages";
 
 const DEVICE_LABEL: Record<string, string> = { web: "Navegador / web app", fcm: "App Android", apns: "App iPhone" };
 
@@ -123,6 +124,7 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
             {worker.phone ? <a href={`tel:${worker.phone}`}>{worker.phone}</a> : <span className="text-amber-700">Sin teléfono (entra con su email)</span>}
             {worker.email && <span>· {worker.email}</span>}
             {worker.zone && <span>· {worker.zone}</span>}
+            {languagesText(worker) ? <span>· 🗣 {languagesText(worker)}</span> : <span className="text-amber-700">· Sin nivel de inglés</span>}
             {!worker.active && <span className="font-medium text-red-600">· Inactivo</span>}
           </div>
           {worker.notes && <p className="mt-2 max-w-xl text-sm whitespace-pre-line text-stone-600">{worker.notes}</p>}
