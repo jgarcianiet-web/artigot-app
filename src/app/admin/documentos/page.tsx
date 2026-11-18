@@ -8,7 +8,6 @@ import { db } from "@/lib/db";
 import { addDays, formatDate, today } from "@/lib/domain";
 import { DOC_LABEL, DOC_WARN_DAYS } from "@/lib/staff";
 
-const REASONS = ["Se ve borroso o cortado", "Falta una de las caras", "Está caducado", "No corresponde a esta persona", "No es el documento pedido"];
 const when = (d: Date) => new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(d);
 
 export default async function Documents({ searchParams }: { searchParams: Promise<{ ver?: string }> }) {
@@ -92,9 +91,7 @@ export default async function Documents({ searchParams }: { searchParams: Promis
                     <div className="flex flex-wrap items-center gap-2">
                       <form action={verifyDocument.bind(null, d.id)}><button className="btn btn-sm btn-success">✓ Correcto</button></form>
                       <form action={rejectDocument.bind(null, d.id)} className="flex flex-1 items-center gap-1">
-                        <select name="reason" className="input py-1 text-xs" aria-label="Motivo del rechazo" defaultValue={REASONS[0]}>
-                          {REASONS.map((r) => <option key={r}>{r}</option>)}
-                        </select>
+                        <input name="reason" required maxLength={200} className="input min-w-0 flex-1 py-1 text-xs" aria-label="Motivo del rechazo" placeholder="Motivo del rechazo (lo verá el trabajador)" />
                         <button className="btn btn-sm btn-danger">Rechazar</button>
                       </form>
                     </div>

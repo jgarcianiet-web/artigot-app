@@ -272,7 +272,9 @@ export async function emailAccessCode(id: string, _prev: string | null): Promise
 
 export async function reviewPhotoAction(workerId: string, accept: boolean, form: FormData) {
   const by = await requireAdmin();
-  await reviewPhoto(workerId, accept, accept ? null : String(form.get("reason") ?? ""), by);
+  const reason = String(form.get("reason") ?? "").trim().slice(0, 200);
+  if (!accept && !reason) return;
+  await reviewPhoto(workerId, accept, accept ? null : reason, by);
   revalidatePath("/admin", "layout");
 }
 
@@ -801,7 +803,9 @@ export async function verifyAllDocuments(workerId: string) {
 /** Rechaza un documento (borroso, caducado, no corresponde…): se borra y se avisa a la persona para que lo suba de nuevo. */
 export async function rejectDocument(id: string, form: FormData) {
   const by = await requireAdmin();
-  const reason = String(form.get("reason") ?? "").trim().slice(0, 200) || "No es válido";
+  // El motivo lo escribe RRHH (el trabajador lo ve tal cual en la app)
+  const reason = String(form.get("reason") ?? "").trim().slice(0, 200);
+  if (!reason) return;
   // Si lo había pedido RRHH, la petición vuelve a quedar pendiente con el motivo
   const req = await reopenRequest(id, reason);
   const d = await db.workerDocument.delete({ where: { id }, include: { worker: { select: { name: true } } } });

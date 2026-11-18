@@ -12,14 +12,6 @@ import { notify } from "./push";
  * pendiente.
  */
 
-export const PHOTO_REJECT_REASONS = [
-  "No se te ve bien la cara",
-  "Está borrosa o muy oscura",
-  "Con gafas de sol, gorra o filtros",
-  "No es una foto tuya",
-  "Busca un fondo neutro y de frente",
-];
-
 export const PHOTO_STATUS: Record<string, { label: string; cls: string }> = {
   PENDIENTE: { label: "Pendiente de revisar", cls: "bg-amber-100 text-amber-900" },
   ACEPTADA: { label: "Aceptada", cls: "bg-emerald-100 text-emerald-800" },
