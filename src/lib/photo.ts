@@ -34,6 +34,7 @@ export async function reviewPhoto(workerId: string, accept: boolean, reason: str
   if (accept) {
     await db.worker.update({ where: { id: workerId }, data: { photoStatus: "ACEPTADA", photoNote: null } });
     await auditAdmin(by, "Trabajador", "Foto de perfil aceptada", `${w.name}: foto de perfil aceptada`, { entityId: workerId });
+    after(() => notify({ workerIds: [workerId], workerUrl: "/app", title: "✓ Foto de perfil aprobada", body: "RRHH ha aprobado tu foto de perfil.", tag: "foto" }).catch(() => {}));
     return;
   }
   const note = reason?.trim() || "No es válida";
