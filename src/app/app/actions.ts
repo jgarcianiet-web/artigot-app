@@ -468,7 +468,7 @@ export async function uploadRequestedDocument(requestId: string, _prev: FormResu
   }
   form.set("type", r.type);
   form.set("label", r.label ?? "");
-  const res = await addDocument(me.id, form, me.name);
+  const res = await addDocument(me.id, form, me.name, false, false);
   if (!res.ok || !("id" in res)) return { ok: false, message: res.message };
   await db.docRequest.update({ where: { id: r.id }, data: { status: "ENTREGADO", documentId: res.id, uploadedAt: new Date() } });
   await audit(me.name, "Trabajador", "Documento", "Subido (pedido por RRHH)", `${me.name}: ${requestTitle(r)}`, { entityId: me.id });
