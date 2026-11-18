@@ -6,6 +6,7 @@ import { ActionForm, SubmitButton } from "@/components/client";
 import { IDENTITY_FILE_KEYS, IdentityFields } from "@/components/IdentityFields";
 import { shrinkFormImages } from "@/lib/image";
 import { CONTRACT_LABEL, EVENT_TYPE_LABEL, EVENT_TYPES, OWN_RATE_ROLES, ROLE_LABEL, ROLES } from "@/lib/domain";
+import { LanguageFields } from "@/components/LanguageFields";
 
 type Worker = {
   id: string;
@@ -16,6 +17,8 @@ type Worker = {
   roles: string[];
   rating: number;
   zone: string | null;
+  englishLevel?: string | null;
+  otherLanguages?: string | null;
   notes: string | null;
   dni: string | null;
   nss: string | null;
@@ -118,6 +121,7 @@ export function WorkerForm({ worker, docs = {} }: { worker?: Worker; docs?: DocS
           <label className="label">Zona / localidad (opcional)</label>
           <input name="zone" className="input" defaultValue={worker?.zone ?? ""} placeholder="p. ej. Valencia centro, tiene coche" />
         </div>
+        <LanguageFields english={worker?.englishLevel} other={worker?.otherLanguages} inputClass="input mt-1" />
         <fieldset className="grid gap-4 rounded-lg border border-stone-200 p-4 sm:col-span-2 sm:grid-cols-2">
           <legend className="px-1 text-sm font-semibold">Datos laborales (también los puede completar el trabajador en su app)</legend>
           <p className="text-xs text-stone-500 sm:col-span-2">El DNI, la Seguridad Social y el IBAN siempre van con su documento adjunto.</p>

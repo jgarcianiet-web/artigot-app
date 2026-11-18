@@ -6,14 +6,15 @@ import { duplicateGroups } from "@/lib/mergeWorkers";
 import { CENTER_LABEL, isFixed, isRole, ROLE_PLURAL, ROLES, today } from "@/lib/domain";
 import { computeScores, explainScore } from "@/lib/scoring";
 import { incompleteWorkers } from "@/lib/completeness";
+import { isEnglishLevel, languagesText, levelsFrom } from "@/lib/languages";
 import { BulkBar, SelectAll } from "./BulkBar";
 
 export default async function StaffList({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; role?: string; inactivos?: string; orden?: string; incompletos?: string; sinavisos?: string; centro?: string; nuevos?: string; app?: string }>;
+  searchParams: Promise<{ q?: string; role?: string; inactivos?: string; orden?: string; incompletos?: string; sinavisos?: string; centro?: string; nuevos?: string; app?: string; ingles?: string }>;
 }) {
-  const { q = "", role = "", inactivos, orden = "puntuacion", incompletos, sinavisos, centro = "", nuevos, app = "" } = await searchParams;
+  const { q = "", role = "", inactivos, orden = "puntuacion", incompletos, sinavisos, centro = "", nuevos, app = "", ingles = "" } = await searchParams;
   const t = today();
   const workers = await db.worker.findMany({
     where: {
@@ -21,6 +22,8 @@ export default async function StaffList({
       role: isRole(role) ? role : undefined,
       // Alta en la app = ha entrado alguna vez con su usuario y código
       firstLoginAt: app === "si" ? { not: null } : app === "no" ? null : undefined,
+      // Inglés: «X o más», o quien aún no lo ha indicado
+      englishLevel: ingles === "sin" ? null : isEnglishLevel(ingles) ? { in: [...levelsFrom(ingles)] } : undefined,
       // Centro de A3: «sin» = sin indicar (se les aplica el convenio de Madrid)
       AND: centro === "sin" ? [{ OR: [{ a3Center: null }, { a3Center: "" }] }] : centro ? [{ a3Center: centro }] : [],
       OR: q ? [
@@ -96,6 +99,13 @@ export default async function StaffList({
           <option value="si">Ya han entrado en la app ({inApp})</option>
           <option value="no">Aún no han entrado ({notInApp})</option>
         </select>
+        <select name="ingles" defaultValue={ingles} className="input w-auto" aria-label="Nivel de inglés">
+          <option value="">Cualquier nivel de inglés</option>
+          <option value="Básico">Inglés básico o más</option>
+          <option value="Intermedio">Inglés intermedio o más</option>
+          <option value="Alto">Inglés alto o nativo</option>
+          <option value="sin">Sin indicar el inglés</option>
+        </select>
         <select name="orden" defaultValue={orden} className="input w-auto">
           <option value="puntuacion">Por puntuación</option>
           <option value="nombre">Por nombre</option>
@@ -144,6 +154,7 @@ export default async function StaffList({
                     {incomplete.has(w.id) && (
                       <span className="ml-2 rounded bg-amber-100 px-1.5 text-[11px] text-amber-900" title={`Falta: ${incomplete.get(w.id)!.join(", ")}`}>Datos incompletos</span>
                     )}
+                    {w.englishLevel && w.englishLevel !== "Ninguno" && <span className="ml-2 text-[11px] text-stone-500" title={languagesText(w)}>🗣 {w.englishLevel === "Nativo" ? "inglés nativo" : `inglés ${w.englishLevel.toLowerCase()}`}</span>}
                     {w._count.devices === 0 && (
                       <span className="ml-2 text-[11px] text-amber-700" title="No ha activado los avisos de la app: no le llegan las convocatorias">🔕 sin avisos</span>
                     )}

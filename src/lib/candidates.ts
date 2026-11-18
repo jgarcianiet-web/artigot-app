@@ -8,6 +8,7 @@ import { mailEnabled, sendMail } from "./mail";
 import { ageOn, MIN_AGE } from "./minors";
 import { notify } from "./push";
 import { validDniNie, validIban, validNss } from "./staff";
+import { parseLanguages } from "./languages";
 
 export const CANDIDATE_STATUS: Record<string, { label: string; cls: string }> = {
   NUEVO: { label: "Nuevo", cls: "bg-sky-100 text-sky-800" },
@@ -70,6 +71,8 @@ export async function applyAsCandidate(form: FormData): Promise<ApplyResult> {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, message: "El email no es válido." };
   if (!roles.length) return { ok: false, message: "Marca al menos un puesto." };
   if (car !== "1" && car !== "0") return { ok: false, message: "Indica si tienes coche." };
+  const languages = parseLanguages(form);
+  if (!languages.englishLevel) return { ok: false, message: "Indica tu nivel de inglés." };
   // Datos para el alta en A3 (NSS e IBAN, si los tiene)
   const dni = String(form.get("dni") ?? "").trim().toUpperCase().replace(/[\s-]/g, "");
   const birthDate = String(form.get("birthDate") ?? "");
@@ -110,6 +113,7 @@ export async function applyAsCandidate(form: FormData): Promise<ApplyResult> {
       experience: String(form.get("experience") ?? "").trim().slice(0, 2000) || null,
       availability: String(form.get("availability") ?? "").trim().slice(0, 500) || null,
       hasCar: car === "1",
+      ...languages,
       dni, birthDate, sex, nationality, nss: nss || null, iban: iban || null,
       fileId,
       consentAt: new Date(),
@@ -151,7 +155,7 @@ export async function hireCandidate(id: string, role: Role, by = "RRHH") {
     .join("\n") || null;
   const existing = await db.worker.findUnique({ where: { phoneKey: key } });
   // Datos para el alta en A3 que dio al apuntarse (a quien ya existía solo se le completan los que falten)
-  const ids = { dni: c.dni, birthDate: c.birthDate, sex: c.sex, nationality: c.nationality, nss: c.nss, iban: c.iban };
+  const ids = { dni: c.dni, birthDate: c.birthDate, sex: c.sex, nationality: c.nationality, nss: c.nss, iban: c.iban, englishLevel: c.englishLevel, otherLanguages: c.otherLanguages };
   // El DNI no se repite: si ya lo tiene otra ficha, se deja para que RRHH lo revise
   if (ids.dni && (await db.worker.findFirst({ where: { dni: ids.dni, NOT: existing ? { id: existing.id } : undefined }, select: { id: true } }))) ids.dni = null;
   if (existing) {
