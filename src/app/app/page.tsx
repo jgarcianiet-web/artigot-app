@@ -8,6 +8,7 @@ import { unreadCounts } from "@/lib/chat";
 import { clockWindow, hhmm, radiusOf } from "@/lib/clockRules";
 import { db } from "@/lib/db";
 import { pendingReviews } from "@/lib/reviews";
+import { requestTitle } from "@/lib/docRequests";
 import { addDays, callTime, clocksIn, isLeadRole, formatDate, num, ROLE_LABEL, today, workedHours, type Role } from "@/lib/domain";
 import { Checklist } from "@/components/StaffForms";
 import { AvailabilityCalendar } from "@/components/AvailabilityCalendar";
@@ -71,6 +72,7 @@ export default async function WorkerHome() {
     }),
     openPollsFor(worker),
   ]);
+  const docRequests = await db.docRequest.findMany({ where: { workerId: me.id, status: "PENDIENTE" }, orderBy: { createdAt: "asc" } });
   const toReview = worker.assignments.some((a) => isLeadRole(a.role)) ? await pendingReviews(me.id) : [];
   // Bienvenida guiada: protección de datos, datos y documentos, avisos
   const [privacy, incomplete, devices] = await Promise.all([
@@ -186,6 +188,18 @@ export default async function WorkerHome() {
       )}
 
       {polls.map((p) => <PollCard key={p.id} poll={p} busy={busy} />)}
+
+      {docRequests.length > 0 && (
+        <section className="card space-y-2 border-amber-300 bg-amber-50">
+          <h2>📎 RRHH te pide {docRequests.length === 1 ? "un documento" : `${docRequests.length} documentos`}</h2>
+          {docRequests.map((r) => (
+            <Link key={r.id} href="/app/perfil#pedidos" className="btn w-full justify-between">
+              <span className="truncate">{requestTitle(r)}</span>
+              <span className="text-xs">{r.rejectReason ? "Súbelo de nuevo ›" : "Subir ›"}</span>
+            </Link>
+          ))}
+        </section>
+      )}
 
       {toSign.length > 0 && (
         <section className="card space-y-2 border-stone-300 bg-stone-100">

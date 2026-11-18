@@ -20,6 +20,7 @@ import { getConvocationSettings } from "./convocation";
 import { autoReplace } from "./staffing";
 import { getAutomation } from "./automation";
 import { CANDIDATE_RETENTION_MONTHS, purgeOldCandidates } from "./candidates";
+import { requestTitle } from "./docRequests";
 
 /**
  * Avisos automáticos. Se comprueban cada pocos minutos; cada aviso se registra en ReminderLog
@@ -264,6 +265,23 @@ export async function runReminders(now = new Date()) {
     if (!(await claim(`firma-recordatorio:${x.id}`))) continue;
     await inviteExternal(x, x.request, true).catch((e) => console.error("recordatorio firma externa", x.email, e));
     sent.push(`firma-recordatorio:${x.id}`);
+  }
+
+  // 13. Documentos pedidos por RRHH: a los 2 días (de pedirlo o de rechazar el que subió), un recordatorio si no lo ha subido
+  const asked = await db.docRequest.findMany({ where: { status: "PENDIENTE", worker: { active: true } } });
+  for (const r of asked) {
+    const since = r.rejectReason && r.reviewedAt ? r.reviewedAt : r.createdAt;
+    if (now.getTime() - since.getTime() < 2 * 864e5) continue;
+    if (!(await claim(`doc-pedido:${r.id}:${since.getTime()}`))) continue;
+    await notify({
+      workerIds: [r.workerId],
+      workerUrl: "/app/perfil#pedidos",
+      title: "📎 Te falta subir un documento",
+      body: `RRHH te pidió: ${requestTitle(r)}. Súbelo desde la app (foto o PDF).`,
+      tag: "doc-pedido",
+      emailFallback: true,
+    });
+    sent.push(`doc-pedido:${r.id}`);
   }
 
   // 11. Automatizaciones: convocatoria automática, disponibilidad semanal y email diario de A3

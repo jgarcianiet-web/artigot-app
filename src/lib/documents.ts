@@ -17,6 +17,6 @@ export async function addDocument(workerId: string, form: FormData, uploadedBy: 
   } catch (e) {
     return { ok: false, message: (e as Error).message };
   }
-  await db.workerDocument.create({ data: { workerId, type, label, expiresAt, fileId, uploadedBy, verified } });
-  return { ok: true, message: "Documento subido. RRHH lo revisará." };
+  const doc = await db.workerDocument.create({ data: { workerId, type, label, expiresAt, fileId, uploadedBy, verified } });
+  return { ok: true, message: "Documento subido. RRHH lo revisará.", id: doc.id };
 }

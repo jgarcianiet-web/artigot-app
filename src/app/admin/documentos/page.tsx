@@ -21,7 +21,7 @@ export default async function Documents({ searchParams }: { searchParams: Promis
     view === "revisar"
       ? db.workerDocument.findMany({
           where: { verified: false, worker: { active: true } },
-          include: { worker: { select: { id: true, name: true, dni: true } }, file: { select: { id: true, mime: true } } },
+          include: { worker: { select: { id: true, name: true, dni: true } }, file: { select: { id: true, mime: true } }, request: { select: { id: true } } },
           orderBy: { createdAt: "asc" },
         })
       : [],
@@ -82,7 +82,7 @@ export default async function Documents({ searchParams }: { searchParams: Promis
                 {docs.map((d) => (
                   <li key={d.id} className="space-y-2 rounded-lg border border-stone-200 p-3">
                     <div className="flex items-start justify-between gap-2 text-sm">
-                      <span><b>{DOC_LABEL[d.type] ?? d.type}</b>{d.label && ` · ${d.label}`}<span className="block text-xs text-stone-500">Subido {when(d.createdAt)} por {d.uploadedBy}{d.expiresAt && ` · caduca ${formatDate(d.expiresAt)}`}</span></span>
+                      <span><b>{DOC_LABEL[d.type] ?? d.type}</b>{d.label && ` · ${d.label}`}{d.request && <span className="ml-1.5 rounded bg-amber-100 px-1.5 text-[11px] text-amber-900">📎 pedido por RRHH</span>}<span className="block text-xs text-stone-500">Subido {when(d.createdAt)} por {d.uploadedBy}{d.expiresAt && ` · caduca ${formatDate(d.expiresAt)}`}</span></span>
                     </div>
                     {d.file && (d.file.mime.startsWith("image/") ? (
                       <a href={`/api/files/${d.file.id}`} target="_blank"><img src={`/api/files/${d.file.id}`} alt={DOC_LABEL[d.type]} className="max-h-48 w-full rounded border object-contain" loading="lazy" /></a>

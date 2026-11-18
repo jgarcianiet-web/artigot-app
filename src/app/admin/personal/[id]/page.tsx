@@ -11,6 +11,9 @@ import { PHOTO_STATUS } from "@/lib/photo";
 import {
   addLoan,
   adminUploadDocument,
+  cancelDocRequest,
+  remindDocRequest,
+  requestDocumentFor,
   deleteDocument,
   deleteLoan,
   returnLoan,
@@ -30,7 +33,8 @@ import { AdminPushTest } from "@/components/PushTest";
 import { ConfirmButton, CopyButton, SubmitButton } from "@/components/client";
 import { Empty, NewBadge, RoleBadge, ScoreBadge, Stars, StatusBadge } from "@/components/ui";
 import { computeScores, CRITERIA, reviewAverage, SCORING } from "@/lib/scoring";
-import { DocumentUploadForm } from "@/components/StaffForms";
+import { DocumentUploadForm, RequestDocForm } from "@/components/StaffForms";
+import { requestTitle } from "@/lib/docRequests";
 import { DOC_LABEL, docState, formatIban } from "@/lib/staff";
 import { db } from "@/lib/db";
 import { CENTER_LABEL, CONTRACT_SHORT, euro, formatDate, isFixed, loginId, num, ownRatesText, today, workedHours } from "@/lib/domain";
@@ -51,6 +55,7 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
       unavailabilities: { where: { date: { gte: t } }, orderBy: { date: "asc" } },
       assignments: { include: { event: true }, orderBy: { event: { date: "desc" } }, take: 50 },
       documents: { orderBy: { createdAt: "desc" } },
+      docRequests: { where: { status: { in: ["PENDIENTE", "ENTREGADO"] } }, orderBy: { createdAt: "asc" } },
       employments: { orderBy: { startDate: "desc" }, take: 20 },
       loans: { orderBy: [{ returnedAt: "asc" }, { deliveredAt: "desc" }] },
       reviews: {
@@ -386,6 +391,35 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
             </ul>
           )}
           <h3 className="pt-2 font-semibold">Documentos</h3>
+          {worker.docRequests.length > 0 && (
+            <ul className="divide-y divide-amber-100 rounded-lg bg-amber-50 px-3 text-sm">
+              {worker.docRequests.map((r) => (
+                <li key={r.id} className="flex flex-wrap items-center gap-2 py-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium">📎 Pedido: {requestTitle(r)}</div>
+                    <div className="text-xs text-stone-600">
+                      {r.status === "ENTREGADO" ? (
+                        <span className="font-medium text-amber-800">Subido, por revisar</span>
+                      ) : r.rejectReason ? (
+                        <span className="text-red-700">Rechazado ({r.rejectReason}): pendiente de que lo suba de nuevo</span>
+                      ) : (
+                        "Pendiente de que lo suba"
+                      )}
+                      {" · "}pedido por {r.requestedBy} el {formatDate(r.createdAt.toISOString().slice(0, 10))}
+                    </div>
+                  </div>
+                  {r.status === "ENTREGADO" ? (
+                    <Link href="/admin/documentos" className="btn btn-sm">Revisar</Link>
+                  ) : (
+                    <form action={remindDocRequest.bind(null, r.id)}><SubmitButton className="btn btn-sm">Recordar</SubmitButton></form>
+                  )}
+                  <form action={cancelDocRequest.bind(null, r.id)}>
+                    <ConfirmButton className="btn btn-sm btn-danger" message="¿Anular esta petición? Ya no le aparecerá en la app.">Anular</ConfirmButton>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          )}
           {worker.documents.length === 0 && <p className="text-sm text-stone-500">Sin documentos.</p>}
           <ul className="divide-y divide-stone-100 text-sm">
             {worker.documents.map((d) => {
@@ -416,7 +450,11 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
               );
             })}
           </ul>
-          <DocumentUploadForm action={adminUploadDocument.bind(null, worker.id)} title="Añadir documento" />
+          <RequestDocForm action={requestDocumentFor.bind(null, worker.id)} />
+          <details className="text-sm">
+            <summary className="cursor-pointer text-stone-600">¿Ya lo tienes tú? Súbelo directamente</summary>
+            <div className="pt-2"><DocumentUploadForm action={adminUploadDocument.bind(null, worker.id)} title="Añadir documento" /></div>
+          </details>
         </section>
 
         <section className="card space-y-3">
