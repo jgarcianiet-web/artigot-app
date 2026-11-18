@@ -268,8 +268,9 @@ async function a3Daily(now: Date) {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
- * Personal activo con email que aún no ha entrado en la app y al que toca enviarle los datos de acceso: a quien
+ * Personal activo con email y DNI que aún no ha entrado en la app y al que toca enviarle los datos de acceso: a quien
  * nunca se le han enviado y, si `resendDays` > 0, una segunda vez a quien sigue sin entrar pasados esos días.
+ * Solo con DNI: el usuario de todos es su DNI/NIE (quien aún no lo tiene en la app espera a que RRHH lo complete).
  */
 export async function accessPending(resendDays: number, now = new Date()) {
   const workers = await db.worker.findMany({
@@ -277,6 +278,7 @@ export async function accessPending(resendDays: number, now = new Date()) {
       active: true,
       firstLoginAt: null,
       email: { not: null },
+      dni: { not: null },
       OR: [{ accessEmails: 0 }, ...(resendDays > 0 ? [{ accessEmails: 1, accessEmailedAt: { lt: new Date(now.getTime() - resendDays * 864e5) } }] : [])],
     },
     orderBy: [{ accessEmails: "asc" }, { createdAt: "asc" }, { name: "asc" }],
@@ -284,6 +286,9 @@ export async function accessPending(resendDays: number, now = new Date()) {
   });
   return workers.filter((w) => EMAIL_RE.test(w.email!.trim()));
 }
+
+/** Con email y sin entrar, pero sin DNI en la app: no se les envía hasta tenerlo. */
+export const accessWithoutDni = () => db.worker.count({ where: { active: true, firstLoginAt: null, email: { not: null }, dni: null } });
 
 /** Envía los datos de acceso a los pendientes (como mucho `max`). Devuelve cuántos se han enviado y cuántos fallaron. */
 export async function sendAccessBatch(max: number, resendDays: number, now = new Date()) {

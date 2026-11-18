@@ -78,6 +78,11 @@ export default async function SignContract({ params }: { params: Promise<{ id: s
           )}
           {c.kind === "RGPD" && <Link href="/app/perfil" className="btn btn-primary">Subir mis documentos ›</Link>}
         </div>
+      ) : c.kind.startsWith("PRL_") && !me.dni ? (
+        <div className="card space-y-2 border-amber-300 bg-amber-50">
+          <p className="text-sm text-amber-900">Este documento lleva tu nombre y tu DNI. Antes de firmarlo, pon tu DNI o NIE en tu perfil.</p>
+          <Link href="/app/perfil" className="btn btn-primary w-full">Completar mis datos ›</Link>
+        </div>
       ) : (
         <SignForm id={c.id} kind={c.kind} medicalChoice={canChooseMedical(me)} docs={docs.map((d) => d.title)} />
       )}

@@ -128,8 +128,9 @@ export function AutomationForm({ s, mail }: { s: AutomationSettings; mail: boole
       <section className="card space-y-3">
         <h2>6. Enviar los datos de acceso</h2>
         <p className="text-sm text-stone-600">
-          A quien tiene el email puesto y todavía no ha entrado en la app se le envía por email su usuario, su código y el enlace para entrar. Se envía una
-          vez y, si sigue sin entrar, se le reenvía pasados los días que pongas. Quien ya ha entrado no recibe nada.
+          A quien tiene el email y el DNI puestos y todavía no ha entrado en la app se le envía por email su usuario (su DNI/NIE), su código y el enlace
+          para entrar. Se envía una vez y, si sigue sin entrar, se le reenvía pasados los días que pongas. Quien ya ha entrado no recibe nada, y a quien
+          aún no tiene el DNI en la app se le enviará cuando lo tenga.
         </p>
         {!mail && <p className="rounded bg-amber-50 p-2 text-sm text-amber-900">El envío de emails no está configurado: hasta que lo esté, no se envía.</p>}
         <label className="flex items-center gap-2 text-sm">
@@ -168,7 +169,7 @@ export function SendA3Now({ mail }: { mail: boolean }) {
   );
 }
 
-export function SendAccessNow({ mail, pending }: { mail: boolean; pending: number }) {
+export function SendAccessNow({ mail, pending, noDni }: { mail: boolean; pending: number; noDni: number }) {
   const [msg, run] = useActionState(sendAccessNow, null);
   if (!mail) return null;
   return (
@@ -178,6 +179,12 @@ export function SendAccessNow({ mail, pending }: { mail: boolean; pending: numbe
           ? `${pending} ${pending === 1 ? "persona tiene" : "personas tienen"} el email puesto y aún no ${pending === 1 ? "ha" : "han"} recibido sus datos de acceso (o les toca el reenvío). ¿Se los envías ya?`
           : "Ahora mismo no hay nadie pendiente de recibir sus datos de acceso."}
       </p>
+      {noDni > 0 && (
+        <p className="text-sm text-amber-800">
+          {noDni} {noDni === 1 ? "persona tiene" : "personas tienen"} email pero no DNI en la app: no se les envía hasta tenerlo. Complétalo importando la base
+          de datos de A3 (Ajustes → Nóminas A3) o desde su ficha.
+        </p>
+      )}
       {msg && <p className="text-sm">{msg}</p>}
       {pending > 0 && <SubmitButton className="btn">Enviar ahora los datos de acceso</SubmitButton>}
     </ActionForm>

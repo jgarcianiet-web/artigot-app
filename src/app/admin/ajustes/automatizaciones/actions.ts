@@ -77,7 +77,7 @@ export async function sendAccessNow(_prev: string | null) {
   if (!mailEnabled()) return "El envío de emails no está configurado.";
   const { accessEmail: s } = await getAutomation();
   const pending = (await accessPending(s.resendDays)).length;
-  if (!pending) return "No hay nadie pendiente: todos los que tienen email ya han entrado o ya han recibido sus datos.";
+  if (!pending) return "No hay nadie pendiente: todos los que tienen email y DNI ya han entrado o ya han recibido sus datos.";
   const r = await sendAccessBatch(s.maxPerDay, s.resendDays);
   await auditAdmin(by, "Trabajador", "Datos de acceso por email", `Envío a mano desde Ajustes → Automatizaciones: ${r.sent} enviados`);
   revalidatePath("/admin/ajustes/automatizaciones");
