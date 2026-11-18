@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { MAX_FILE_BYTES, storeDocument } from "./files";
+import { fulfillOpenRequest } from "./docRequests";
 
 /**
  * DNI, nº de la Seguridad Social e IBAN van siempre acompañados de su documento:
@@ -54,9 +55,10 @@ export async function storeIdentityDocs(workerId: string, form: FormData, upload
     if (!(f instanceof File) || f.size === 0) continue;
     const file = await storeDocument(f, workerId);
     const expiresAt = d.type === "DNI" ? String(form.get("doc_dni_expires") ?? "") : "";
-    await db.workerDocument.create({
+    const doc = await db.workerDocument.create({
       data: { workerId, type: d.type, fileId: file.id, uploadedBy, verified, expiresAt: /^\d{4}-\d{2}-\d{2}$/.test(expiresAt) ? expiresAt : null },
     });
+    await fulfillOpenRequest(workerId, d.type, null, doc.id, verified);
     stored.push(d.type);
   }
   return stored;

@@ -64,3 +64,20 @@ export async function reopenRequest(documentId: string, reason: string | null) {
     data: { status: "PENDIENTE", documentId: null, rejectReason: reason, uploadedAt: null, reviewedAt: reason ? new Date() : r.reviewedAt },
   });
 }
+
+/**
+ * Un documento recién subido (desde «Mis datos», «Subir documento» o por RRHH) cumple la petición abierta del mismo tipo:
+ * queda «Subido, por revisar», o «Aprobado» si lo ha subido RRHH.
+ */
+export async function fulfillOpenRequest(workerId: string, type: string, label: string | null, documentId: string, verified: boolean) {
+  const r = await db.docRequest.findFirst({
+    where: { workerId, type, status: "PENDIENTE", ...(label ? { OR: [{ label }, { label: null }] } : { label: null }) },
+    orderBy: { createdAt: "asc" },
+  });
+  if (!r) return;
+  const now = new Date();
+  await db.docRequest.update({
+    where: { id: r.id },
+    data: { documentId, uploadedAt: now, ...(verified ? { status: "APROBADO", reviewedAt: now } : { status: "ENTREGADO" }) },
+  });
+}

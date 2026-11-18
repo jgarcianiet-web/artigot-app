@@ -806,15 +806,21 @@ export async function rejectDocument(id: string, form: FormData) {
   const req = await reopenRequest(id, reason);
   const d = await db.workerDocument.delete({ where: { id }, include: { worker: { select: { name: true } } } });
   if (d.fileId) await deleteStoredFile(d.fileId);
-  const what = req ? requestTitle(req) : (DOC_LABEL[d.type] ?? "Un documento");
+  // Si lo subió por su cuenta, se le pide de nuevo: así ve el motivo en la app («RRHH te pide») hasta que lo vuelva a subir
+  if (!req) {
+    const open = await db.docRequest.findFirst({ where: { workerId: d.workerId, type: d.type, label: d.label, status: "PENDIENTE" } });
+    if (open) await db.docRequest.update({ where: { id: open.id }, data: { rejectReason: reason, reviewedAt: new Date() } });
+    else await db.docRequest.create({ data: { workerId: d.workerId, type: d.type, label: d.label, rejectReason: reason, reviewedAt: new Date(), requestedBy: by } });
+  }
+  const what = req ? requestTitle(req) : d.label || (DOC_LABEL[d.type] ?? "Un documento");
   await auditAdmin(by, "Documento", "Rechazado", `${d.worker.name}: ${what} rechazado (${reason})`, { entityId: d.workerId });
   after(() =>
     notify({
       workerIds: [d.workerId],
-      workerUrl: req ? "/app/perfil#pedidos" : "/app/perfil",
+      workerUrl: "/app/perfil#pedidos",
       title: "Documento rechazado",
       body: `${what}: ${reason}. Súbelo de nuevo desde tu perfil.`,
-      emailFallback: !!req,
+      emailFallback: true,
       tag: `doc-${d.workerId}`,
     }),
   );
