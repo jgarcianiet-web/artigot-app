@@ -33,7 +33,8 @@ import { computeScores, CRITERIA, reviewAverage, SCORING } from "@/lib/scoring";
 import { DocumentUploadForm } from "@/components/StaffForms";
 import { DOC_LABEL, docState, formatIban } from "@/lib/staff";
 import { db } from "@/lib/db";
-import { CENTER_LABEL, CONTRACT_SHORT, euro, formatDate, isFixed, num, ownRatesText, today, workedHours } from "@/lib/domain";
+import { CENTER_LABEL, CONTRACT_SHORT, euro, formatDate, isFixed, loginId, num, ownRatesText, today, workedHours } from "@/lib/domain";
+import { getAutomation } from "@/lib/automation";
 import { type Slot, SLOT_SHORT } from "@/lib/slots";
 
 const DEVICE_LABEL: Record<string, string> = { web: "Navegador / web app", fcm: "App Android", apns: "App iPhone" };
@@ -68,6 +69,9 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
   const missing = worker.active ? ((await incompleteWorkers([worker.id]))[0]?.missing ?? []) : [];
 
   const instructions = accessText(worker);
+  // Entra con su DNI/NIE (el usuario de todos); mientras no lo tengamos, con su teléfono o su email
+  const login = loginId(worker);
+  const dataReminderOn = (await getAutomation()).dataReminder.enabled;
   const score = (await computeScores([worker.id], today())).get(worker.id)!;
   const isNew = (await newcomers(today(), [worker.id])).get(worker.id);
   const criteriaAvg = CRITERIA.map((c) => {
@@ -218,8 +222,8 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
         <h2>Acceso a la app</h2>
         <div className="flex flex-wrap items-end gap-6">
           <div>
-            <div className="text-xs text-stone-500">Teléfono</div>
-            <div className="font-medium">{worker.phone ?? <span className="text-amber-700">Sin teléfono: entra con {worker.email}</span>}</div>
+            <div className="text-xs text-stone-500">Usuario{login ? ` (${login.label})` : ""}</div>
+            <div className="font-mono text-lg font-medium">{login ? login.value : <span className="font-sans text-sm text-amber-700">Falta el DNI/NIE para que pueda entrar</span>}</div>
           </div>
           <div>
             <div className="text-xs text-stone-500">Código de acceso</div>
@@ -261,7 +265,12 @@ export default async function WorkerDetail({ params, searchParams }: { params: P
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="card space-y-3">
           <h2>Datos laborales</h2>
-          {missing.length > 0 && <p className="rounded bg-amber-50 p-2 text-sm text-amber-900">Falta: {missing.join(", ")}. Se le recuerda automáticamente.</p>}
+          {missing.length > 0 && (
+            <p className="rounded bg-amber-50 p-2 text-sm text-amber-900">
+              Falta: {missing.join(", ")}.{" "}
+              {dataReminderOn ? "Se le recuerda automáticamente." : "El recordatorio automático está en pausa (Ajustes → Automatizaciones)."}
+            </p>
+          )}
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
             <dt className="text-stone-500">Protección de datos</dt>
             <dd>
