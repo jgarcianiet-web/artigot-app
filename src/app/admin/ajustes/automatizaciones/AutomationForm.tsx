@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import { ActionForm, SubmitButton } from "@/components/client";
 import { WEEKDAY_LABEL, type AutomationSettings } from "@/lib/automation";
 import { EVENT_TYPE_LABEL, EVENT_TYPES } from "@/lib/domain";
-import { saveAutomationAction, sendA3EmailNow } from "./actions";
+import { saveAutomationAction, sendA3EmailNow, sendAccessNow } from "./actions";
 
 // La semana empieza en lunes
 const WEEK = [1, 2, 3, 4, 5, 6, 0];
@@ -125,6 +125,31 @@ export function AutomationForm({ s, mail }: { s: AutomationSettings; mail: boole
         </label>
       </section>
 
+      <section className="card space-y-3">
+        <h2>6. Enviar los datos de acceso</h2>
+        <p className="text-sm text-stone-600">
+          A quien tiene el email puesto y todavía no ha entrado en la app se le envía por email su usuario, su código y el enlace para entrar. Se envía una
+          vez y, si sigue sin entrar, se le reenvía pasados los días que pongas. Quien ya ha entrado no recibe nada.
+        </p>
+        {!mail && <p className="rounded bg-amber-50 p-2 text-sm text-amber-900">El envío de emails no está configurado: hasta que lo esté, no se envía.</p>}
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="accessEnabled" value="1" defaultChecked={s.accessEmail.enabled} className="size-4" />
+          Enviar los datos de acceso a quien aún no ha entrado
+        </label>
+        <div className="flex flex-wrap gap-3">
+          <label className="block text-sm">Cada día a las<input name="accessHour" type="time" className="input mt-1 w-32" defaultValue={s.accessEmail.hour} /></label>
+          <label className="block text-sm">
+            Como mucho, al día
+            <input name="accessMax" type="number" min={1} max={1000} className="input mt-1 w-28" defaultValue={s.accessEmail.maxPerDay} />
+          </label>
+          <label className="block text-sm">
+            Reenviar a los (días; 0 = no)
+            <input name="accessResend" type="number" min={0} max={60} className="input mt-1 w-28" defaultValue={s.accessEmail.resendDays} />
+          </label>
+        </div>
+        <p className="text-xs text-stone-500">El plan gratuito de Brevo permite 300 emails al día entre todos los de la app: si hay muchos pendientes, se reparten en varios días.</p>
+      </section>
+
       {msg && <p className="text-sm">{msg}</p>}
       <SubmitButton>Guardar</SubmitButton>
     </ActionForm>
@@ -139,6 +164,22 @@ export function SendA3Now({ mail }: { mail: boolean }) {
       <p className="text-sm text-stone-600">¿Lo quieres ya? Envía ahora el email de A3 de mañana (el automático de hoy ya no se repetirá).</p>
       {msg && <p className="text-sm">{msg}</p>}
       <SubmitButton className="btn">Enviar ahora el email de A3</SubmitButton>
+    </ActionForm>
+  );
+}
+
+export function SendAccessNow({ mail, pending }: { mail: boolean; pending: number }) {
+  const [msg, run] = useActionState(sendAccessNow, null);
+  if (!mail) return null;
+  return (
+    <ActionForm action={run} className="card max-w-3xl space-y-2">
+      <p className="text-sm text-stone-600">
+        {pending
+          ? `${pending} ${pending === 1 ? "persona tiene" : "personas tienen"} el email puesto y aún no ${pending === 1 ? "ha" : "han"} recibido sus datos de acceso (o les toca el reenvío). ¿Se los envías ya?`
+          : "Ahora mismo no hay nadie pendiente de recibir sus datos de acceso."}
+      </p>
+      {msg && <p className="text-sm">{msg}</p>}
+      {pending > 0 && <SubmitButton className="btn">Enviar ahora los datos de acceso</SubmitButton>}
     </ActionForm>
   );
 }

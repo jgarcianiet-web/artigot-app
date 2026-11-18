@@ -185,7 +185,7 @@ export async function workerLogin(login: string, code: string): Promise<string |
     });
     return generic;
   }
-  await db.worker.update({ where: { id: worker.id }, data: { failedLogins: 0, lockedUntil: null } });
+  await db.worker.update({ where: { id: worker.id }, data: { failedLogins: 0, lockedUntil: null, ...(!worker.firstLoginAt && { firstLoginAt: new Date() }) } });
   await writeSession(
     { k: "w", id: worker.id, v: worker.sessionVersion, e: Date.now() + WORKER_MAX_AGE * 1000 },
     WORKER_MAX_AGE,

@@ -65,6 +65,11 @@ model Worker {
   sessionVersion    Int                 @default(0)
   failedLogins      Int                 @default(0)
   lockedUntil       DateTime?
+  /// Primera vez que entró en la app (null = aún no ha entrado)
+  firstLoginAt      DateTime?
+  /// Datos de acceso enviados por email: cuándo fue la última vez y cuántas
+  accessEmailedAt   DateTime?
+  accessEmails      Int                 @default(0)
   createdAt         DateTime            @default(now())
   unavailabilities  Unavailability[]
   assignments       Assignment[]
