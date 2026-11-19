@@ -6,7 +6,7 @@ import { coverage } from "@/lib/staffing";
 import { DOC_LABEL, DOC_WARN_DAYS } from "@/lib/staff";
 import { todayTasks } from "@/lib/todayTasks";
 import { syncAutoEmployments } from "@/lib/autoAltas";
-import { incompleteWorkers } from "@/lib/completeness";
+import { incompleteWorkers, mainMissing } from "@/lib/completeness";
 import { getAutomation } from "@/lib/automation";
 
 export default async function Dashboard() {
@@ -35,7 +35,9 @@ export default async function Dashboard() {
     getAutomation(),
   ]);
   const dataReminderOn = automation.dataReminder.enabled;
-  const incompleteSoon = incomplete.filter((w) => w.upcoming);
+  // El inglés que falta no cuenta aquí (no impide el alta): se ve en Personal
+  const incompleteMain = incomplete.filter((w) => mainMissing(w.missing).length > 0);
+  const incompleteSoon = incompleteMain.filter((w) => w.upcoming);
   const rows = events.map((e) => {
     const cov = coverage(e, e.assignments);
     const need = cov.reduce((s, c) => s + c.need, 0);
@@ -93,16 +95,16 @@ export default async function Dashboard() {
         ))}
       </div>
 
-      {(incomplete.length > 0 || docsPending > 0) && (
+      {(incompleteMain.length > 0 || docsPending > 0) && (
         <section className="space-y-2">
           <h2>🪪 Datos y documentos</h2>
           <div className={`card space-y-1 text-sm ${incompleteSoon.length ? "border-red-300 bg-red-50" : ""}`}>
             {docsPending > 0 && (
               <p><Link href="/admin/documentos" className="link font-medium">{docsPending} {docsPending === 1 ? "documento" : "documentos"} por revisar</Link>.</p>
             )}
-            {incomplete.length > 0 && (
+            {incompleteMain.length > 0 && (
               <p>
-                <Link href="/admin/personal?incompletos=1" className="link">{incomplete.length} {incomplete.length === 1 ? "persona" : "personas"} con datos o documentos incompletos</Link>
+                <Link href="/admin/personal?incompletos=1" className="link">{incompleteMain.length} {incompleteMain.length === 1 ? "persona" : "personas"} con datos o documentos incompletos</Link>
                 {incompleteSoon.length > 0 && <span className="font-medium text-red-700">, {incompleteSoon.length} con servicio en los próximos 7 días: {incompleteSoon.map((w) => w.name).join(", ")}</span>}
                 .{" "}
                 {dataReminderOn ? (

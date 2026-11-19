@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { duplicateGroups } from "@/lib/mergeWorkers";
 import { CENTER_LABEL, isFixed, isRole, ROLE_PLURAL, ROLES, today } from "@/lib/domain";
 import { computeScores, explainScore } from "@/lib/scoring";
-import { incompleteWorkers } from "@/lib/completeness";
+import { ENGLISH_MISSING, incompleteWorkers, mainMissing } from "@/lib/completeness";
 import { isEnglishLevel, languagesText, levelsFrom } from "@/lib/languages";
 import { BulkBar, SelectAll } from "./BulkBar";
 
@@ -43,7 +43,8 @@ export default async function StaffList({
   });
 
   const incomplete = new Map((await incompleteWorkers(workers.map((w) => w.id))).map((w) => [w.id, w.missing]));
-  if (incompletos) workers.splice(0, workers.length, ...workers.filter((w) => incomplete.has(w.id)));
+  // «Datos incompletos» = falta algo para el alta o la ficha; el inglés va aparte (tiene su propio filtro)
+  if (incompletos) workers.splice(0, workers.length, ...workers.filter((w) => mainMissing(incomplete.get(w.id) ?? []).length > 0));
   const fresh = await newcomers(t);
   if (nuevos) workers.splice(0, workers.length, ...workers.filter((w) => fresh.has(w.id)));
   if (sinavisos) workers.splice(0, workers.length, ...workers.filter((w) => w._count.devices === 0));
@@ -151,8 +152,11 @@ export default async function StaffList({
                     <Link href={`/admin/personal/${w.id}`} className="link">{w.name}</Link>
                     {w.unavailabilities.length > 0 && <span className="ml-2 text-xs text-red-600">No disponible hoy</span>}
                     {!w.active && <span className="ml-2 text-xs text-stone-500">Inactivo</span>}
-                    {incomplete.has(w.id) && (
-                      <span className="ml-2 rounded bg-amber-100 px-1.5 text-[11px] text-amber-900" title={`Falta: ${incomplete.get(w.id)!.join(", ")}`}>Datos incompletos</span>
+                    {mainMissing(incomplete.get(w.id) ?? []).length > 0 && (
+                      <span className="ml-2 rounded bg-red-100 px-1.5 text-[11px] text-red-800" title={`Falta: ${mainMissing(incomplete.get(w.id)!).join(", ")}`}>Faltan datos</span>
+                    )}
+                    {incomplete.get(w.id)?.includes(ENGLISH_MISSING) && (
+                      <span className="ml-2 rounded bg-stone-100 px-1.5 text-[11px] text-stone-600" title="No ha indicado su nivel de inglés">Falta el inglés</span>
                     )}
                     {w.englishLevel && w.englishLevel !== "Ninguno" && <span className="ml-2 text-[11px] text-stone-500" title={languagesText(w)}>🗣 {w.englishLevel === "Nativo" ? "inglés nativo" : `inglés ${w.englishLevel.toLowerCase()}`}</span>}
                     {w.photoFileId && w.photoStatus === "PENDIENTE" && (

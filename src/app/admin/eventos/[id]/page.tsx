@@ -51,6 +51,7 @@ import { REVIEW_DAYS, reviewWindowOpen, teamOf } from "@/lib/reviews";
 import { CRITERIA, explainScore, reviewAverage } from "@/lib/scoring";
 import { SLOT_SHORT } from "@/lib/slots";
 import { candidatesFor, coverage, gaps } from "@/lib/staffing";
+import { englishCoverage, englishMinText } from "@/lib/languages";
 
 function ClockTag({ distance, accuracy, manual, offline, reason }: { distance: number | null; accuracy: number | null; manual: boolean; offline: boolean; reason?: string | null }) {
   // Fichado fuera del horario normal: el motivo que escribió el trabajador
@@ -125,6 +126,7 @@ export default async function EventDetail({ params, searchParams }: { params: Pr
   })) otherSameDay.set(o.workerId, [...(otherSameDay.get(o.workerId) ?? []), `${o.event.name} ${o.event.startTime}${o.event.endTime ? `–${o.event.endTime}` : ""}`]);
   const [budget] = await budgetRows({ eventId: event.id });
   const cov = coverage(event, event.assignments);
+  const eng = englishCoverage(event, event.assignments.map((a) => ({ role: a.role, status: a.status, englishLevel: a.worker.englishLevel })));
   const missing = gaps(event, event.assignments);
   const totalMissing = ROLES.reduce((s, r) => s + missing[r], 0);
   const fillable = ROLES.reduce((s, r) => s + Math.min(missing[r], candidates[r].length), 0);
@@ -285,6 +287,12 @@ export default async function EventDetail({ params, searchParams }: { params: Pr
             </form>
           )}
         </div>
+        {eng && (
+          <p className={`rounded-lg p-2 text-sm ${eng.confirmed + eng.pending < eng.need ? "bg-red-50 text-red-800" : eng.confirmed < eng.need ? "bg-amber-50 text-amber-900" : "bg-emerald-50 text-emerald-800"}`}>
+            🗣 {englishMinText(eng.min)}: <b>{eng.confirmed}</b> de {eng.need}{eng.all ? " (todos)" : ""} confirmados{eng.pending > 0 && ` y ${eng.pending} convocados`}
+            {eng.confirmed + eng.pending < eng.need && ` · faltan ${eng.need - eng.confirmed - eng.pending}: al convocar salen primero los que tienen ese nivel`}
+          </p>
+        )}
         {pendingNoPush.length > 0 && (
           <p className="rounded-lg bg-amber-50 p-2 text-sm text-amber-900">
             🔕 {pendingNoPush.length} {pendingNoPush.length === 1 ? "convocado no tiene" : "convocados no tienen"} los avisos de la app activados y no se enteran de la convocatoria:{" "}
@@ -465,6 +473,9 @@ export default async function EventDetail({ params, searchParams }: { params: Pr
                             {fresh.has(c.id) && <NewBadge title={newcomerText(fresh.get(c.id)!)} />}
                             <MinorBadge id={c.id} />
                             {c.available && <span className="ml-1.5 rounded bg-emerald-100 px-1.5 text-[11px] text-emerald-800" title="Ha dicho en un sondeo que puede trabajar este día">✓ disponible</span>}
+                            {event.englishMin && c.role !== "MOZO" && (c.speaksEnglish
+                              ? <span className="ml-1.5 rounded bg-indigo-100 px-1.5 text-[11px] text-indigo-800">🗣 inglés {c.englishLevel?.toLowerCase()}</span>
+                              : <span className="ml-1.5 text-[11px] text-stone-400">{c.englishLevel ? `inglés ${c.englishLevel.toLowerCase()}` : "inglés sin indicar"}</span>)}
                             {c.slot && c.slot !== "DIA" && !c.slotConflict && <span className="ml-1.5 rounded bg-sky-100 px-1.5 text-[11px] text-sky-800">{SLOT_SHORT[c.slot]}</span>}
                             {c.busyWith && <div className="text-xs text-amber-800">⚠ Ese día ya está en {c.busyWith}</div>}
                             {c.slotConflict && <div className="text-xs text-amber-800">⚠ Ese día {SLOT_SHORT[c.slot!]} ({c.slot === "MANANA" ? "hasta" : "desde"} las 15:00)</div>}

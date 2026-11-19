@@ -33,6 +33,8 @@ type Event = {
   autoConvokeDays: number | null;
   clockRadius?: number | null;
   groupChats?: boolean;
+  englishMin?: string | null;
+  englishCount?: number | null;
   venueId: string | null;
   clientId: string | null;
 };
@@ -320,6 +322,21 @@ export function EventForm({
             RRHH y los maîtres).
           </span>
         </label>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+          <span>🗣 Inglés:</span>
+          <select name="englishMin" defaultValue={v.englishMin ?? ""} className="input h-9 w-auto" aria-label="Nivel de inglés que hace falta">
+            <option value="">No hace falta</option>
+            <option value="Básico">Básico o más</option>
+            <option value="Intermedio">Intermedio o más</option>
+            <option value="Alto">Alto o más</option>
+            <option value="Nativo">Nativo</option>
+          </select>
+          <label className="flex items-center gap-2">
+            ¿cuántos?
+            <input name="englishCount" type="number" min={1} max={500} defaultValue={v.englishCount ?? ""} placeholder="todos" className="input h-9 w-20" />
+          </label>
+          <span className="text-xs text-stone-500">Entre camareros, responsables y maîtres. Al convocar (también la automática) se les da prioridad.</span>
+        </div>
         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
           <label className="flex items-center gap-2">
             <input type="checkbox" name="autoConvoke" value="1" checked={autoOn} onChange={(e) => setAutoOn(e.target.checked)} className="size-4 shrink-0" />

@@ -162,6 +162,9 @@ model Event {
   clockRadius      Int?
   // Eventos grandes: cada grupo tiene su chat y el chat general es solo de avisos (escriben RRHH y maîtres)
   groupChats       Boolean       @default(false)
+  // Inglés: cuántos del equipo (sin contar mozos) tienen que tener al menos este nivel; se priorizan al convocar
+  englishMin       String?
+  englishCount     Int?
   createdAt        DateTime      @default(now())
   assignments      Assignment[]
   swaps            SwapRequest[]

@@ -41,10 +41,14 @@ export async function incompleteWorkers(workerIds?: string[]): Promise<Incomplet
       else if (!docs.has(d.type)) missing.push(DOC_NAME[d.type]);
     }
     if (!w.email) missing.push("email");
-    if (!w.englishLevel) missing.push("nivel de inglés");
+    if (!w.englishLevel) missing.push(ENGLISH_MISSING);
     if (missing.length) out.push({ id: w.id, name: w.name, phone: w.phone, email: w.email, dni: w.dni, devices: w._count.devices, missing, upcoming: w.assignments.length > 0 });
   }
   return out;
 }
+
+/** Lo que falta sin contar el inglés (que no impide el alta ni pagarle). */
+export const ENGLISH_MISSING = "nivel de inglés";
+export const mainMissing = (m: string[]) => m.filter((x) => x !== ENGLISH_MISSING);
 
 export const missingText = (m: string[]) => (m.length <= 2 ? m.join(" y ") : `${m.slice(0, -1).join(", ")} y ${m.at(-1)}`);
