@@ -6,7 +6,7 @@ import { addDays, payable, rateFor, ROLE_LABEL, ROLES, type Role, workedHours } 
 export const DOC_TYPES = ["DNI", "NSS", "MANIPULADOR", "CUENTA", "CONTRATO", "OTRO"] as const;
 export const DOC_LABEL: Record<string, string> = {
   DNI: "DNI / NIE",
-  NSS: "Tarjeta de la Seguridad Social",
+  NSS: "Documento de afiliación a la Seguridad Social",
   MANIPULADOR: "Carnet de manipulador de alimentos",
   CUENTA: "Certificado de cuenta bancaria",
   CONTRATO: "Contrato firmado",

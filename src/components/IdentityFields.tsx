@@ -10,7 +10,7 @@ type Status = Record<string, { fileId: string | null; verified: boolean }>;
 
 const FIELDS = [
   { field: "dni", type: "DNI", label: "DNI / NIE", doc: "Foto o PDF del DNI / NIE (por las dos caras)", inputMode: undefined },
-  { field: "nss", type: "NSS", label: "Nº Seguridad Social", doc: "Foto o PDF de la tarjeta de la Seguridad Social", inputMode: "numeric" as const },
+  { field: "nss", type: "NSS", label: "Nº Seguridad Social", doc: "Foto o PDF del documento de afiliación a la Seguridad Social", inputMode: "numeric" as const },
   { field: "iban", type: "CUENTA", label: "IBAN (cuenta para la nómina)", doc: "Certificado de titularidad de la cuenta (o captura de la app del banco con el IBAN y el titular)", inputMode: undefined },
 ] as const;
 

@@ -11,7 +11,7 @@ type Action = (prev: Result, form: FormData) => Promise<Result>;
 
 const DOC_TYPES: [string, string][] = [
   ["DNI", "DNI / NIE"],
-  ["NSS", "Tarjeta de la Seguridad Social"],
+  ["NSS", "Documento de afiliación a la Seguridad Social"],
   ["MANIPULADOR", "Carnet de manipulador de alimentos"],
   ["CUENTA", "Certificado de cuenta bancaria"],
   ["CONTRATO", "Contrato firmado"],

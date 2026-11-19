@@ -4,14 +4,14 @@ import { fulfillOpenRequest } from "./docRequests";
 
 /**
  * DNI, nº de la Seguridad Social e IBAN van siempre acompañados de su documento:
- * foto o PDF del DNI/NIE, de la tarjeta de la Seguridad Social y del certificado de titularidad de la cuenta.
+ * foto o PDF del DNI/NIE, del documento de afiliación a la Seguridad Social y del certificado de titularidad de la cuenta.
  * Si el dato se rellena o se cambia y aún no hay documento de ese tipo (o el dato ha cambiado), hay que adjuntarlo.
  * Vale tanto el que se adjunta en el formulario como uno subido antes en «Mis documentos»: si el
  * dato es nuevo, cualquiera de ese tipo; si cambia, uno que RRHH aún no haya revisado (el nuevo).
  */
 export const IDENTITY_DOCS = [
   { field: "dni", type: "DNI", input: "doc_dni", what: "la foto o PDF del DNI / NIE" },
-  { field: "nss", type: "NSS", input: "doc_nss", what: "la foto o PDF de la tarjeta de la Seguridad Social" },
+  { field: "nss", type: "NSS", input: "doc_nss", what: "la foto o PDF del documento de afiliación a la Seguridad Social" },
   { field: "iban", type: "CUENTA", input: "doc_iban", what: "el certificado de titularidad de la cuenta (o una captura de la app del banco donde se vea el IBAN y el titular)" },
 ] as const;
 
