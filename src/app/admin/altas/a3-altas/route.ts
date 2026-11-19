@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getA3 } from "@/lib/a3";
 import { buildAltasSucesivasWorkbook, getA3Alta } from "@/lib/a3alta";
-import { isAdmin } from "@/lib/auth";
+import { adminName, isAdmin } from "@/lib/auth";
 import { syncAutoEmployments } from "@/lib/autoAltas";
+import { auditAdmin } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { isRole, ROLE_LABEL, today, type Role } from "@/lib/domain";
 
@@ -39,6 +40,12 @@ export async function GET(req: NextRequest) {
     a3.companyCode,
     cfg,
   );
+  // Descargado para A3: cuentan como comunicadas (así, si luego alguien no va, la app avisa de anularla en RED en vez de borrarla)
+  const sent = altas.filter((e) => e.worker.a3Code?.trim() && !e.startReported).map((e) => e.id);
+  if (sent.length) {
+    await db.employment.updateMany({ where: { id: { in: sent } }, data: { startReported: true } });
+    await auditAdmin((await adminName()) ?? "RRHH", "Alta S. S.", "Comunicación RED", `${sent.length} altas del ${day} marcadas como comunicadas al descargar el Excel de A3`);
+  }
   return new NextResponse(buffer as unknown as ArrayBuffer, {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

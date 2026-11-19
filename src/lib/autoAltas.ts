@@ -1,4 +1,5 @@
 import { auditAdmin } from "./audit";
+import { notify } from "./push";
 import { db } from "./db";
 import { addDays, EXTRA_WHERE, isFixed, passesMidnight, ROLE_LABEL, today, type Role } from "./domain";
 
@@ -66,15 +67,23 @@ export async function syncAutoEmployments(opts: { actor?: string } = {}) {
   const t = today();
   const from = addDays(t, -ACT_DAYS);
   const to = addDays(t, AHEAD_DAYS);
-  return db.$transaction(
+  const alerts: { name: string; text: string }[] = [];
+  const result = await db.$transaction(
     async (tx) => {
+      alerts.length = 0;
       // Una sola sincronización a la vez (página y recordatorios pueden coincidir)
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(724001)`;
       const work = await workDays(addDays(t, -LOOKBACK_DAYS), addDays(to, 1));
       const employments = await tx.employment.findMany({
         where: { OR: [{ endDate: null }, { endDate: { gte: from } }], startDate: { lte: addDays(to, 1) } },
-        include: { worker: { select: { contractCode: true } } },
+        include: { worker: { select: { contractCode: true, name: true } } },
       });
+      /** Pone un aviso para RED (y avisa a RRHH si es nuevo). ANULAR: anularla; CORREGIR: corregir una fecha comunicada. */
+      const warn = async (e: (typeof employments)[number], warning: string, kind: "ANULAR" | "CORREGIR", extra: Record<string, unknown> = {}) => {
+        const isNew = e.warning !== warning;
+        await tx.employment.update({ where: { id: e.id }, data: { ...extra, warning, warningKind: kind, ...(isNew && { warningAt: new Date() }) } });
+        if (isNew) alerts.push({ name: e.worker.name, text: warning });
+      };
       const byWorker = new Map<string, typeof employments>();
       for (const e of employments) byWorker.set(e.workerId, [...(byWorker.get(e.workerId) ?? []), e]);
 
@@ -107,23 +116,24 @@ export async function syncAutoEmployments(opts: { actor?: string } = {}) {
             startChanged && e.startReported && `El alta comunicada era el ${e.startDate}; ahora empieza el ${s.start}. Corrígela en RED.`,
             endChanged && e.endReported && `La baja comunicada era el ${e.endDate}; ahora termina el ${s.end}. Corrígela en RED.`,
           ].filter(Boolean) as string[];
-          if (startChanged || endChanged || e.notes !== notes || (e.warning && !warnings.length && !extra.length)) {
-            await tx.employment.update({
-              where: { id: e.id },
-              data: {
-                startDate: s.start, endDate: s.end, notes, category: role,
-                ...(startChanged && { startReported: false }),
-                ...(endChanged && { endReported: false }),
-                warning: warnings.join(" ") || null,
-              },
-            });
+          // El aviso de corregir una fecha se queda hasta que RRHH lo marca como corregido; el de anular se quita solo si vuelve a tener servicio
+          const clearAnular = e.warningKind === "ANULAR" && !warnings.length;
+          if (startChanged || endChanged || e.notes !== notes || clearAnular) {
+            const data = {
+              startDate: s.start, endDate: s.end, notes, category: role,
+              ...(startChanged && { startReported: false }),
+              ...(endChanged && { endReported: false }),
+            };
+            if (warnings.length) await warn(e, warnings.join(" "), "CORREGIR", data);
+            else await tx.employment.update({ where: { id: e.id }, data: { ...data, ...(clearAnular && { warning: null, warningKind: null, warningAt: null }) } });
             if (startChanged || endChanged) updated++;
           }
           // Dos periodos que ahora son seguidos se unen en uno
           for (const x of extra) {
             if (x.startReported || x.endReported) {
               kept.add(x.id);
-              await tx.employment.update({ where: { id: x.id }, data: { warning: `Se ha unido con el periodo del ${s.start}: anula este en RED si ya lo comunicaste.` } });
+              const w = `Se ha unido con el periodo del ${s.start}: anula este en RED si ya lo comunicaste.`;
+              if (x.warning !== w) await warn(x, w, "ANULAR");
             } else {
               await tx.employment.delete({ where: { id: x.id } });
               removed++;
@@ -141,7 +151,7 @@ export async function syncAutoEmployments(opts: { actor?: string } = {}) {
           const warning = isFixed(e.worker)
             ? "Ahora es fijo (no lleva altas por actividad): anula esta alta en RED si no corresponde."
             : "Ya no tiene servicios en estas fechas: anula el alta en RED.";
-          if (e.warning !== warning) await tx.employment.update({ where: { id: e.id }, data: { warning } });
+          if (e.warning !== warning) await warn(e, warning, "ANULAR");
         }
       }
       if (created || updated || removed) {
@@ -151,6 +161,17 @@ export async function syncAutoEmployments(opts: { actor?: string } = {}) {
     },
     { timeout: 60_000 },
   );
+  // Aviso a RRHH de lo que hay que anular o corregir en RED (sale también en Tareas de hoy)
+  if (alerts.length) {
+    await notify({
+      admins: true,
+      adminUrl: "/admin/altas#red",
+      title: "⚠️ Revisar en RED",
+      body: alerts.length === 1 ? `${alerts[0].name}: ${alerts[0].text}` : `${alerts.length} altas para anular o corregir en RED: ${alerts.map((a) => a.name).join(", ")}.`,
+      tag: "red-avisos",
+    }).catch((e) => console.error("aviso RED", e));
+  }
+  return { ...result, alerts };
 }
 
 // ---------- Movimientos para el cuadrante y los eventos ----------
@@ -228,5 +249,9 @@ export async function dayMovements(date: string) {
 }
 
 /** Avisos pendientes (cambios después de comunicar a RED). */
-export const employmentWarnings = () =>
-  db.employment.findMany({ where: { warning: { not: null } }, include: { worker: { select: { id: true, name: true } } }, orderBy: { startDate: "asc" } });
+export const employmentWarnings = (workerIds?: string[]) =>
+  db.employment.findMany({
+    where: { warning: { not: null }, ...(workerIds && { workerId: { in: workerIds } }) },
+    include: { worker: { select: { id: true, name: true } } },
+    orderBy: { startDate: "asc" },
+  });

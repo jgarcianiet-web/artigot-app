@@ -43,6 +43,7 @@ import { notify } from "@/lib/push";
 import { autoReplace, candidatesFor, fillGaps, notifyInvited } from "@/lib/staffing";
 import { deleteStoredFile } from "@/lib/files";
 import { ENGLISH_LEVELS } from "@/lib/languages";
+import { syncAutoEmployments } from "@/lib/autoAltas";
 const time = z.string().regex(/^\d{2}:\d{2}$/);
 const optTime = z.union([time, z.literal("")]).transform((v) => v || null);
 const optText = z.string().trim().transform((v) => v || null);
@@ -743,6 +744,8 @@ export async function decideWithdrawal(id: string, approve: boolean) {
   const by = await requireAdmin();
   const a = approve ? await approveWithdrawal(id) : await rejectWithdrawal(id);
   if (!a) return;
+  // Si su alta ya estaba comunicada, queda el aviso de anularla en RED (en el evento, en Altas y bajas y en Tareas de hoy) y se avisa a RRHH
+  if (approve) await syncAutoEmployments({ actor: by }).catch((e) => console.error("altas automáticas", e));
   await auditAdmin(by, "Convocatoria", approve ? "Baja aprobada" : "Baja no aprobada", `${a.worker.name} en ${a.event.name} (${formatDate(a.event.date)}): ${approve ? "aprobada su no asistencia" : "no aprobada, sigue confirmado"}${a.withdrawReason ? `. Motivo: ${a.withdrawReason}` : ""}`, { entityId: a.eventId });
   revalidatePath(`/admin/eventos/${a.eventId}`);
   revalidatePath("/admin");

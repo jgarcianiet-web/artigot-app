@@ -15,7 +15,9 @@ export type Task = { key: string; text: string; detail?: string; href: string; n
 export async function todayTasks(t: string): Promise<Task[]> {
   const conv = await getConvocationSettings();
   const remindBefore = new Date(Date.now() - conv.remindHours * 3_600_000);
-  const [noAlta, altas, bajas, noAnswer, events, drafts, docs, photos, candidates, incidents, withdrawals, openShifts, interviews] = await Promise.all([
+  const [redWarnings, noAlta, altas, bajas, noAnswer, events, drafts, docs, photos, candidates, incidents, withdrawals, openShifts, interviews] = await Promise.all([
+    // Altas ya comunicadas que hay que anular o corregir en RED (hasta que RRHH lo marca)
+    db.employment.findMany({ where: { warning: { not: null } }, select: { warningKind: true, worker: { select: { name: true } } } }),
     missingAltas(t, 7),
     // Altas de hoy y mañana sin comunicar (el alta va antes de empezar a trabajar)
     db.employment.findMany({ where: { startReported: false, startDate: { gte: addDays(t, -3), lte: addDays(t, 1) } }, select: { startDate: true } }),
@@ -61,7 +63,18 @@ export async function todayTasks(t: string): Promise<Task[]> {
   const firstEvent = (ids: string[]) => ids[0];
   const names = (list: string[]) => [...new Set(list)].slice(0, 3).join(", ") + (new Set(list).size > 3 ? "…" : "");
 
+  const toCancel = redWarnings.filter((w) => w.warningKind !== "CORREGIR").length;
   const tasks: Task[] = [
+    {
+      key: "red",
+      n: redWarnings.length,
+      urgent: true,
+      text: toCancel === redWarnings.length
+        ? `Anular ${toCancel} ${toCancel === 1 ? "alta" : "altas"} en RED`
+        : `Revisar ${redWarnings.length} ${redWarnings.length === 1 ? "alta" : "altas"} en RED (${toCancel} para anular)`,
+      detail: `Ya comunicadas a la Seguridad Social: ${names(redWarnings.map((w) => w.worker.name))}. Márcalo en Altas y bajas cuando lo hayas hecho en RED`,
+      href: "/admin/altas#red",
+    },
     {
       key: "sinalta",
       n: noAlta.length,
@@ -75,7 +88,7 @@ export async function todayTasks(t: string): Promise<Task[]> {
       n: altas.length + bajas.length,
       urgent: altas.some((a) => a.startDate <= addDays(t, 1)) || bajas.length > 0,
       text: `Comunicar ${altas.length} ${altas.length === 1 ? "alta" : "altas"} y ${bajas.length} ${bajas.length === 1 ? "baja" : "bajas"} a la Seguridad Social`,
-      detail: "Descarga los Excel para A3 del día y márcalos como comunicados",
+      detail: "Descarga los Excel para A3 del día: al descargarlos quedan como comunicados",
       href: `/admin/altas?dia=${altas.find((a) => a.startDate >= t)?.startDate ?? bajas[0]?.endDate ?? t}`,
     },
     {

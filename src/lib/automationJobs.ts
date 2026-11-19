@@ -199,7 +199,9 @@ export async function a3DailyFiles(now = new Date()) {
         cfg,
       ),
     });
-  return { today, tomorrow, files, newRows, coded: coded.length, bajas: bajas.length, incomplete };
+  // Altas ya comunicadas que hay que anular o corregir en RED
+  const red = await db.employment.findMany({ where: { warning: { not: null } }, select: { warning: true, startDate: true, worker: { select: { name: true } } }, orderBy: { startDate: "asc" } });
+  return { today, tomorrow, files, newRows, coded: coded.length, bajas: bajas.length, incomplete, red, altaIds: coded.map((e) => e.id), bajaIds: bajas.map((e) => e.id) };
 }
 
 /** Destinatarios: los de Ajustes → Automatizaciones o, si no hay, todos los usuarios de RRHH activos. */
@@ -212,7 +214,7 @@ async function a3Recipients(to: string) {
 export async function sendA3DailyEmail(now = new Date()) {
   const { a3Email: s } = await getAutomation();
   const r = await a3DailyFiles(now);
-  if (!r.files.length && !r.incomplete.length) return { sent: 0, ...r };
+  if (!r.files.length && !r.incomplete.length && !r.red.length) return { sent: 0, ...r };
   const lines = [
     `Excel de A3 preparados por la app para mañana, ${formatDate(r.tomorrow)}:`,
     "",
@@ -220,21 +222,30 @@ export async function sendA3DailyEmail(now = new Date()) {
     ...(r.newRows.length ? ["", `Nuevos en A3 (código asignado): ${r.newRows.map((x) => `${x.worker.name} (${x.code})`).join(", ")}.`] : []),
     ...(r.coded ? [`Altas de mañana: ${r.coded}.`] : []),
     ...(r.bajas ? [`Bajas de hoy: ${r.bajas}.`] : []),
+    ...(r.red.length
+      ? ["", "⚠ Altas para anular o corregir en RED (ya estaban comunicadas). Cuando lo hagas, márcalo en Altas y bajas:", ...r.red.map((x) => `• ${x.worker.name} (alta del ${formatDate(x.startDate)}): ${x.warning}`)]
+      : []),
     ...(r.incomplete.length
       ? ["", "⚠ Trabajan mañana pero les faltan datos para el alta en A3 (complétalos y hazles el alta en Altas y bajas → A3):", ...r.incomplete.map((x) => `• ${x.name}: falta ${x.problems.join(", ")}`)]
       : []),
     "",
-    "Importa los Excel en A3 y comunica las altas y bajas en RED como siempre. Después márcalas como comunicadas en la app.",
+    "Importa los Excel en A3 y comunica las altas y bajas en RED como siempre. Las altas y bajas de estos Excel ya quedan como comunicadas en la app.",
   ];
   const to = await a3Recipients(s.to);
   let sent = 0;
   for (const email of to) {
     try {
-      await sendMail(email, `A3: altas de mañana ${formatDate(r.tomorrow)}${r.bajas ? " y bajas de hoy" : ""}`, lines.join("\n"), r.files, { button: { label: "Ir a Altas y bajas", url: `${appUrl()}/admin/altas` } });
+      const subject = r.files.length ? `A3: altas de mañana ${formatDate(r.tomorrow)}${r.bajas ? " y bajas de hoy" : ""}${r.red.length ? " · altas para anular en RED" : ""}` : "A3: altas para anular o corregir en RED";
+      await sendMail(email, subject, lines.join("\n"), r.files, { button: { label: "Ir a Altas y bajas", url: `${appUrl()}/admin/altas` } });
       sent++;
     } catch (e) {
       console.error("email A3", email, e);
     }
+  }
+  // Enviados para A3: cuentan como comunicadas (si luego alguien no va, la app pide anularla en RED en vez de borrarla)
+  if (sent) {
+    await db.employment.updateMany({ where: { id: { in: r.altaIds }, startReported: false }, data: { startReported: true } });
+    await db.employment.updateMany({ where: { id: { in: r.bajaIds }, endReported: false }, data: { endReported: true } });
   }
   await audit(
     AUTO_ACTOR,

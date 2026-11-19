@@ -83,6 +83,26 @@ export async function markDayReported(day: string, which: "start" | "end") {
   refresh();
 }
 
+/**
+ * RRHH ya lo ha hecho en RED: si era para anular, el alta se borra (ya no existe en la Seguridad Social);
+ * si era para corregir una fecha, se quita el aviso.
+ */
+export async function resolveEmploymentWarning(id: string) {
+  const by = await requireAdmin();
+  const e = await db.employment.findUnique({ where: { id }, include: { worker: { select: { name: true } } } });
+  if (!e?.warning) return;
+  const period = `alta del ${e.startDate}${e.endDate ? ` (baja ${e.endDate})` : ""}`;
+  if (e.warningKind === "ANULAR") {
+    await db.employment.delete({ where: { id } });
+    await auditAdmin(by, "Alta S. S.", "Anulada en RED", `${e.worker.name}: ${period} anulada en RED (${e.warning})`, { entityId: e.workerId });
+  } else {
+    await db.employment.update({ where: { id }, data: { warning: null, warningKind: null, warningAt: null } });
+    await auditAdmin(by, "Alta S. S.", "Corregida en RED", `${e.worker.name}: ${period} corregida en RED (${e.warning})`, { entityId: e.workerId });
+  }
+  refresh(e.workerId);
+  revalidatePath("/admin", "layout");
+}
+
 export async function deleteEmployment(id: string) {
   const by = await requireAdmin();
   const e = await db.employment.delete({ where: { id }, include: { worker: { select: { name: true } } } });
