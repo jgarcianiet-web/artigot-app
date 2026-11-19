@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { pendingPhotos } from "@/lib/photo";
 import { pushConfig } from "@/lib/push";
 import { logout } from "../actions";
+import { AutoRefresh } from "@/components/AutoRefresh";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <AdminNav name={name} logout={logout} badges={{ "/admin/documentos": docsPending, "/admin/mensajes": unreadMessages, "/admin/candidatos": newCandidates }} />
       <main className="mx-auto w-full min-w-0 max-w-6xl space-y-4 px-4 py-6 lg:px-8">
         <div className="print:hidden"><PushSetup config={await pushConfig()} /></div>
+        {/* Los datos se actualizan solos cada minuto y al volver a la app */}
+        <AutoRefresh seconds={60} />
         {children}
       </main>
     </div>
