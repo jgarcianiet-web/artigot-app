@@ -479,10 +479,13 @@ async function writeEvent(form: FormData, by: string, note = "") {
     autoConvokeDays: form.get("autoConvoke") === "1" ? (int("autoConvokeDays", 0, 60) ?? 7) : null,
     // Vacío = el radio general
     clockRadius: int("clockRadius", 50, 3000),
+    // Inglés: nivel mínimo y cuántos (vacío = todos los camareros, responsables y maîtres)
+    englishMin: ["Básico", "Intermedio", "Alto", "Nativo"].includes(String(form.get("englishMin"))) ? String(form.get("englishMin")) : null,
+    englishCount: ["Básico", "Intermedio", "Alto", "Nativo"].includes(String(form.get("englishMin"))) ? int("englishCount", 1, 500) : null,
   };
   const data = { ...parsed.data, ...auto, ...(await linkVenueAndClient(form, parsed.data)) };
   const event = id ? await db.event.update({ where: { id }, data }) : await db.event.create({ data });
-  const ed = diff(before, event, { name: "Nombre", date: "Fecha", startTime: "Inicio", endTime: "Fin", unloadTime: "Descarga", venue: "Lugar", client: "Cliente", salesRep: "Comercial", budget: "Presupuesto", budgetNote: "Comentario presupuesto", needCamareros: "Camareros", needMaitres: "Maîtres", needResponsables: "Responsables", needMozos: "Mozos", guests: "Invitados", autoConvokeDays: "Convocatoria automática (días antes)", clockRadius: "Radio de fichaje (m)", groupChats: "Chat por grupos" });
+  const ed = diff(before, event, { name: "Nombre", date: "Fecha", startTime: "Inicio", endTime: "Fin", unloadTime: "Descarga", venue: "Lugar", client: "Cliente", salesRep: "Comercial", budget: "Presupuesto", budgetNote: "Comentario presupuesto", needCamareros: "Camareros", needMaitres: "Maîtres", needResponsables: "Responsables", needMozos: "Mozos", guests: "Invitados", autoConvokeDays: "Convocatoria automática (días antes)", clockRadius: "Radio de fichaje (m)", groupChats: "Chat por grupos", englishMin: "Inglés", englishCount: "Con inglés" });
   if (!before) await auditAdmin(by, "Evento", "Alta", `Nuevo evento: ${event.name} (${formatDate(event.date)})${note}`, { entityId: event.id });
   else if (ed.changed) await auditAdmin(by, "Evento", "Cambios", `${event.name}: ${ed.text}`, { entityId: event.id, data: ed.data });
   return { event, before } as const;

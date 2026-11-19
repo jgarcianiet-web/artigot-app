@@ -5,6 +5,7 @@ import { getConvocationSettings } from "./convocation";
 import { pendingPhotos } from "./photo";
 import { coverage } from "./staffing";
 import { missingAltas } from "./employment";
+import { englishCoverage } from "./languages";
 
 export type Task = { key: string; text: string; detail?: string; href: string; n: number; urgent?: boolean };
 
@@ -29,7 +30,7 @@ export async function todayTasks(t: string): Promise<Task[]> {
     }),
     db.event.findMany({
       where: { date: { gte: t, lte: addDays(t, 7) }, status: "ABIERTO" },
-      include: { assignments: { select: { role: true, status: true } } },
+      include: { assignments: { select: { role: true, status: true, worker: { select: { englishLevel: true } } } } },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
     }),
     db.eventDraft.findMany({ where: { date: { gte: t, lte: addDays(t, 7) } }, orderBy: { date: "asc" }, select: { id: true, name: true, date: true } }),
@@ -60,6 +61,10 @@ export async function todayTasks(t: string): Promise<Task[]> {
       return { e, missing: cov.reduce((s, c) => s + Math.max(0, c.need - c.confirmed), 0) };
     })
     .filter((x) => x.missing > 0);
+  // Eventos que piden inglés y no llegan (entre convocados y confirmados)
+  const noEnglish = events
+    .map((e) => ({ e, cov: englishCoverage(e, e.assignments.map((a) => ({ role: a.role, status: a.status, englishLevel: a.worker.englishLevel }))) }))
+    .filter((x) => x.cov && x.cov.confirmed + x.cov.pending < x.cov.need);
   const firstEvent = (ids: string[]) => ids[0];
   const names = (list: string[]) => [...new Set(list)].slice(0, 3).join(", ") + (new Set(list).size > 3 ? "…" : "");
 
@@ -113,6 +118,14 @@ export async function todayTasks(t: string): Promise<Task[]> {
       text: `${uncovered.length} ${uncovered.length === 1 ? "evento" : "eventos"} de los próximos 7 días sin cubrir`,
       detail: uncovered.slice(0, 3).map((x) => `${x.e.name} (${formatDate(x.e.date)}, faltan ${x.missing})`).join(" · "),
       href: `/admin/eventos/${uncovered[0]?.e.id}`,
+    },
+    {
+      key: "ingles",
+      n: noEnglish.length,
+      urgent: noEnglish.some((x) => x.e.date <= addDays(t, 2)),
+      text: `${noEnglish.length} ${noEnglish.length === 1 ? "evento" : "eventos"} de esta semana sin el inglés que piden`,
+      detail: noEnglish.slice(0, 3).map((x) => `${x.e.name} (${formatDate(x.e.date)}: ${x.cov!.confirmed + x.cov!.pending} de ${x.cov!.need})`).join(" · "),
+      href: `/admin/eventos/${noEnglish[0]?.e.id}`,
     },
     {
       key: "borradores",

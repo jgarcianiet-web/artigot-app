@@ -5,6 +5,7 @@ import { notify } from "./push";
 import { computeScores, type Score } from "./scoring";
 import { availableOn } from "./polls";
 import { eventHalf, type Slot, slotConflict } from "./slots";
+import { ENGLISH_ROLES, englishCoverage, meetsEnglish } from "./languages";
 
 export const ACTIVE_STATUSES = ["CONVOCADO", "CONFIRMADO"];
 
@@ -26,7 +27,26 @@ export type Candidate = {
   slotConflict: boolean;
   /** Ya está convocado o confirmado ese día en otro evento (p. ej. «Comida Hotel 13:00–17:00»): se puede, pero se avisa */
   busyWith: string | null;
+  englishLevel: string | null;
+  /** Tiene el inglés que pide el evento (si lo pide) */
+  speaksEnglish: boolean;
 };
+
+type StaffEvent = {
+  id: string; date: string; startTime: string;
+  englishMin?: string | null; englishCount?: number | null; needMaitres?: number; needResponsables?: number; needCamareros?: number;
+};
+
+/** Cuántos con inglés faltan todavía en el evento (entre convocados y confirmados); 0 si no lo pide. */
+export async function englishShort(ev: StaffEvent) {
+  if (!ev.englishMin) return 0;
+  const team = await db.assignment.findMany({ where: { eventId: ev.id }, select: { role: true, status: true, worker: { select: { englishLevel: true } } } });
+  const cov = englishCoverage(
+    { englishMin: ev.englishMin, englishCount: ev.englishCount ?? null, needMaitres: ev.needMaitres ?? 0, needResponsables: ev.needResponsables ?? 0, needCamareros: ev.needCamareros ?? 0 },
+    team.map((a) => ({ role: a.role, status: a.status, englishLevel: a.worker.englishLevel })),
+  )!;
+  return Math.max(0, cov.need - cov.confirmed - cov.pending);
+}
 
 /**
  * Trabajadores disponibles para un evento, por puesto.
@@ -36,7 +56,7 @@ export type Candidate = {
  * Un trabajador aparece en cada puesto que puede desempeñar (p. ej. camarero y camarero responsable).
  * Ordena por la puntuación del algoritmo (ver scoring.ts).
  */
-export async function candidatesFor(event: { id: string; date: string; startTime: string }) {
+export async function candidatesFor(event: StaffEvent) {
   const [workers, recent] = await Promise.all([
     db.worker.findMany({
       where: {
@@ -87,12 +107,17 @@ export async function candidatesFor(event: { id: string; date: string; startTime
         slot,
         slotConflict: slotConflict(slot, event.startTime),
         busyWith: w.assignments.map((a) => `${a.event.name} ${a.event.startTime}${a.event.endTime ? `–${a.event.endTime}` : ""}`).join(", ") || null,
+        englishLevel: w.englishLevel,
+        speaksEnglish: !!event.englishMin && meetsEnglish(w.englishLevel, event.englishMin),
       });
     }
   }
+  // Si el evento pide inglés y aún faltan, los que lo tienen van primero (en camareros, responsables y maîtres)
+  const short = await englishShort(event);
   for (const role of ROLES) {
+    const english = short > 0 && ENGLISH_ROLES.includes(role);
     byRole[role].sort(
-      (a, b) => Number(!!a.busyWith || a.slotConflict) - Number(!!b.busyWith || b.slotConflict) || Number(b.available) - Number(a.available) || b.score.score - a.score.score || a.recentEvents - b.recentEvents || a.name.localeCompare(b.name),
+      (a, b) => Number(!!a.busyWith || a.slotConflict) - Number(!!b.busyWith || b.slotConflict) || (english ? Number(b.speaksEnglish) - Number(a.speaksEnglish) : 0) || Number(b.available) - Number(a.available) || b.score.score - a.score.score || a.recentEvents - b.recentEvents || a.name.localeCompare(b.name),
     );
   }
   return byRole;
@@ -175,17 +200,19 @@ export async function fillGaps(eventId: string, roles: readonly Role[] = ROLES) 
       const candidates = await candidatesFor(ev);
       const picked = new Set<string>();
       const order: Role[] = ["MAITRE", "RESPONSABLE", "CAMARERO", "MOZO"];
+      // Inglés: mientras falten, en cada hueco se elige al mejor que lo tenga (si no hay nadie con inglés, al mejor sin él)
+      let short = await englishShort(ev);
       for (const role of order.filter((r) => roles.includes(r))) {
-        let count = 0;
-        for (const c of candidates[role]) {
-          if (count >= missing[role]) break;
+        for (let n = 0; n < missing[role]; n++) {
           // La selección automática no convoca a quien ya trabaja ese día en otro evento ni a quien solo puede la otra
           // franja (RRHH sí puede, a mano)
-          if (picked.has(c.id) || c.busyWith || c.slotConflict) continue;
+          const free = candidates[role].filter((c) => !picked.has(c.id) && !c.busyWith && !c.slotConflict);
+          const c = (short > 0 && ENGLISH_ROLES.includes(role) && free.find((x) => x.speaksEnglish)) || free[0];
+          if (!c) break;
           picked.add(c.id);
+          if (c.speaksEnglish && ENGLISH_ROLES.includes(role)) short--;
           await tx.assignment.create({ data: { eventId, workerId: c.id, role } });
           invited.push({ workerId: c.id, role, name: c.name });
-          count++;
         }
       }
       return ev;

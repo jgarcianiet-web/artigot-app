@@ -20,7 +20,7 @@ import { getConvocationSettings } from "./convocation";
 import { autoReplace } from "./staffing";
 import { getAutomation } from "./automation";
 import { CANDIDATE_RETENTION_MONTHS, purgeOldCandidates } from "./candidates";
-import { requestTitle } from "./docRequests";
+import { createDocRequests, requestTitle } from "./docRequests";
 
 /**
  * Avisos automáticos. Se comprueban cada pocos minutos; cada aviso se registra en ReminderLog
@@ -191,28 +191,40 @@ export async function runReminders(now = new Date()) {
     }
   }
 
-  // 5. Documentos que caducan: aviso 30 días antes y el día que caducan (al trabajador y a RRHH)
+  // 5. Documentos que caducan: 30 días antes y el día que caducan. Al trabajador se le pide el nuevo (le sale en
+  //    «RRHH te pide» hasta que lo sube y RRHH lo revisa) y a RRHH se le avisa.
   const docs = await db.workerDocument.findMany({
     where: { expiresAt: { not: null, lte: addDays(today, DOC_WARN_DAYS) }, worker: { active: true } },
     include: { worker: { select: { id: true, name: true } } },
   });
   for (const d of docs) {
+    // Si ya ha subido uno más nuevo del mismo documento, este no cuenta
+    const newer = await db.workerDocument.count({
+      where: { workerId: d.workerId, type: d.type, label: d.label, id: { not: d.id }, OR: [{ expiresAt: null, createdAt: { gt: d.createdAt } }, { expiresAt: { gt: d.expiresAt! } }] },
+    });
+    if (newer) continue;
     const expired = d.expiresAt! <= today;
     const key = `${expired ? "doc-caducado" : "doc-caduca"}:${d.id}`;
     if (!(await claim(key))) continue;
-    const what = DOC_LABEL[d.type] ?? "Un documento";
-    await notify({
-      workerIds: [d.workerId],
-      workerUrl: "/app/perfil",
-      title: expired ? "Documento caducado" : "Documento a punto de caducar",
-      body: `${what} ${expired ? "ha caducado" : `caduca el ${formatDate(d.expiresAt!)}`}. Sube el nuevo desde tu perfil.`,
-      tag: `doc-${d.id}`,
-    });
+    const what = d.label || DOC_LABEL[d.type] || "Un documento";
+    const when = expired ? `caducó el ${formatDate(d.expiresAt!)}` : `caduca el ${formatDate(d.expiresAt!)}`;
+    const asked = await createDocRequests([d.workerId], { type: d.type, label: d.label, message: `El que tenemos ${when}: sube el nuevo.` }, "Automático (caducidad)");
+    if (!asked.created) {
+      // Ya se le había pedido: solo se le recuerda
+      await notify({
+        workerIds: [d.workerId],
+        workerUrl: "/app/perfil#pedidos",
+        title: expired ? "Documento caducado" : "Documento a punto de caducar",
+        body: `${what} ${when}. Sube el nuevo desde tu perfil.`,
+        tag: `doc-${d.id}`,
+        emailFallback: true,
+      });
+    }
     await notify({
       admins: true,
       adminUrl: `/admin/personal/${d.workerId}`,
       title: expired ? "Documento caducado" : "Documento a punto de caducar",
-      body: `${d.worker.name}: ${what} ${expired ? "ha caducado" : `caduca el ${formatDate(d.expiresAt!)}`}.`,
+      body: `${d.worker.name}: ${what} ${when}. Se le ha pedido el nuevo.`,
       tag: `doc-${d.id}`,
     });
     sent.push(key);
