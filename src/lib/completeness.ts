@@ -10,7 +10,7 @@ import { getPrivacy } from "./privacy";
  */
 
 const LABEL: Record<string, string> = { dni: "DNI", nss: "nº de la Seguridad Social", iban: "IBAN" };
-const DOC_NAME: Record<string, string> = { DNI: "foto del DNI", NSS: "tarjeta de la Seguridad Social", CUENTA: "certificado de la cuenta" };
+const DOC_NAME: Record<string, string> = { DNI: "foto del DNI", NSS: "documento de afiliación a la Seguridad Social", CUENTA: "certificado de la cuenta" };
 
 export type Incomplete = { id: string; name: string; phone: string | null; email: string | null; dni: string | null; devices: number; missing: string[]; upcoming: boolean };
 
