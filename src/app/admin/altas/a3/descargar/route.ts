@@ -58,6 +58,8 @@ export async function POST(req: NextRequest) {
   if (pay.debtorIban) files.push({ name: `banco_pago_a3_${day}.xlsx`, label: "Datos Banco de Pago", data: await buildBancoPagoWorkbook(rows, a3.companyCode, pay.debtorIban) });
   if (cfg.ampExtra && waiters.length) files.push({ name: `camareros_extras_a3_${day}.xlsx`, label: "Camareros extras (AMP)", data: await buildAmpWorkbook(waiters, a3.companyCode) });
   await bumpLastCode(Math.max(...codes.map(Number)));
+  // El alta masiva lleva la fecha de alta: esas altas cuentan como comunicadas
+  for (const id of ids) await db.employment.updateMany({ where: { workerId: id, startDate: get(id, "start"), startReported: false }, data: { startReported: true } });
   await auditAdmin(by, "A3", "Alta masiva", `Excel de alta en A3 (${files.map((f) => f.label).join(", ")}) de ${rows.length}: ${rows.map((r) => `${r.worker.name} (${r.code})`).join(", ")}`);
   return NextResponse.json(
     { files: files.map((f) => ({ name: f.name, label: f.label, base64: f.data.toString("base64") })), missingImputation: !cfg.imputation && !cfg.imputationMozo, missingBank: !pay.debtorIban },

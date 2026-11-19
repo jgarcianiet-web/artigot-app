@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getA3 } from "@/lib/a3";
 import { buildBajasWorkbook, getA3Alta } from "@/lib/a3alta";
-import { isAdmin } from "@/lib/auth";
+import { adminName, isAdmin } from "@/lib/auth";
 import { syncAutoEmployments } from "@/lib/autoAltas";
+import { auditAdmin } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { today } from "@/lib/domain";
 
@@ -29,6 +30,12 @@ export async function GET(req: NextRequest) {
     a3.companyCode,
     cfg,
   );
+  // Descargado para A3: cuentan como comunicadas
+  const sent = bajas.filter((e) => !e.endReported).map((e) => e.id);
+  if (sent.length) {
+    await db.employment.updateMany({ where: { id: { in: sent } }, data: { endReported: true } });
+    await auditAdmin((await adminName()) ?? "RRHH", "Alta S. S.", "Comunicación RED", `${sent.length} bajas del ${day} marcadas como comunicadas al descargar el Excel de A3`);
+  }
   return new NextResponse(buffer as unknown as ArrayBuffer, {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

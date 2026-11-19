@@ -754,7 +754,7 @@ model Payslip {
 
 // Altas y bajas en la Seguridad Social (sustituye al Excel de altas y bajas)
 model Employment {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   workerId      String
   startDate     String
   endDate       String?
@@ -764,16 +764,19 @@ model Employment {
   endReason     String?
   notes         String?
   // Comunicado a la Seguridad Social (Sistema RED)
-  startReported Boolean  @default(false)
-  endReported   Boolean  @default(false)
+  startReported Boolean   @default(false)
+  endReported   Boolean   @default(false)
   // Generada sola a partir del personal confirmado (días seguidos = un alta; se baja el último día)
-  auto          Boolean  @default(false)
+  auto          Boolean   @default(false)
   // Aviso para RRHH (p. ej. cambió después de comunicarla a la Seguridad Social)
   warning       String?
+  // ANULAR: ya no corresponde y hay que anularla en RED (al marcarla anulada se borra). CORREGIR: cambió una fecha comunicada
+  warningKind   String?
+  warningAt     DateTime?
   createdBy     String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  worker        Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  worker        Worker    @relation(fields: [workerId], references: [id], onDelete: Cascade)
 
   @@index([workerId, startDate])
 }

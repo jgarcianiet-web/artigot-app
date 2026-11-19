@@ -16,6 +16,8 @@ import {
 import { ConfirmButton, ListFilter, SelectAll, SubmitButton } from "@/components/client";
 import { SaveTemplate } from "./SaveTemplate";
 import { TeamAltas } from "./TeamAltas";
+import { RedWarnings } from "../../altas/RedWarnings";
+import { employmentWarnings } from "@/lib/autoAltas";
 import { Groups } from "./Groups";
 import { budgetRows, pctText } from "@/lib/budget";
 import { AdminTransport } from "./Transport";
@@ -135,6 +137,8 @@ export default async function EventDetail({ params, searchParams }: { params: Pr
   const maitres = confirmed.filter((a) => isLeadRole(a.role)); // maître o camarero responsable
   // Lista de comprobación antes de cerrar el evento
   const openIncidents = await db.incident.count({ where: { eventId: event.id, resolved: false } });
+  // Altas ya comunicadas de gente de este evento que hay que anular o corregir en RED (p. ej. al aprobar que no venga)
+  const redWarnings = await employmentWarnings((await db.assignment.findMany({ where: { eventId: event.id }, select: { workerId: true } })).map((a) => a.workerId));
   const noHours = confirmed.filter((a) => costHours(a, a.worker, event) == null);
   const stillPending = event.assignments.filter((a) => a.status === "CONVOCADO");
   const closeChecks = [
@@ -240,6 +244,8 @@ export default async function EventDetail({ params, searchParams }: { params: Pr
           </section>
         );
       })()}
+
+      <RedWarnings warnings={redWarnings} title="⚠️ Alta ya comunicada a la Seguridad Social: revisar en RED" />
 
       {/* Solicitudes de no asistencia a menos de 24 h: las aprueba RRHH */}
       {withdrawRequests.length > 0 && (

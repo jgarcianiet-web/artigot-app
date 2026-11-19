@@ -8,6 +8,7 @@ import { dayMovements, employmentWarnings, syncAutoEmployments } from "@/lib/aut
 import { addDays } from "@/lib/domain";
 import { deleteEmployment, markDayReported, toggleReported } from "./actions";
 import { EmploymentForm, EndForm } from "./Forms";
+import { RedWarnings } from "./RedWarnings";
 
 const VIEWS = {
   dia: "Día a día",
@@ -71,16 +72,7 @@ export default async function Employments({ searchParams }: { searchParams: Prom
         </div>
       </div>
 
-      {warnings.length > 0 && (
-        <section className="card space-y-2 border-amber-300 bg-amber-50">
-          <h2>⚠️ Revisar en RED</h2>
-          <ul className="space-y-1 text-sm">
-            {warnings.map((e) => (
-              <li key={e.id}><Link href={`/admin/personal/${e.worker.id}`} className="link font-medium">{e.worker.name}</Link>: {e.warning}</li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <RedWarnings warnings={warnings} />
 
       {byEvent.size > 0 && (
         <section className="card space-y-2 border-red-300 bg-red-50">
