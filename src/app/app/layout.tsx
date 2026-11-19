@@ -8,6 +8,7 @@ import { pushConfig } from "@/lib/push";
 import { Logo } from "@/components/Logo";
 import { WorkerNav } from "@/components/WorkerNav";
 import { OfflineClockSync } from "@/components/OfflineClockSync";
+import { AutoRefresh } from "@/components/AutoRefresh";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,8 @@ export default async function WorkerLayout({ children }: { children: React.React
       <main className="mx-auto w-full max-w-lg flex-1 space-y-4 p-4 pb-24">
         <PushSetup config={await pushConfig()} />
         <OfflineClockSync />
+        {/* Los datos se actualizan solos cada minuto y al volver a la app */}
+        <AutoRefresh seconds={60} />
         {children}
       </main>
       <WorkerNav chats={await unreadChats(me)} />
