@@ -41,7 +41,7 @@ import { checkIdentityDocs, storeIdentityDocs } from "@/lib/identityDocs";
 import { addDays, EVENT_TYPE_LABEL, EVENT_TYPES, formatDate, isRole, LEAD_ROLES, OWN_RATE_ROLES, ROLE_LABEL, ROLES, type Role } from "@/lib/domain";
 import { notify } from "@/lib/push";
 import { autoReplace, candidatesFor, fillGaps, notifyInvited } from "@/lib/staffing";
-import { deleteStoredFile } from "@/lib/files";
+import { deleteStoredFile, storeLeadDoc } from "@/lib/files";
 import { ENGLISH_LEVELS } from "@/lib/languages";
 import { syncAutoEmployments } from "@/lib/autoAltas";
 const time = z.string().regex(/^\d{2}:\d{2}$/);
@@ -743,6 +743,55 @@ export async function setAssignmentStatus(id: string, status: string) {
 }
 
 /** RRHH aprueba (o no) que alguien confirmado no vaya, cuando lo pidió a menos de 24 h del evento. */
+// ---------- Documentos del evento para el maître y los camareros responsables ----------
+
+/** Sube uno o varios documentos (PDF o fotos) que solo ven RRHH y quien dirige el evento, y les avisa. */
+export async function uploadEventDocs(eventId: string, _prev: { ok: boolean; message: string } | null, form: FormData) {
+  const by = await requireAdmin();
+  const files = form.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+  if (!files.length) return { ok: false, message: "Elige al menos un archivo." };
+  if (files.length > 10) return { ok: false, message: "Como mucho 10 archivos a la vez." };
+  const title = String(form.get("title") ?? "").trim().slice(0, 120);
+  const saved: string[] = [];
+  for (const f of files) {
+    let fileId: string;
+    try {
+      fileId = (await storeLeadDoc(f, eventId)).id;
+    } catch (e) {
+      return { ok: false, message: (e as Error).message + (saved.length ? ` (ya se habían subido: ${saved.join(", ")})` : "") };
+    }
+    const name = (files.length === 1 && title) || f.name.replace(/\.[a-z0-9]+$/i, "").slice(0, 120) || "Documento";
+    await db.eventDoc.create({ data: { eventId, fileId, title: name, uploadedBy: by } });
+    saved.push(name);
+  }
+  const ev = await db.event.findUniqueOrThrow({
+    where: { id: eventId },
+    select: { name: true, date: true, assignments: { where: { status: "CONFIRMADO", role: { in: [...LEAD_ROLES] } }, select: { workerId: true } } },
+  });
+  await auditAdmin(by, "Evento", "Documento para responsables", `${ev.name}: ${saved.join(", ")}`, { entityId: eventId });
+  if (ev.assignments.length)
+    after(() =>
+      notify({
+        workerIds: ev.assignments.map((a) => a.workerId),
+        workerUrl: `/app/eventos/${eventId}#documentos`,
+        title: "📄 Documentos del evento",
+        body: `${ev.name} (${formatDate(ev.date)}): ${saved.join(", ")}. Solo los ves tú como responsable.`,
+        tag: `evdoc-${eventId}`,
+      }),
+    );
+  revalidatePath(`/admin/eventos/${eventId}`);
+  return { ok: true, message: saved.length === 1 ? "Documento subido." : `${saved.length} documentos subidos.` };
+}
+
+export async function deleteEventDoc(id: string) {
+  const by = await requireAdmin();
+  const d = await db.eventDoc.findUnique({ where: { id }, include: { event: { select: { name: true } } } });
+  if (!d) return;
+  await deleteStoredFile(d.fileId);
+  await auditAdmin(by, "Evento", "Documento borrado", `${d.event.name}: ${d.title}`, { entityId: d.eventId });
+  revalidatePath(`/admin/eventos/${d.eventId}`);
+}
+
 export async function decideWithdrawal(id: string, approve: boolean) {
   const by = await requireAdmin();
   const a = approve ? await approveWithdrawal(id) : await rejectWithdrawal(id);
@@ -812,6 +861,25 @@ export async function rejectDocument(id: string, form: FormData) {
   // El motivo lo escribe RRHH (el trabajador lo ve tal cual en la app)
   const reason = String(form.get("reason") ?? "").trim().slice(0, 200);
   if (!reason) return;
+  // Duplicado (lo ha subido dos veces): se quita la copia y no se le vuelve a pedir ni se le avisa
+  if (/duplicad|repetid/i.test(reason)) {
+    const req = await db.docRequest.findUnique({ where: { documentId: id } });
+    const d = await db.workerDocument.delete({ where: { id }, include: { worker: { select: { name: true } } } });
+    if (d.fileId) await deleteStoredFile(d.fileId);
+    if (req) {
+      // Si lo había pedido RRHH, la petición se da por cumplida con el otro (si lo hay) o se cierra
+      const other = await db.workerDocument.findFirst({ where: { workerId: d.workerId, type: d.type, request: null }, orderBy: { createdAt: "desc" } });
+      await db.docRequest.update({
+        where: { id: req.id },
+        data: other
+          ? { documentId: other.id, status: other.verified ? "APROBADO" : "ENTREGADO", reviewedAt: other.verified ? new Date() : null }
+          : { status: "ANULADO", reviewedAt: new Date() },
+      });
+    }
+    await auditAdmin(by, "Documento", "Duplicado quitado", `${d.worker.name}: ${d.label || (DOC_LABEL[d.type] ?? d.type)} duplicado (${reason}); no se le vuelve a pedir`, { entityId: d.workerId });
+    revalidatePath("/admin", "layout");
+    return;
+  }
   // Si lo había pedido RRHH, la petición vuelve a quedar pendiente con el motivo
   const req = await reopenRequest(id, reason);
   const d = await db.workerDocument.delete({ where: { id }, include: { worker: { select: { name: true } } } });

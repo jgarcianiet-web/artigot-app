@@ -9,6 +9,7 @@ import { ageOn, MIN_AGE } from "./minors";
 import { notify } from "./push";
 import { validDniNie, validIban, validNss } from "./staff";
 import { parseLanguages } from "./languages";
+import { parseTray, trayText } from "./tray";
 
 export const CANDIDATE_STATUS: Record<string, { label: string; cls: string }> = {
   NUEVO: { label: "Nuevo", cls: "bg-sky-100 text-sky-800" },
@@ -73,6 +74,8 @@ export async function applyAsCandidate(form: FormData): Promise<ApplyResult> {
   if (car !== "1" && car !== "0") return { ok: false, message: "Indica si tienes coche." };
   const languages = parseLanguages(form);
   if (!languages.englishLevel) return { ok: false, message: "Indica tu nivel de inglés." };
+  const tray = parseTray(form);
+  if (Object.values(tray).some((v) => !v)) return { ok: false, message: "Contesta las preguntas de manejo de bandeja." };
   // Datos para el alta en A3 (NSS e IBAN, si los tiene)
   const dni = String(form.get("dni") ?? "").trim().toUpperCase().replace(/[\s-]/g, "");
   const birthDate = String(form.get("birthDate") ?? "");
@@ -114,6 +117,7 @@ export async function applyAsCandidate(form: FormData): Promise<ApplyResult> {
       availability: String(form.get("availability") ?? "").trim().slice(0, 500) || null,
       hasCar: car === "1",
       ...languages,
+      ...tray,
       dni, birthDate, sex, nationality, nss: nss || null, iban: iban || null,
       fileId,
       consentAt: new Date(),
@@ -150,7 +154,7 @@ export async function hireCandidate(id: string, role: Role, by = "RRHH") {
   const c = await db.candidate.findUniqueOrThrow({ where: { id } });
   const key = phoneKey(c.phone);
   const roles = [...new Set([role, ...c.roles.filter(isRole)])];
-  const notes = [c.experience && `Experiencia: ${c.experience}`, c.availability && `Disponibilidad: ${c.availability}`, c.notes && `Entrevista: ${c.notes}`]
+  const notes = [c.experience && `Experiencia: ${c.experience}`, trayText(c), c.availability && `Disponibilidad: ${c.availability}`, c.notes && `Entrevista: ${c.notes}`]
     .filter(Boolean)
     .join("\n") || null;
   const existing = await db.worker.findUnique({ where: { phoneKey: key } });

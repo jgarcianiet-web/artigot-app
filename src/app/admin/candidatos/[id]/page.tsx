@@ -11,6 +11,7 @@ import { mailEnabled } from "@/lib/mail";
 import { formatDate, ROLE_LABEL, ROLES } from "@/lib/domain";
 import { ageOn } from "@/lib/minors";
 import { languagesText } from "@/lib/languages";
+import { trayText } from "@/lib/tray";
 
 /** Valor para <input type="datetime-local"> en hora de Madrid. */
 const localInput = (d: Date) => new Date(d.toLocaleString("sv-SE", { timeZone: "Europe/Madrid" }).replace(" ", "T") + "Z").toISOString().slice(0, 16);
@@ -57,6 +58,7 @@ export default async function CandidateDetail({ params }: { params: Promise<{ id
         <p><strong>Experiencia:</strong> {c.experience ?? "—"}</p>
         <p><strong>Disponibilidad:</strong> {c.availability ?? "—"}</p>
         <p><strong>Idiomas:</strong> {languagesText(c) || "—"}</p>
+        <p><strong>Manejo de bandeja:</strong> {trayText(c).replace(/^Bandeja — /, "") || "—"}</p>
         <p><strong>Coche:</strong> {c.hasCar == null ? "—" : c.hasCar ? "🚗 Sí tiene coche" : "No tiene coche"}</p>
         {c.dni && (
           <p>

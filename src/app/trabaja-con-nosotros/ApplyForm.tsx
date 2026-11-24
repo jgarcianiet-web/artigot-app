@@ -4,6 +4,7 @@ import { startTransition, useActionState } from "react";
 import { shrinkImage } from "@/lib/image";
 import { apply } from "./actions";
 import { LanguageFields } from "@/components/LanguageFields";
+import { TRAY_QUESTIONS } from "@/lib/tray";
 
 // La solicitud pública es solo para camareros y mozos (maîtres y responsables se gestionan desde RRHH)
 const ROLES: [string, string][] = [
@@ -51,6 +52,20 @@ export function ApplyForm({ countries }: { countries: string[] }) {
       <div className="grid gap-4 sm:grid-cols-2">
         <LanguageFields required inputClass="input mt-1 text-base" />
       </div>
+      <fieldset className="space-y-3 rounded-lg border border-stone-200 p-3">
+        <legend className="px-1 text-sm font-semibold">Manejo de bandeja</legend>
+        <p className="text-xs text-stone-500">Contesta con sinceridad: si te falta práctica, te enseñamos.</p>
+        {TRAY_QUESTIONS.map((q) => (
+          <div key={q.name}>
+            <p className="mb-1 text-sm">{q.label}</p>
+            <div className="flex flex-wrap gap-x-5 gap-y-1">
+              {q.options.map((o, i) => (
+                <label key={o} className="flex items-center gap-2 text-sm"><input type="radio" name={q.name} value={o} className="size-4" required={i === 0} /> {o}</label>
+              ))}
+            </div>
+          </div>
+        ))}
+      </fieldset>
       <fieldset className="space-y-3 rounded-lg border border-stone-200 p-3">
         <legend className="px-1 text-sm font-semibold">Datos para darte de alta</legend>
         <p className="text-xs text-stone-500">Solo se usan si te contratamos, para darte de alta en la Seguridad Social sin hacerte esperar.</p>

@@ -52,6 +52,7 @@ import { CRITERIA, explainScore, reviewAverage } from "@/lib/scoring";
 import { SLOT_SHORT } from "@/lib/slots";
 import { candidatesFor, coverage, gaps } from "@/lib/staffing";
 import { englishCoverage, englishMinText } from "@/lib/languages";
+import { EventDocs } from "./EventDocs";
 
 function ClockTag({ distance, accuracy, manual, offline, reason }: { distance: number | null; accuracy: number | null; manual: boolean; offline: boolean; reason?: string | null }) {
   // Fichado fuera del horario normal: el motivo que escribió el trabajador
@@ -273,6 +274,8 @@ export default async function EventDetail({ params, searchParams }: { params: Pr
           </ul>
         </section>
       )}
+
+      <EventDocs eventId={event.id} leads={event.assignments.filter((a) => a.status === "CONFIRMADO" && isLeadRole(a.role)).map((a) => a.worker.name)} />
 
       {/* Cobertura */}
       <section className="card space-y-3">
