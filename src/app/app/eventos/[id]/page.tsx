@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Chat } from "@/components/Chat";
+import { FileLink } from "@/components/FileLink";
 import { EventInfo } from "@/components/EventInfo";
 import { StatusBadge } from "@/components/ui";
 import { requireWorker } from "@/lib/auth";
@@ -87,6 +88,26 @@ export default async function WorkerEvent({ params, searchParams }: { params: Pr
       {confirmed && (
         <Transport assignmentId={a.id} eventId={a.eventId} meetingPoint={a.event.meetingPoint} meetingTime={a.event.meetingTime} editable={a.event.date >= today() && !a.checkIn} />
       )}
+
+      {confirmed && isLeadRole(a.role) &&
+        (await (async () => {
+          // Documentos que RRHH ha subido para quien dirige el evento (solo maître y camareros responsables)
+          const docs = await db.eventDoc.findMany({ where: { eventId: a.eventId }, include: { file: { select: { mime: true } } }, orderBy: { createdAt: "asc" } });
+          if (!docs.length) return null;
+          return (
+            <section id="documentos" className="card scroll-mt-4 space-y-2">
+              <h2>📄 Documentos del evento</h2>
+              <p className="text-xs text-stone-500">Solo los ves tú y el resto de responsables del evento.</p>
+              <div className="space-y-1.5">
+                {docs.map((d) => (
+                  <FileLink key={d.id} href={`/api/files/${d.fileId}`} title={d.title} className="btn w-full justify-start">
+                    {d.file.mime === "application/pdf" ? "📄" : "🖼"} <span className="truncate">{d.title}</span>
+                  </FileLink>
+                ))}
+              </div>
+            </section>
+          );
+        })())}
 
       {confirmed && isLeadRole(a.role) && a.event.date <= today() && (
         <Link href={`/app/eventos/${a.eventId}/equipo`} className="btn w-full">👥 Panel del equipo e incidencias</Link>

@@ -91,7 +91,7 @@ export default async function Documents({ searchParams }: { searchParams: Promis
                     <div className="flex flex-wrap items-center gap-2">
                       <form action={verifyDocument.bind(null, d.id)}><button className="btn btn-sm btn-success">✓ Correcto</button></form>
                       <form action={rejectDocument.bind(null, d.id)} className="flex flex-1 items-center gap-1">
-                        <input name="reason" required maxLength={200} className="input min-w-0 flex-1 py-1 text-xs" aria-label="Motivo del rechazo" placeholder="Motivo del rechazo (lo verá el trabajador)" />
+                        <input name="reason" required maxLength={200} className="input min-w-0 flex-1 py-1 text-xs" aria-label="Motivo del rechazo" placeholder="Motivo (lo verá el trabajador). Si pones «duplicado», solo se quita la copia" title="Si el motivo dice «duplicado» o «repetido», se borra la copia y no se le pide de nuevo ni se le avisa" />
                         <button className="btn btn-sm btn-danger">Rechazar</button>
                       </form>
                     </div>

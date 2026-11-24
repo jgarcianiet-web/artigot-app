@@ -8,7 +8,7 @@ import { isEventLead } from "./reviews";
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
 
-export type Scope = "CHAT" | "INCIDENT" | "DOC" | "CANDIDATE" | "SIGNATURE" | "PHOTO" | "STAFF" | "PAYSLIP" | "DM" | "GROUP" | "SIGNDOC";
+export type Scope = "CHAT" | "INCIDENT" | "DOC" | "CANDIDATE" | "SIGNATURE" | "PHOTO" | "STAFF" | "PAYSLIP" | "DM" | "GROUP" | "SIGNDOC" | "LEADDOC";
 
 /** Guarda una imagen subida (las fotos se reducen en el móvil antes de enviarlas). */
 export async function storeImage(file: File, opts: { eventId: string; scope: Scope; incidentId?: string }) {
@@ -40,6 +40,14 @@ export async function storeSignDoc(file: File) {
   if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) throw new Error("El documento tiene que ser un PDF.");
   if (file.size === 0 || file.size > MAX_SIGNDOC_BYTES) throw new Error("El PDF es demasiado grande (máximo 10 MB).");
   return save(Buffer.from(await file.arrayBuffer()), { scope: "SIGNDOC", mime: "application/pdf" });
+}
+
+/** Documento de un evento para quien lo dirige (PDF o foto, hasta 10 MB): lo ven RRHH, el maître y los camareros responsables. */
+export async function storeLeadDoc(file: File, eventId: string) {
+  const pdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  if (!pdf && !IMAGE_TYPES.includes(file.type)) throw new Error(`«${file.name}»: sube un PDF o una foto.`);
+  if (file.size === 0 || file.size > MAX_SIGNDOC_BYTES) throw new Error(`«${file.name}» es demasiado grande (máximo 10 MB).`);
+  return save(Buffer.from(await file.arrayBuffer()), { scope: "LEADDOC", eventId, mime: pdf ? "application/pdf" : file.type });
 }
 
 /** Foto del chat interno de RRHH (solo la ve RRHH). */
@@ -146,6 +154,7 @@ export async function sweepOrphanFiles() {
  * - Documentos y nóminas del trabajador: RRHH y el propio trabajador.
  * - Fotos de un grupo con el personal: RRHH y los miembros del grupo.
  * - Documentos enviados a firmar: RRHH y las personas a las que se envió.
+ * - Documentos del evento para quien lo dirige: RRHH y el maître / camareros responsables confirmados.
  */
 export async function canReadFile(viewer: Viewer, file: { id?: string; scope: string; eventId: string | null; workerId: string | null; groupId?: string | null }) {
   if (viewer.kind === "admin") return true;
@@ -157,7 +166,7 @@ export async function canReadFile(viewer: Viewer, file: { id?: string; scope: st
   if (file.scope === "CANDIDATE" || file.scope === "STAFF") return false; // solo RRHH
   if (!file.eventId) return false;
   if (file.scope === "CHAT") return canAccessChat(viewer, file.eventId);
-  if (file.scope === "INCIDENT") return isEventLead(file.eventId, viewer.id);
+  if (file.scope === "INCIDENT" || file.scope === "LEADDOC") return isEventLead(file.eventId, viewer.id);
   return false;
 }
 

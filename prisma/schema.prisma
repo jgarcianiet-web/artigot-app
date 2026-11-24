@@ -162,6 +162,8 @@ model Event {
   clockRadius      Int?
   // Eventos grandes: cada grupo tiene su chat y el chat general es solo de avisos (escriben RRHH y maîtres)
   groupChats       Boolean       @default(false)
+  // Documentos del evento que solo ven RRHH, el maître y los camareros responsables (escaleta, plano de mesas…)
+  docs             EventDoc[]
   // Inglés: cuántos del equipo (sin contar mozos) tienen que tener al menos este nivel; se priorizan al convocar
   englishMin       String?
   englishCount     Int?
@@ -364,6 +366,7 @@ model StoredFile {
   groupId             String?
   group               WorkerGroup?     @relation(fields: [groupId], references: [id], onDelete: Cascade)
   document            WorkerDocument?
+  eventDoc            EventDoc?
   candidate           Candidate?
   signatureOf         Contract?
   externalSignatureOf ExternalSigner?  @relation("ExternalSignature")
@@ -577,6 +580,10 @@ model Candidate {
   nationality    String?
   englishLevel   String?
   otherLanguages String?
+  // Manejo de bandeja (respuestas del formulario «Trabaja con nosotros»)
+  trayOneHand    String?
+  trayGlasses    String?
+  traySilver     String?
   nss            String?
   iban           String?
   file           StoredFile? @relation(fields: [fileId], references: [id], onDelete: SetNull)
@@ -957,4 +964,18 @@ model GroupMessage {
   group      WorkerGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@index([groupId, createdAt])
+}
+
+// Documento de un evento para quien lo dirige: solo lo ven RRHH, el maître y los camareros responsables confirmados
+model EventDoc {
+  id         String     @id @default(cuid())
+  eventId    String
+  fileId     String     @unique
+  title      String
+  uploadedBy String
+  createdAt  DateTime   @default(now())
+  event      Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  file       StoredFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
 }
